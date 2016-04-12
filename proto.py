@@ -444,12 +444,11 @@ class String_Simulation():
         #      [x'0, x'1, ... , x'N-1],
         #      [y'1, y'2, ..., y'N-1]]
 
-        self.t, count, frame = 0., 0, 0
+        self.t, t_count, count, frame = 0., 0, 0, 0
         # solver = RK4(self.force)  # Runge-Kutta method
         solver = Euler(self.force)  # Euler method
         while self.t < self.t_max:
             if not self.pause:
-                log.info(self.t)
                 X = solver.solve(X, self.t, self.h)
                 # update values
                 self.point.position_x, self.point.position_y = X[0], X[1]
@@ -465,7 +464,8 @@ class String_Simulation():
                 X = self.point.divide_if_extended(X)
 
                 # 一定の間隔で描画を行う
-                if self.t > self.h * 9 * frame:  # TODO: 要検討
+                if self.t > self.h * 12 * frame:  # TODO: 要検討
+                    log.info(self.t)
                     log.info("x: " + str(self.point.position_x))
                     log.info("y: " + str(self.point.position_y))
                     log.info("d: " + str(self.point.get_distances(
@@ -480,7 +480,8 @@ class String_Simulation():
                                np.append(self.point.position_y,
                                          self.point.position_y[0])]
                     frame += 1
-                self.t += self.h
+                t_count += 1
+                self.t = self.h * t_count
             else:
                 time.sleep(0.1)
                 if self.point.is_open:
