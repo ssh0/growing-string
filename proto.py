@@ -1,8 +1,15 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
-#
-# written by Shotaro Fujimoto
-# 2016-03-28
+""" Numerical simulation of growing strings
+
+各点間をバネでつなぎ、その自然長が時間と共に増大することを考える。
+この自然長、もしくは2点間の距離がある閾値を超えた時、新たに2点間に点を置く。
+点に作用する力は、バネによる力と、曲げ弾性による力、粘性による摩擦力である。
+オイラー法または4次のルンゲクッタ法でこれを解き、matplotlibでアニメーションに
+して表示する。
+"""
+__author__ = "Shotaro Fujimoto"
+__date__ = "2016/4/12"
 
 import numpy as np
 import matplotlib.pyplot as plt
