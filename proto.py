@@ -148,31 +148,26 @@ class Points():
 
         return distances
 
-    def grow(self, func):
-        """2点間の自然長を大きくする
+    def grow(self, func_nl, func_k):
+        """2点間の自然長を大きくする & バネ定数を変化させる
 
+        バネ定数は単位(自然長)長さあたりが同じいなるように随時変化させる
         --- Arguments ---
-        func (function): N-1(開曲線)，N(閉曲線)次元のnp.arrayに対する関数
+        func_nl (function): N-1(開曲線)，N(閉曲線)次元のnp.arrayに対する関数
             返り値は同次元のnp.arrayで返し，これが成長後の自然長のリストである
+        func_k (function): N-1(開曲線)，N(閉曲線)次元のnp.arrayに対する関数
+            返り値は同次元のnp.arrayで返し，これが成長後のバネ定数のリスト
         """
-        self.natural_length = func(self.natural_length)
+        old_nl = self.natural_length
+        new_nl = func_nl(self.natural_length)
+        self.natural_length = new_nl
+        self.K = func_k(self.K, old_nl, new_nl)
 
     def divide_if_extended(self, X):
-        """もし2点間距離がlength_limitの設定値より大きいとき，新しい点を追加する
+        """2点間の自然長がlength_limitの設定値より大きいとき新しい点を追加する
         """
-
         j = 0
         for i in np.where(self.natural_length > self.length_limit)[0]:
-            if self.is_open:
-                k = i + j
-            else:
-                k = i + j - 1
-            self.create_new_point(k, X)
-            j += 1
-
-        distances = self.get_distances(self.position_x, self.position_y)
-        j = 0
-        for i in np.where(distances > self.length_limit)[0]:
             if self.is_open:
                 k = i + j
             else:
@@ -214,7 +209,7 @@ class Points():
 
         # 一様乱数で間の適当な値を選ぶ場合
         # pickp = lambda a, b: (random.random() - 0.5) * (b - a) * 0.1 \
-        #     + (b+a)/2
+        #     + (b + a) / 2
 
         newpos_x = pickp(self.position_x[k], self.position_x[k + 1])
         newpos_y = pickp(self.position_y[k], self.position_y[k + 1])
@@ -332,6 +327,9 @@ class String_Simulation():
         #                   for i in range(self.point.N)])
         #     return arr + D
         # self.grow_func = glow_randomly
+        def grow_func_k(arr, old_nl, new_nl):
+            return arr * (old_nl / new_nl)
+        self.grow_func_k = grow_func_k
 
         self.fig, self.ax = plt.subplots()
         self.l, = self.ax.plot(np.array([]), np.array([]), 'bo-')
@@ -396,13 +394,13 @@ class String_Simulation():
         # 曲げ由来の力を表す行列Bを作成
         if self.point.is_open:
             # 開曲線のとき，先頭,末尾はゼロにする
-            ee = 0.5 * self.e * (distances[1:] ** 5 + distances[:-1] ** 5) / 2
+            ee = self.e * (distances[1:] ** -3 + distances[:-1] ** -3) / 2
             ee = np.insert(ee, 0, 0)
             ee = np.append(ee, 0)
         else:
             # 閉曲線の場合
-            ee = 0.5 * self.e * (distances ** 5. +
-                                 np.roll(distances, -1) ** 5.)
+            ee = self.e * (distances ** -3 +
+                                 np.roll(distances, -1) ** -3) / 2
         # どちらの場合でも len(ee) = N
         ee = np.diag(ee)
         el = np.roll(ee, -1, axis=1)
@@ -420,6 +418,58 @@ class String_Simulation():
                          X[3],
                          np.dot(Z, X[0]) + np.dot(B, X[0]) - self.D * X[2],
                          np.dot(Z, X[1]) + np.dot(B, X[1]) - self.D * X[3]
+                         ])
+
+    def force_with_more_viscosity(self, t, X):
+        """関数forceの変化形。粘性が優位
+        """
+        distances = self.point.get_distances(X[0], X[1])
+
+        # 圧縮由来の力を表す行列Zを作成
+        if self.point.is_open:
+            # 開曲線のとき，先頭はゼロにする
+            zz = np.insert(self.point.natural_length / distances - 1., 0, 0)
+            K = np.insert(self.point.K, 0, 0)
+        else:
+            # 閉曲線の場合
+            zz = self.point.natural_length / distances - 1.
+            K = self.point.K
+        # どちらの場合でも len(zz) = N
+
+        zz = np.diag(zz)
+        K = np.diag(K)
+        z = np.dot(K, zz)
+        zl = -np.roll(z, -1, axis=1)
+        zu = -np.roll(z, -1, axis=0)
+        zul = -np.roll(zu, -1, axis=1)
+        Z = z + zl + zu + zul
+
+        # 曲げ由来の力を表す行列Bを作成
+        if self.point.is_open:
+            # 開曲線のとき，先頭,末尾はゼロにする
+            ee = self.e * (distances[1:] ** -3 + distances[:-1] ** -3) / 2
+            ee = np.insert(ee, 0, 0)
+            ee = np.append(ee, 0)
+        else:
+            # 閉曲線の場合
+            ee = self.e * (distances ** -3 +
+                                 np.roll(distances, -1) ** -3) / 2
+        # どちらの場合でも len(ee) = N
+        ee = np.diag(ee)
+        el = np.roll(ee, -1, axis=1)
+        er = np.roll(ee, 1, axis=1)
+        eu = np.roll(ee, -1, axis=0)
+        ed = np.roll(ee, 1, axis=0)
+        eru = np.roll(er, -1, axis=0)
+        erd = np.roll(er, 1, axis=0)
+        elu = np.roll(el, -1, axis=0)
+        eld = np.roll(el, 1, axis=0)
+        B = -(eld + erd + elu + eru) / 4 + (el + ed + er + eu) / 2 - ee
+
+        # 粘性項D
+        return np.array([(np.dot(Z, X[0]) + np.dot(B, X[0])) / self.D,
+                         (np.dot(Z, X[1]) + np.dot(B, X[1])) / self.D,
+                          X[2], X[3]
                          ])
 
     def update(self):
@@ -446,7 +496,8 @@ class String_Simulation():
 
         self.t, t_count, count, frame = 0., 0, 0, 0
         # solver = RK4(self.force)  # Runge-Kutta method
-        solver = Euler(self.force)  # Euler method
+        solver = Euler(self.force_with_more_viscosity)  # Euler method
+        # solver = Euler(self.force)  # Euler method
         while self.t < self.t_max:
             if not self.pause:
                 X = solver.solve(X, self.t, self.h)
@@ -454,9 +505,9 @@ class String_Simulation():
                 self.point.position_x, self.point.position_y = X[0], X[1]
                 self.point.vel_x, self.point.vel_y = X[2], X[3]
 
-                # 一定の周期で各バネの自然長を増加させる
-                if self.t > 0.01 * (count + 1):  # TODO: 要検討
-                    self.point.grow(self.grow_func)
+                # 一定の周期で各バネの自然長を増加させる & バネ定数を変化させる
+                if self.t > 0.02 * (count + 1):  # TODO: 要検討
+                    self.point.grow(self.grow_func, self.grow_func_k)
                     count += 1
 
                 # 各点間の距離が基準値を超えていたら，間に新たな点を追加する
@@ -540,11 +591,6 @@ if __name__ == '__main__':
             'nl': np.array([2., 2., 2.]),
             'K': np.array([300., 300., 300.]),
             'length_limit': 4.,
-            'h': 0.005,
-            't_max': 130.,
-            'e': 0.08,
-            'D': 10.,
-            'debug_mode': args.debug_mode
         },
 
         "close 4": {
@@ -553,11 +599,6 @@ if __name__ == '__main__':
             'nl': np.array([1., 1., 1., 1.]),
             'K': np.array([300., 300., 300., 300.]),
             'length_limit': 4.,
-            'h': 0.005,
-            't_max': 130.,
-            'e': 0.08,
-            'D': 10.,
-            'debug_mode': args.debug_mode
         },
 
         "close 3": {
@@ -566,12 +607,29 @@ if __name__ == '__main__':
             'nl': np.array([2., 2., 2.]),
             'K': np.array([300., 300., 300.]),
             'length_limit': 4.,
-            'h': 0.005,
-            't_max': 130.,
-            'e': 0.08,
-            'D': 10.,
-            'debug_mode': args.debug_mode
         },
     }
-    sim = String_Simulation(params['close 4'])
+
+    x = np.arange(-5., 5., step=1.)
+    params.update({
+        "open many": {
+            'x': x,
+            'y': np.array([0. + 0.1 * (random.random() - 0.5) for n in
+                           range(len(x))]),
+            'nl': np.array([1.] * (len(x)-1)),
+            'K': np.array([15.] * (len(x)-1)),
+            'length_limit': 4.,
+        }
+    })
+
+    for k in params.iterkeys():
+        params[k].update({
+            'h': 0.005,
+            't_max': 300.,
+            'e': 70.,
+            'D': 10.,
+            'debug_mode': args.debug_mode
+        })
+
+    sim = String_Simulation(params['open 4'])
     sim.run()
