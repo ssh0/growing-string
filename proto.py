@@ -369,59 +369,10 @@ class String_Simulation():
         self.l.set_data(data[0], data[1])
         return self.l,
 
-    def force(self, t, X):  # TODO: unittest
-        distances = self.point.get_distances(X[0], X[1])
+    def __force_create_matrix(self, t, X):
+        """self.forceとself.force_with_more_viscosityで用いられる行列を計算
 
-        # 圧縮由来の力を表す行列Zを作成
-        if self.point.is_open:
-            # 開曲線のとき，先頭はゼロにする
-            zz = np.insert(self.point.natural_length / distances - 1., 0, 0)
-            K = np.insert(self.point.K, 0, 0)
-        else:
-            # 閉曲線の場合
-            zz = self.point.natural_length / distances - 1.
-            K = self.point.K
-        # どちらの場合でも len(zz) = N
-
-        zz = np.diag(zz)
-        K = np.diag(K)
-        z = np.dot(K, zz)
-        zl = -np.roll(z, -1, axis=1)
-        zu = -np.roll(z, -1, axis=0)
-        zul = -np.roll(zu, -1, axis=1)
-        Z = z + zl + zu + zul
-
-        # 曲げ由来の力を表す行列Bを作成
-        if self.point.is_open:
-            # 開曲線のとき，先頭,末尾はゼロにする
-            ee = self.e * (distances[1:] ** -3 + distances[:-1] ** -3) / 2
-            ee = np.insert(ee, 0, 0)
-            ee = np.append(ee, 0)
-        else:
-            # 閉曲線の場合
-            ee = self.e * (distances ** -3 +
-                                 np.roll(distances, -1) ** -3) / 2
-        # どちらの場合でも len(ee) = N
-        ee = np.diag(ee)
-        el = np.roll(ee, -1, axis=1)
-        er = np.roll(ee, 1, axis=1)
-        eu = np.roll(ee, -1, axis=0)
-        ed = np.roll(ee, 1, axis=0)
-        eru = np.roll(er, -1, axis=0)
-        erd = np.roll(er, 1, axis=0)
-        elu = np.roll(el, -1, axis=0)
-        eld = np.roll(el, 1, axis=0)
-        B = -(eld + erd + elu + eru) / 4 + (el + ed + er + eu) / 2 - ee
-
-        # 粘性項D
-        return np.array([X[2],
-                         X[3],
-                         np.dot(Z, X[0]) + np.dot(B, X[0]) - self.D * X[2],
-                         np.dot(Z, X[1]) + np.dot(B, X[1]) - self.D * X[3]
-                         ])
-
-    def force_with_more_viscosity(self, t, X):
-        """関数forceの変化形。粘性が優位
+        バネ弾性，曲げ弾性による力を計算するための変換行列を生成する。
         """
         distances = self.point.get_distances(X[0], X[1])
 
@@ -465,6 +416,43 @@ class String_Simulation():
         elu = np.roll(el, -1, axis=0)
         eld = np.roll(el, 1, axis=0)
         B = -(eld + erd + elu + eru) / 4 + (el + ed + er + eu) / 2 - ee
+
+        return Z, B
+
+    def force(self, t, X):
+        """各点にかかる力を，バネ弾性と曲げ弾性，粘性の効果を入れて計算
+
+        1タイムステップでの変化
+        @return X'
+        X = [x, y, x', y']
+        X' = [x', y', f_x/m, f_y/m]
+        """
+        # 必要な変換行列を計算
+        Z, B = self.__force_create_matrix(t, X)
+        # 粘性項D, 質量m
+        return np.array([X[2],
+                         X[3],
+                         (np.dot(Z, X[0]) + np.dot(B, X[0]) - self.D * X[2]) \
+                            / self.m,
+                         (np.dot(Z, X[1]) + np.dot(B, X[1]) - self.D * X[3]) \
+                            / self.m
+                         ])
+
+    def force_with_more_viscosity(self, t, X):
+        """関数forceの変化形。粘性が優位な場合
+
+        1 タイムステップでの変化
+        @return X'
+        X = [x, y, x', y']
+        粘性が非常に大きい時，運動方程式
+        mx'' = f - D v
+        のx''は殆ど無視できるとして，式を簡単にすると
+        D v = f
+        の式を解くことになる。(x''の項は考慮しなくて良くなる)
+        X' = [f_x/D, f_y/D, dummy. dummy]
+        """
+        # 必要な変換行列を計算
+        Z, B = self.__force_create_matrix(t, X)
 
         # 粘性項D
         return np.array([(np.dot(Z, X[0]) + np.dot(B, X[0])) / self.D,
@@ -517,6 +505,7 @@ class String_Simulation():
                 # 一定の間隔で描画を行う
                 if self.t > self.h * 12 * frame:  # TODO: 要検討
                     log.info(self.t)
+                    log.info("N: " + str(self.point.N))
                     log.info("x: " + str(self.point.position_x))
                     log.info("y: " + str(self.point.position_y))
                     log.info("d: " + str(self.point.get_distances(
@@ -562,13 +551,14 @@ class String_Simulation():
         # i キーで情報表示
         if event.key == "i":
             print "--- [information] ---"
-            print "t: " + str(self.t)
             print "x: " + str(self.point.position_x)
             print "y: " + str(self.point.position_y)
             print "d: " + str(self.point.get_distances(self.point.position_x,
                                                        self.point.position_y))
             print "nl: " + str(self.point.natural_length)
             print "K: " + str(self.point.K)
+            print "t: " + str(self.t)
+            print "N: " + str(self.point.N)
 
         # ctrl+p キーでPause
         if event.key == "ctrl+p":
@@ -622,14 +612,20 @@ if __name__ == '__main__':
         }
     })
 
+    # common parameters (overwrite)
     for k in params.iterkeys():
-        params[k].update({
+        params_after = {
             'h': 0.005,
             't_max': 300.,
+            'm': 3.,
             'e': 70.,
             'D': 10.,
             'debug_mode': args.debug_mode
-        })
+        }
+        for kk in params_after.iterkeys():
+            if kk in params[k]:
+                params_after[kk] = params[k][kk]
+        params[k].update(params_after)
 
     sim = String_Simulation(params['open 4'])
     sim.run()
