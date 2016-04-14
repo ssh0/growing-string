@@ -327,6 +327,7 @@ class String_Simulation():
         #                   for i in range(self.point.N)])
         #     return arr + D
         # self.grow_func = glow_randomly
+
         def grow_func_k(arr, old_nl, new_nl):
             return arr * (old_nl / new_nl)
         self.grow_func_k = grow_func_k
@@ -398,13 +399,13 @@ class String_Simulation():
         # 曲げ由来の力を表す行列Bを作成
         if self.point.is_open:
             # 開曲線のとき，先頭,末尾はゼロにする
-            ee = self.e * (distances[1:] ** -3 + distances[:-1] ** -3) / 2
+            ee = self.e * (distances[1:] ** (-3) + distances[:-1] ** (-3)) / 2
             ee = np.insert(ee, 0, 0)
             ee = np.append(ee, 0)
         else:
             # 閉曲線の場合
-            ee = self.e * (distances ** -3 +
-                                 np.roll(distances, -1) ** -3) / 2
+            ee = self.e * (distances ** (-3) +
+                           np.roll(distances, -1) ** (-3)) / 2
         # どちらの場合でも len(ee) = N
         ee = np.diag(ee)
         el = np.roll(ee, -1, axis=1)
@@ -432,10 +433,10 @@ class String_Simulation():
         # 粘性項D, 質量m
         return np.array([X[2],
                          X[3],
-                         (np.dot(Z, X[0]) + np.dot(B, X[0]) - self.D * X[2]) \
-                            / self.m,
-                         (np.dot(Z, X[1]) + np.dot(B, X[1]) - self.D * X[3]) \
-                            / self.m
+                         (np.dot(Z, X[0]) + np.dot(B, X[0]) - self.D * X[2])
+                         / self.m,
+                         (np.dot(Z, X[1]) + np.dot(B, X[1]) - self.D * X[3])
+                         / self.m
                          ])
 
     def force_with_more_viscosity(self, t, X):
@@ -457,7 +458,7 @@ class String_Simulation():
         # 粘性項D
         return np.array([(np.dot(Z, X[0]) + np.dot(B, X[0])) / self.D,
                          (np.dot(Z, X[1]) + np.dot(B, X[1])) / self.D,
-                          X[2], X[3]
+                         X[2], X[3]
                          ])
 
     def update(self):
@@ -606,8 +607,8 @@ if __name__ == '__main__':
             'x': x,
             'y': np.array([0. + 0.1 * (random.random() - 0.5) for n in
                            range(len(x))]),
-            'nl': np.array([1.] * (len(x)-1)),
-            'K': np.array([15.] * (len(x)-1)),
+            'nl': np.array([1.] * (len(x) - 1)),
+            'K': np.array([15.] * (len(x) - 1)),
             'length_limit': 4.,
         }
     })
