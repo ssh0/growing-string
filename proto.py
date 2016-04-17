@@ -319,7 +319,7 @@ class String_Simulation():
         # 累積的に成長する場合
         # self.grow_func = lambda arr: arr * 1.01
         # 一定の成長率で成長する場合
-        self.grow_func = lambda arr: arr + 0.001
+        self.grow_func = lambda arr: arr + 0.00025
         # 乱数を含める
         # import random
         # def glow_randomly(arr):
@@ -461,6 +461,74 @@ class String_Simulation():
                          X[2], X[3]
                          ])
 
+    def update_position_self_avoiding(self):
+        crossing = True
+        while crossing:
+            count = 0
+            for i in range(self.point.N - 1):
+                for k in range(i + 2, self.point.N - 2):
+                    if self.cross_detect(self.point.position_x[i],
+                                         self.point.position_x[i+1],
+                                         self.point.position_x[k],
+                                         self.point.position_x[k+1],
+                                         self.point.position_y[i],
+                                         self.point.position_y[i+1],
+                                         self.point.position_y[k],
+                                         self.point.position_y[k+1]
+                                        ):
+                        # Update positions
+                        x_i1 = self.point.position_x[i+1]
+                        y_i1 = self.point.position_y[i+1]
+                        x_k = self.point.position_x[k]
+                        y_k = self.point.position_y[k]
+                        self.point.position_x[i+1] = 0.75 * x_k + 0.25 * x_i1
+                        self.point.position_y[i+1] = 0.75 * y_k + 0.25 * y_i1
+                        self.point.position_x[k] = 0.25 * x_k + 0.75 * x_i1
+                        self.point.position_y[k] = 0.25 * y_k + 0.75 * y_i1
+                        # self.point.position_x[i+1] = x_k
+                        # self.point.position_y[i+1] = y_k
+                        # self.point.position_x[k] = x_i1
+                        # self.point.position_y[k] = y_i1
+                        count += 1
+            if count == 0:
+                crossing = False
+
+    def cross_detect(self, x1, x2, x3, x4, y1, y2, y3, y4):
+        """2つの線分の交差判定を行う
+
+        @return True/False
+        線分1: (x1, y1), (x2,y2)
+        線分2: (x3, y3), (x4,y4)
+        # 線分が接する場合にはFalseを返すこととする
+        """
+        # まず,絶対に交差しない場合を除く
+        # xについて
+        if x1 < x2:
+            if (x3 < x1 and x4 < x1) or (x3 > x2 and x4 > x2):
+                return False
+        else:
+            if (x3 < x2 and x4 < x2) or (x3 > x1 and x4 > x1):
+                return False
+
+        # yについて
+        if y1 < y2:
+            if (y3 < y1 and y4 < y1) or (y3 > y2 and y4 > y2):
+                return False
+        else:
+            if (y3 < y2 and y4 < y2) or (y3 > y1 and y4 > y1):
+                return False
+
+        if ((x1 - x2)*(y3 - y1) + (y1 - y2)*(x1 - x3)) * \
+        ((x1 - x2)*(y4 - y1) + (y1 - y2)*(x1 - x4)) >= 0:
+            return False
+
+        if ((x3 - x4)*(y1 - y3) + (y3 - y4)*(x3 - x1)) * \
+        ((x3 - x4)*(y2 - y3) + (y3 - y4)*(x3 - x2)) >= 0:
+            return False
+
+        # Else
+        return True
+
     def update(self):
         """時間発展(タイムオーダーは成長よりも短くすること)
 
@@ -483,7 +551,7 @@ class String_Simulation():
         #      [x'0, x'1, ... , x'N-1],
         #      [y'1, y'2, ..., y'N-1]]
 
-        self.t, t_count, count, frame = 0., 0, 0, 0
+        self.t, t_count, frame = 0., 0, 0
         # solver = RK4(self.force)  # Runge-Kutta method
         solver = Euler(self.force_with_more_viscosity)  # Euler method
         # solver = Euler(self.force)  # Euler method
@@ -494,14 +562,15 @@ class String_Simulation():
                 self.point.position_x, self.point.position_y = X[0], X[1]
                 self.point.vel_x, self.point.vel_y = X[2], X[3]
 
-                # 一定の周期で各バネの自然長を増加させる & バネ定数を変化させる
-                if self.t > 0.02 * (count + 1):  # TODO: 要検討
-                    self.point.grow(self.grow_func, self.grow_func_k)
-                    count += 1
+                # 各バネの自然長を増加させる & バネ定数を変化させる
+                self.point.grow(self.grow_func, self.grow_func_k)
 
                 # 各点間の距離が基準値を超えていたら，間に新たな点を追加する
                 # 自然長が超えている場合も同じ様にするべき?
                 X = self.point.divide_if_extended(X)
+
+                # self avoiding
+                self.update_position_self_avoiding()
 
                 # 一定の間隔で描画を行う
                 if self.t > self.h * 12 * frame:  # TODO: 要検討
