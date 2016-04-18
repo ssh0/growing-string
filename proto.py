@@ -465,8 +465,12 @@ class String_Simulation():
         crossing = True
         while crossing:
             count = 0
-            for i in range(self.point.N - 1):
-                for k in range(i + 2, self.point.N - 2):
+            lis = range(self.point.N - 1)
+            random.shuffle(lis)
+            for i in lis:
+                llis = range(i + 2, self.point.N - 2)
+                random.shuffle(llis)
+                for k in llis:
                     if self.cross_detect(self.point.position_x[i],
                                          self.point.position_x[i+1],
                                          self.point.position_x[k],
@@ -481,10 +485,10 @@ class String_Simulation():
                         y_i1 = self.point.position_y[i+1]
                         x_k = self.point.position_x[k]
                         y_k = self.point.position_y[k]
-                        self.point.position_x[i+1] = 0.75 * x_k + 0.25 * x_i1
-                        self.point.position_y[i+1] = 0.75 * y_k + 0.25 * y_i1
-                        self.point.position_x[k] = 0.25 * x_k + 0.75 * x_i1
-                        self.point.position_y[k] = 0.25 * y_k + 0.75 * y_i1
+                        self.point.position_x[i+1] = 0.55 * x_k + 0.45 * x_i1
+                        self.point.position_y[i+1] = 0.55 * y_k + 0.45 * y_i1
+                        self.point.position_x[k] = 0.45 * x_k + 0.55 * x_i1
+                        self.point.position_y[k] = 0.45 * y_k + 0.55 * y_i1
                         # self.point.position_x[i+1] = x_k
                         # self.point.position_y[i+1] = y_k
                         # self.point.position_x[k] = x_i1
@@ -570,7 +574,8 @@ class String_Simulation():
                 X = self.point.divide_if_extended(X)
 
                 # self avoiding
-                self.update_position_self_avoiding()
+                if self.self_avoiding:
+                    self.update_position_self_avoiding()
 
                 # 一定の間隔で描画を行う
                 if self.t > self.h * 12 * frame:  # TODO: 要検討
@@ -688,14 +693,15 @@ if __name__ == '__main__':
             'h': 0.005,
             't_max': 300.,
             'm': 3.,
-            'e': 70.,
+            'e': 30.,
             'D': 10.,
-            'debug_mode': args.debug_mode
+            'debug_mode': args.debug_mode,
+            'self_avoiding': True
         }
         for kk in params_after.iterkeys():
             if kk in params[k]:
                 params_after[kk] = params[k][kk]
         params[k].update(params_after)
 
-    sim = String_Simulation(params['open 4'])
+    sim = String_Simulation(params['close 3'])
     sim.run()
