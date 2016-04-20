@@ -12,9 +12,10 @@ __author__ = "Shotaro Fujimoto"
 __date__ = "2016/4/12"
 
 import numpy as np
+from numpy.linalg import norm
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-# from scipy.spatial import euclidean as euc
+from scipy.spatial.distance import euclidean as euc
 import time
 import logging as log
 import random
@@ -130,20 +131,20 @@ class Points():
         # これを超えるとその間に点を追加する
         self.length_limit = length_limit
 
-    def get_distances(self, x_list, y_list):
+    def get_distances(self, x, y):
         """Caluculate distance between two points and return list.
 
         --- Arguments ---
-        x_list (list or ndarray): x座標の値のリスト
-        y_list (list or ndarray): y座標の値のリスト
+        x (list or ndarray): x座標の値のリスト
+        y (list or ndarray): y座標の値のリスト
         """
         if self.is_open:
-            distances = np.sqrt(np.power(x_list[1:] - x_list[:-1], 2) +
-                                np.power(y_list[1:] - y_list[:-1], 2))
+            distances = norm(np.c_[x[1:], y[1:]]
+                             - np.c_[x[:-1], y[:-1]], axis=1)
             # len(distances) == self.N - 1
         else:
-            distances = np.sqrt(np.power(x_list - np.roll(x_list, 1), 2) +
-                                np.power(y_list - np.roll(y_list, 1), 2))
+            distances = norm(np.c_[x, y]
+                             - np.c_[np.roll(x, 1), np.roll(y, 1)], axis=1)
             # len(distances) == self.N
 
         return distances
@@ -329,7 +330,7 @@ class String_Simulation():
         # self.grow_func = glow_randomly
 
         def grow_func_k(arr, old_nl, new_nl):
-            return arr * (old_nl / new_nl)
+            return (arr * old_nl) / new_nl
         self.grow_func_k = grow_func_k
 
         self.fig, self.ax = plt.subplots()
@@ -466,29 +467,40 @@ class String_Simulation():
         while crossing:
             count = 0
             lis = range(self.point.N - 1)
-            random.shuffle(lis)
+            # random.shuffle(lis)
             for i in lis:
                 llis = range(i + 2, self.point.N - 2)
-                random.shuffle(llis)
+                # random.shuffle(llis)
                 for k in llis:
-                    if self.cross_detect(self.point.position_x[i],
-                                         self.point.position_x[i+1],
-                                         self.point.position_x[k],
-                                         self.point.position_x[k+1],
-                                         self.point.position_y[i],
-                                         self.point.position_y[i+1],
-                                         self.point.position_y[k],
-                                         self.point.position_y[k+1]
-                                        ):
+                    x_i = self.point.position_x[i]
+                    y_i = self.point.position_y[i]
+                    x_i1 = self.point.position_x[i+1]
+                    y_i1 = self.point.position_y[i+1]
+                    x_k = self.point.position_x[k]
+                    y_k = self.point.position_y[k]
+                    x_k1 = self.point.position_x[k+1]
+                    y_k1 = self.point.position_y[k+1]
+                    if self.cross_detect(x_i, x_i1, x_k, x_k1,
+                                         y_i, y_i1, y_k, y_k1):
                         # Update positions
-                        x_i1 = self.point.position_x[i+1]
-                        y_i1 = self.point.position_y[i+1]
-                        x_k = self.point.position_x[k]
-                        y_k = self.point.position_y[k]
-                        self.point.position_x[i+1] = 0.55 * x_k + 0.45 * x_i1
-                        self.point.position_y[i+1] = 0.55 * y_k + 0.45 * y_i1
-                        self.point.position_x[k] = 0.45 * x_k + 0.55 * x_i1
-                        self.point.position_y[k] = 0.45 * y_k + 0.55 * y_i1
+                        # distance_i_k1 = norm(np.array([x_i - x_k1, y_i - y_k1]))
+                        # distance_i1_k = norm(np.array([x_i1 - x_k, y_i1 - y_k]))
+                        distance_i_k1 = abs(x_i - x_k1) + abs(y_i - y_k1)
+                        distance_i1_k = abs(x_i1 - x_k) + abs(y_i1 - y_k)
+                        if distance_i_k1 > distance_i1_k:
+                            self.point.position_x[i+1] = 0.75 * x_k + 0.25 * x_i1
+                            self.point.position_y[i+1] = 0.75 * y_k + 0.25 * y_i1
+                            self.point.position_x[k] = 0.25 * x_k + 0.75 * x_i1
+                            self.point.position_y[k] = 0.25 * y_k + 0.75 * y_i1
+                        # else:
+                        #     self.point.position_x[i] = 0.75 * x_k1 + 0.25 * x_i
+                        #     self.point.position_y[i] = 0.75 * y_k1 + 0.25 * y_i
+                        #     self.point.position_x[k+1] = 0.25 * x_k1 + 0.75 * x_i
+                        #     self.point.position_y[k+1] = 0.25 * y_k1 + 0.75 * y_i
+                        # self.point.position_x[i+1] = 0.55 * x_k + 0.45 * x_i1
+                        # self.point.position_y[i+1] = 0.55 * y_k + 0.45 * y_i1
+                        # self.point.position_x[k] = 0.45 * x_k + 0.55 * x_i1
+                        # self.point.position_y[k] = 0.45 * y_k + 0.55 * y_i1
                         # self.point.position_x[i+1] = x_k
                         # self.point.position_y[i+1] = y_k
                         # self.point.position_x[k] = x_i1
@@ -555,10 +567,12 @@ class String_Simulation():
         #      [x'0, x'1, ... , x'N-1],
         #      [y'1, y'2, ..., y'N-1]]
 
-        self.t, t_count, frame = 0., 0, 0
         # solver = RK4(self.force)  # Runge-Kutta method
-        solver = Euler(self.force_with_more_viscosity)  # Euler method
+        # solver = RK4(self.force_with_more_viscosity)  # Runge-Kutta method
         # solver = Euler(self.force)  # Euler method
+        solver = Euler(self.force_with_more_viscosity)  # Euler method
+
+        self.t, t_count, frame = 0., 0, 0
         while self.t < self.t_max:
             if not self.pause:
                 X = solver.solve(X, self.t, self.h)
@@ -703,5 +717,5 @@ if __name__ == '__main__':
                 params_after[kk] = params[k][kk]
         params[k].update(params_after)
 
-    sim = String_Simulation(params['close 3'])
+    sim = String_Simulation(params['close 4'])
     sim.run()
