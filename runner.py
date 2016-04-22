@@ -10,6 +10,9 @@ import matplotlib.animation as animation
 import logging as log
 import random
 import time
+from euler import Euler
+from runge_kutta import RK4
+from points import Points
 
 
 class String_Simulation():
@@ -22,7 +25,7 @@ class String_Simulation():
             key: x, y, nl, K, length_limit, h, t_max, e, debug_mode
             See details for each values in Points's documentation.
         """
-        if type(params) != dict:
+        if type(parameters) != dict:
             raise TypeError("params should be dictionary")
         self.__dict__ = parameters
 
