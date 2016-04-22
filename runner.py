@@ -191,6 +191,13 @@ class String_Simulation():
                          ])
 
     def update_position_self_avoiding(self):
+        """自己回避効果を取り入れ，他の線分要素との重なりを解消する
+
+        cross_detect関数を用いて交差判定を行い，座標の交換を行う
+        NOTE: 簡単に無限ループに入って抜け出せなくなるので，
+        別のアプローチを採るべき
+        TODO: 運動方程式内でそれぞれの線分要素に短距離斥力ポテンシャルを与える
+        """
         crossing = True
         while crossing:
             count = 0
@@ -209,7 +216,7 @@ class String_Simulation():
                     x_k1 = self.point.position_x[k+1]
                     y_k1 = self.point.position_y[k+1]
                     if self.cross_detect(x_i, x_i1, x_k, x_k1,
-                                         y_i, y_i1, y_k, y_k1):
+                                            y_i, y_i1, y_k, y_k1):
                         # Update positions
                         # distance_i_k1 = norm(np.array([x_i - x_k1, y_i - y_k1]))
                         # distance_i1_k = norm(np.array([x_i1 - x_k, y_i1 - y_k]))
@@ -220,11 +227,22 @@ class String_Simulation():
                             self.point.position_y[i+1] = 0.75 * y_k + 0.25 * y_i1
                             self.point.position_x[k] = 0.25 * x_k + 0.75 * x_i1
                             self.point.position_y[k] = 0.25 * y_k + 0.75 * y_i1
-                        # else:
-                        #     self.point.position_x[i] = 0.75 * x_k1 + 0.25 * x_i
-                        #     self.point.position_y[i] = 0.75 * y_k1 + 0.25 * y_i
-                        #     self.point.position_x[k+1] = 0.25 * x_k1 + 0.75 * x_i
-                        #     self.point.position_y[k+1] = 0.25 * y_k1 + 0.75 * y_i
+                            # 速度を反転
+                            self.point.vel_x[i+1] = - self.point.vel_x[i+1]
+                            self.point.vel_y[i+1] = - self.point.vel_y[i+1]
+                            self.point.vel_x[k] = - self.point.vel_x[k]
+                            self.point.vel_y[k] = - self.point.vel_y[k]
+
+                        else:
+                            self.point.position_x[i] = 0.75 * x_k1 + 0.25 * x_i
+                            self.point.position_y[i] = 0.75 * y_k1 + 0.25 * y_i
+                            self.point.position_x[k+1] = 0.25 * x_k1 + 0.75 * x_i
+                            self.point.position_y[k+1] = 0.25 * y_k1 + 0.75 * y_i
+                            # 速度を反転
+                            self.point.vel_x[i] = - self.point.vel_x[i]
+                            self.point.vel_y[i] = - self.point.vel_y[i]
+                            self.point.vel_x[k+1] = - self.point.vel_x[k+1]
+                            self.point.vel_y[k+1] = - self.point.vel_y[k+1]
                         # self.point.position_x[i+1] = 0.55 * x_k + 0.45 * x_i1
                         # self.point.position_y[i+1] = 0.55 * y_k + 0.45 * y_i1
                         # self.point.position_x[k] = 0.45 * x_k + 0.55 * x_i1
@@ -233,6 +251,7 @@ class String_Simulation():
                         # self.point.position_y[i+1] = y_k
                         # self.point.position_x[k] = x_i1
                         # self.point.position_y[k] = y_i1
+
                         count += 1
             if count == 0:
                 crossing = False

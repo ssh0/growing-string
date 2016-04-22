@@ -4,9 +4,8 @@
 # written by Shotaro Fujimoto
 # 2016-04-22
 
-
 import numpy as np
-
+import random
 from numpy.linalg import norm
 
 
@@ -134,38 +133,55 @@ class Points():
 
         k番目とk+1番目の間に新しい点を追加
         """
+
+        x_k, x_k1 = self.position_x[k], self.position_x[k + 1]
+        y_k, y_k1 = self.position_y[k], self.position_y[k + 1]
+        d_old = norm((x_k1 - x_k, y_k1 - y_k))
+
         # 点を追加
-        self.update_point_position(k)
+        new_positions = self.update_point_position(k, x_k, x_k1, y_k, y_k1)
+        x_k, x_k1, x_k2, y_k, y_k1, y_k2 = new_positions
+
+        # 距離を記録
+        d_new_left = norm((x_k1 - x_k, y_k1 - y_k))
+        d_new_right = norm((x_k2 - x_k1, y_k2 - y_k1))
 
         # 速度を更新
         self.update_point_velocity(k)
 
-        d = self.get_distances(self.position_x, self.position_y)
         # 自然長を更新
-        self.update_natural_length(k, d)
+        nl_old, n_k1, n_k2 = self.update_natural_length(
+            k, d_old, d_new_left, d_new_right)
 
         # バネ定数を更新
-        self.update_spring_constant(k)
+        self.update_spring_constant(k, d_old, d_new_left, d_new_right)
 
         self.N += 1
 
-    def update_point_position(self, k):
+    def update_point_position(self, k, x_k, x_k1, y_k, y_k1):
         """点を追加
 
         Called from self.create_new_point
         Change: self.position_x, self.position_y
         """
         # 中点を返す場合
-        pickp = lambda a, b: (b + a) / 2
+        # pickp = lambda a, b: (b + a) / 2
+        # newpos_x = pickp(x_k, x_k1)
+        # newpos_y = pickp(y_k, y_k1)
 
         # 一様乱数で間の適当な値を選ぶ場合
-        # pickp = lambda a, b: (random.random() - 0.5) * (b - a) * 0.1 \
-        #     + (b + a) / 2
+        scale = random.triangular(0.48, 0.52)
+        def pickp(a, b):
+            return a + (b - a) * scale
 
-        newpos_x = pickp(self.position_x[k], self.position_x[k + 1])
-        newpos_y = pickp(self.position_y[k], self.position_y[k + 1])
+        newpos_x = pickp(x_k, x_k1)
+        newpos_y = pickp(y_k, y_k1)
+
+        x_k2, y_k2 = x_k1, y_k1
+        x_k1, y_k1 = newpos_x, newpos_y
         self.position_x = np.insert(self.position_x, k + 1, newpos_x)
         self.position_y = np.insert(self.position_y, k + 1, newpos_y)
+        return x_k, x_k1, x_k2, y_k, y_k1, y_k2
 
     def update_point_velocity(self, k):
         """速度を更新
@@ -189,31 +205,28 @@ class Points():
         self.vel_y[k + 1] = vel_ykplus
         self.vel_y = np.insert(self.vel_y, k + 1, vel_yins)
 
-    def update_natural_length(self, k, d):
+    def update_natural_length(self, k, d_old, d_new_left, d_new_right):
         """自然長を更新
 
         Called from self.create_new_point
         Change: self.natural_length
         """
+        nl_old = self.natural_length[k]
+
         # 長さに合わせて変化させる
-        # if self.is_open:
-        #     new_nl = d[k]
-        #     self.natural_length[k] = new_nl
-        #     new_nl = d[k+1]
-        #     self.natural_length = np.insert(self.natural_length,
-        #                                     k + 1, new_nl)
-        # else:
-        #     new_nl = d[k+1]
-        #     self.natural_length[k] = new_nl
-        #     new_nl = d[k+2]
-        #     self.natural_length = np.insert(self.natural_length,
-        #                                     k + 1, new_nl)
+        # n_k = nl_old * d_new_left / d_old
+        # n_k1 = nl_old * d_new_right / d_old
+        # self.natural_length[k] = n_k
+        # self.natural_length = np.insert(self.natural_length, k + 1, n_k1)
 
-        new_nl = self.natural_length[k] / 2
-        self.natural_length[k] = new_nl
-        self.natural_length = np.insert(self.natural_length, k + 1, new_nl)
+        # 単純に2で割る
+        n_k = self.natural_length[k] / 2
+        n_k1 = n_k
+        self.natural_length[k] = n_k
+        self.natural_length = np.insert(self.natural_length, k + 1, n_k1)
+        return nl_old, n_k, n_k1
 
-    def update_spring_constant(self, k):
+    def update_spring_constant(self, k, nl_old, n_k, n_k1):
         """バネ定数を更新
 
         Called from self.create_new_point
@@ -222,17 +235,13 @@ class Points():
         # (元の定数kに対し，それぞれの長さ比で割ったものがバネ定数となる)
         # (↑分割に依ってエネルギーの総量は変わってはいけないという場合)
         # 今の場合，エネルギーは別に保存しなくても良い?
-        # if k == -1:
-        #     d = self.get_distances(np.roll(self.position_x, 1)[0:3],
-        #                            np.roll(self.position_y, 1)[0:3])
-        # else:
-        #     d = self.get_distances(self.position_x[k:k+3],
-        #                            self.position_y[k:k+3])
-        # new_k_left = self.K[k] * (d[0]/np.sum(d))
-        # new_k_right = self.K[k] * (d[1]/np.sum(d))
-
-        new_k_left = self.K[k]
-        new_k_right = self.K[k]
-
+        new_k_left = self.K[k] * nl_old / n_k
+        new_k_right = self.K[k] * nl_old/ n_k1
         self.K[k] = new_k_left
         self.K = np.insert(self.K, k + 1, new_k_right)
+
+        # 単純に元のバネ定数を引き継ぐとした場合
+        # new_k_left = self.K[k]
+        # new_k_right = self.K[k]
+        # self.K[k] = new_k_left
+        # self.K = np.insert(self.K, k + 1, new_k_right)

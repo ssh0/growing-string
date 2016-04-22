@@ -37,7 +37,7 @@ params = {
         'y': np.array([0., 0., 1., 1.]),
         'nl': np.array([1., 1., 1., 1.]),
         'K': np.array([300., 300., 300., 300.]),
-        'length_limit': 4.,
+        'length_limit': 2.,
     },
 
     "close 3": {
@@ -66,16 +66,16 @@ for k in params.iterkeys():
     params_after = {
         'h': 0.005,
         't_max': 300.,
-        'm': 3.,
-        'e': 30.,
-        'D': 10.,
+        'm': 1.,
+        'e': 35.,
+        'D': 5.,
         'debug_mode': args.debug_mode,
-        'self_avoiding': True
+        'self_avoiding': False
     }
     for kk in params_after.iterkeys():
         if kk in params[k]:
             params_after[kk] = params[k][kk]
     params[k].update(params_after)
 
-sim = String_Simulation(params['open 4'])
+sim = String_Simulation(params['close 4'])
 sim.run()
