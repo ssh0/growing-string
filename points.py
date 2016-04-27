@@ -165,17 +165,17 @@ class Points():
         Change: self.position_x, self.position_y
         """
         # 中点を返す場合
-        # pickp = lambda a, b: (b + a) / 2
-        # newpos_x = pickp(x_k, x_k1)
-        # newpos_y = pickp(y_k, y_k1)
-
-        # 一様乱数で間の適当な値を選ぶ場合
-        scale = random.triangular(0.48, 0.52)
-        def pickp(a, b):
-            return a + (b - a) * scale
-
+        pickp = lambda a, b: (b + a) / 2
         newpos_x = pickp(x_k, x_k1)
         newpos_y = pickp(y_k, y_k1)
+
+        # 一様乱数で間の適当な値を選ぶ場合
+        # scale = random.triangular(0.48, 0.52)
+        # def pickp(a, b):
+        #     return a + (b - a) * scale
+
+        # newpos_x = pickp(x_k, x_k1)
+        # newpos_y = pickp(y_k, y_k1)
 
         x_k2, y_k2 = x_k1, y_k1
         x_k1, y_k1 = newpos_x, newpos_y

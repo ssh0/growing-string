@@ -47,7 +47,8 @@ class String_Simulation():
         # 累積的に成長する場合
         # self.grow_func = lambda arr: arr * 1.01
         # 一定の成長率で成長する場合
-        self.grow_func = lambda arr: arr + 0.00025
+        # self.grow_func = lambda arr: arr + 0.00025
+        self.grow_func = lambda arr: arr + 0.001
         # 乱数を含める
         # import random
         # def glow_randomly(arr):
@@ -199,60 +200,60 @@ class String_Simulation():
         TODO: 運動方程式内でそれぞれの線分要素に短距離斥力ポテンシャルを与える
         """
         crossing = True
-        while crossing:
-            count = 0
-            lis = range(self.point.N - 1)
-            # random.shuffle(lis)
-            for i in lis:
-                llis = range(i + 2, self.point.N - 2)
-                # random.shuffle(llis)
-                for k in llis:
-                    x_i = self.point.position_x[i]
-                    y_i = self.point.position_y[i]
-                    x_i1 = self.point.position_x[i+1]
-                    y_i1 = self.point.position_y[i+1]
-                    x_k = self.point.position_x[k]
-                    y_k = self.point.position_y[k]
-                    x_k1 = self.point.position_x[k+1]
-                    y_k1 = self.point.position_y[k+1]
-                    if self.cross_detect(x_i, x_i1, x_k, x_k1,
-                                            y_i, y_i1, y_k, y_k1):
-                        # Update positions
-                        # distance_i_k1 = norm(np.array([x_i - x_k1, y_i - y_k1]))
-                        # distance_i1_k = norm(np.array([x_i1 - x_k, y_i1 - y_k]))
-                        distance_i_k1 = abs(x_i - x_k1) + abs(y_i - y_k1)
-                        distance_i1_k = abs(x_i1 - x_k) + abs(y_i1 - y_k)
-                        if distance_i_k1 > distance_i1_k:
-                            self.point.position_x[i+1] = 0.75 * x_k + 0.25 * x_i1
-                            self.point.position_y[i+1] = 0.75 * y_k + 0.25 * y_i1
-                            self.point.position_x[k] = 0.25 * x_k + 0.75 * x_i1
-                            self.point.position_y[k] = 0.25 * y_k + 0.75 * y_i1
-                            # 速度を反転
-                            self.point.vel_x[i+1] = - self.point.vel_x[i+1]
-                            self.point.vel_y[i+1] = - self.point.vel_y[i+1]
-                            self.point.vel_x[k] = - self.point.vel_x[k]
-                            self.point.vel_y[k] = - self.point.vel_y[k]
+        # while crossing:
+        count = 0
+        lis = range(self.point.N - 1)
+        # random.shuffle(lis)
+        for i in lis:
+            llis = range(i + 2, self.point.N - 2)
+            # random.shuffle(llis)
+            for k in llis:
+                x_i = self.point.position_x[i]
+                y_i = self.point.position_y[i]
+                x_i1 = self.point.position_x[i+1]
+                y_i1 = self.point.position_y[i+1]
+                x_k = self.point.position_x[k]
+                y_k = self.point.position_y[k]
+                x_k1 = self.point.position_x[k+1]
+                y_k1 = self.point.position_y[k+1]
+                if self.cross_detect(x_i, x_i1, x_k, x_k1,
+                                        y_i, y_i1, y_k, y_k1):
+                    # Update positions
+                    # distance_i_k1 = norm(np.array([x_i - x_k1, y_i - y_k1]))
+                    # distance_i1_k = norm(np.array([x_i1 - x_k, y_i1 - y_k]))
+                    distance_i_k1 = abs(x_i - x_k1) + abs(y_i - y_k1)
+                    distance_i1_k = abs(x_i1 - x_k) + abs(y_i1 - y_k)
+                    if distance_i_k1 > distance_i1_k:
+                        self.point.position_x[i+1] = 0.75 * x_k + 0.25 * x_i1
+                        self.point.position_y[i+1] = 0.75 * y_k + 0.25 * y_i1
+                        self.point.position_x[k] = 0.25 * x_k + 0.75 * x_i1
+                        self.point.position_y[k] = 0.25 * y_k + 0.75 * y_i1
+                        # 速度を反転
+                        self.point.vel_x[i+1] = - self.point.vel_x[i+1]
+                        self.point.vel_y[i+1] = - self.point.vel_y[i+1]
+                        self.point.vel_x[k] = - self.point.vel_x[k]
+                        self.point.vel_y[k] = - self.point.vel_y[k]
 
-                        else:
-                            self.point.position_x[i] = 0.75 * x_k1 + 0.25 * x_i
-                            self.point.position_y[i] = 0.75 * y_k1 + 0.25 * y_i
-                            self.point.position_x[k+1] = 0.25 * x_k1 + 0.75 * x_i
-                            self.point.position_y[k+1] = 0.25 * y_k1 + 0.75 * y_i
-                            # 速度を反転
-                            self.point.vel_x[i] = - self.point.vel_x[i]
-                            self.point.vel_y[i] = - self.point.vel_y[i]
-                            self.point.vel_x[k+1] = - self.point.vel_x[k+1]
-                            self.point.vel_y[k+1] = - self.point.vel_y[k+1]
-                        # self.point.position_x[i+1] = 0.55 * x_k + 0.45 * x_i1
-                        # self.point.position_y[i+1] = 0.55 * y_k + 0.45 * y_i1
-                        # self.point.position_x[k] = 0.45 * x_k + 0.55 * x_i1
-                        # self.point.position_y[k] = 0.45 * y_k + 0.55 * y_i1
-                        # self.point.position_x[i+1] = x_k
-                        # self.point.position_y[i+1] = y_k
-                        # self.point.position_x[k] = x_i1
-                        # self.point.position_y[k] = y_i1
+                    else:
+                        self.point.position_x[i] = 0.75 * x_k1 + 0.25 * x_i
+                        self.point.position_y[i] = 0.75 * y_k1 + 0.25 * y_i
+                        self.point.position_x[k+1] = 0.25 * x_k1 + 0.75 * x_i
+                        self.point.position_y[k+1] = 0.25 * y_k1 + 0.75 * y_i
+                        # 速度を反転
+                        self.point.vel_x[i] = - self.point.vel_x[i]
+                        self.point.vel_y[i] = - self.point.vel_y[i]
+                        self.point.vel_x[k+1] = - self.point.vel_x[k+1]
+                        self.point.vel_y[k+1] = - self.point.vel_y[k+1]
+                    # self.point.position_x[i+1] = 0.55 * x_k + 0.45 * x_i1
+                    # self.point.position_y[i+1] = 0.55 * y_k + 0.45 * y_i1
+                    # self.point.position_x[k] = 0.45 * x_k + 0.55 * x_i1
+                    # self.point.position_y[k] = 0.45 * y_k + 0.55 * y_i1
+                    # self.point.position_x[i+1] = x_k
+                    # self.point.position_y[i+1] = y_k
+                    # self.point.position_x[k] = x_i1
+                    # self.point.position_y[k] = y_i1
 
-                        count += 1
+                    count += 1
             if count == 0:
                 crossing = False
 
@@ -331,7 +332,6 @@ class String_Simulation():
                 self.point.grow(self.grow_func, self.grow_func_k)
 
                 # 各点間の距離が基準値を超えていたら，間に新たな点を追加する
-                # 自然長が超えている場合も同じ様にするべき?
                 X = self.point.divide_if_extended(X)
 
                 # self avoiding
