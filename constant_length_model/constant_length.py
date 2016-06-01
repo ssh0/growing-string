@@ -31,25 +31,28 @@ params = {
     "open 4": {
         'x': np.array([-2., 0., 2., 4.]),
         'y': np.array([0., -0.01, 0.01, 0.]),
-        'nl': np.array([2., 2., 2.]),
-        'K': np.array([300., 300., 300.]),
+        'nl': 2.,
+        'K': 300.,
         'length_limit': 4.,
+        'is_open': True,
     },
 
     "close 4": {
         'x': np.array([0., 1., 1., 0.]),
         'y': np.array([0., 0., 1., 1.]),
-        'nl': np.array([1., 1., 1., 1.]),
-        'K': np.array([300., 300., 300., 300.]),
+        'nl': 1.,
+        'K': 300.,
         'length_limit': 2.,
+        'is_open': False
     },
 
     "close 3": {
         'x': np.array([0., 1.73, 1.73]),
         'y': np.array([0., 1., -1.]),
-        'nl': np.array([2., 2., 2.]),
-        'K': np.array([300., 300., 300.]),
+        'nl': 2.,
+        'K': 300.,
         'length_limit': 4.,
+        'is_open': False,
     },
 }
 
@@ -59,8 +62,8 @@ params.update({
         'x': x,
         'y': np.array([0. + 0.1 * (random.random() - 0.5) for n in
                         range(len(x))]),
-        'nl': np.array([1.] * (len(x) - 1)),
-        'K': np.array([15.] * (len(x) - 1)),
+        'nl': 1.,
+        'K': 15.,
         'length_limit': 4.,
     }
 })
@@ -74,7 +77,7 @@ for k in params.iterkeys():
         'e': 500.,
         'D': 10.,
         'debug_mode': args.debug_mode,
-        'self_avoiding': True
+        'self_avoiding': False
     }
     for kk in params_after.iterkeys():
         if kk in params[k]:

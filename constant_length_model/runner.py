@@ -12,7 +12,7 @@ import random
 import time
 from euler import Euler
 from runge_kutta import RK4
-from string import String
+from mystring import MyString
 
 
 class String_Simulation():
@@ -36,11 +36,12 @@ class String_Simulation():
         else:
             log.basicConfig(format="%(levelname)s: %(message)s")
 
-        self.point = String(N=len(self.x),
+        self.point = MyString(N=len(self.x),
                             position_x=self.x,
                             position_y=self.y,
                             natural_length=self.nl,
-                            K=self.K)
+                            K=self.K,
+                            is_open=self.is_open)
 
         self.fig, self.ax = plt.subplots()
         self.l, = self.ax.plot(np.array([]), np.array([]), 'bo-')
@@ -74,25 +75,28 @@ class String_Simulation():
 
         バネ弾性，曲げ弾性による力を計算するための変換行列を生成する。
         """
+        print X[0]
+        print X[1]
         distances = self.point.distances(X[0], X[1])
 
         # 圧縮由来の力を表す行列Zを作成
         zz = self.point.natural_length - distances
+        print zz
         # 自然長より長く伸びた場合には通常のフックの法則より強い力が働くようにする
-        # 但し，境界条件 f(0) = 0を満たすような関数
+        # 但し，境界条件 f(0) = 0を満たすような関数f
         # x = natural_length - distances
         # f(x) = - exp(x) + 1 / (1 - x)
         # U(x) = exp(|x|) - log(|x| + 1)
-        # U(x) = exp(-x) - ( 1 / (-x + 1))
-        zz[zz < 0] = - np.exp(- zz[zz < 0]) + 1 / (1 - zz[z < 0])
+        # U'(x) = exp(-x) - ( 1 / (-x + 1))
+        zz[zz < 0] = np.exp(- zz[zz < 0]) + 1 / (zz[zz < 0] - 1)
         zz = zz / distances
         if self.point.is_open:
             # 開曲線のとき，先頭はゼロにする
             zz = np.insert(zz, 0, 0)
-            K = np.insert(self.point.K, 0, 0)
+            K = np.insert(np.array([self.point.K]*(self.point.N - 1)), 0, 0)
         else:
             # 閉曲線の場合
-            K = self.point.K
+            K = np.array([self.point.K] * self.point.N)
         # どちらの場合でも len(zz) = N
 
         zz = np.diag(zz)
@@ -294,11 +298,11 @@ class String_Simulation():
 
         # solver = RK4(self.force)  # Runge-Kutta method
         # solver = RK4(self.force_with_more_viscosity)  # Runge-Kutta method
-        # solver = Euler(self.force)  # Euler method
-        solver = Euler(self.force_with_more_viscosity)  # Euler method
+        solver = Euler(self.force)  # Euler method
+        # solver = Euler(self.force_with_more_viscosity)  # Euler method
 
         self.t, t_count, count_grow, frame = 0., 0, 0, 0
-        grow_interval = 10
+        grow_interval = 1000
         plot_interval = 12
         while self.t < self.t_max:
             if not self.pause:
@@ -334,8 +338,7 @@ class String_Simulation():
                                np.append(self.point.position_y,
                                          self.point.position_y[0])]
                     frame += 1
-                t_count += 1
-                self.t = self.h * t_count
+                self.t += self.h
             else:
                 time.sleep(0.1)
                 if self.point.is_open:
