@@ -70,12 +70,12 @@ for k in params.iterkeys():
         'e': 500.,
         'D': 10.,
         'debug_mode': args.debug_mode,
-        'self_avoiding': True
+        'self_avoiding': False
     }
     for kk in params_after.iterkeys():
         if kk in params[k]:
             params_after[kk] = params[k][kk]
     params[k].update(params_after)
 
-sim = String_Simulation(params['close 3'])
+sim = String_Simulation(params['open many'])
 sim.run()

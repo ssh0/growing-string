@@ -6,6 +6,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.tri as tri
 import matplotlib.animation as animation
 import logging as log
 import random
