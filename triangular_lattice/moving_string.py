@@ -274,15 +274,22 @@ class Main:
         return string
 
 
-trial = 2000 # for npy
+trial = 3000 # for npy
 # trial = 1000
 params = dict(Lx=40, Ly=40, lattice_scale=10, plot=False)
+# def calc_for_each_size(size):
+#     summation = 0.
+#     for t in range(trial):
+#         main = Main(size=size, **params)
+#         summation += main.num_deadlock
+#     return summation / trial
+
 def calc_for_each_size(size):
-    summation = 0.
+    ret = []
     for t in range(trial):
         main = Main(size=size, **params)
-        summation += main.num_deadlock
-    return summation / trial
+        ret.append(main.num_deadlock)
+    return ret
 
 
 if __name__ == '__main__':
@@ -296,16 +303,18 @@ if __name__ == '__main__':
     #==========================================================================
     # Create data
     pool = Pool(processes=6)
-    sizeset = np.logspace(1., 2.7, num=50, base=7, dtype=np.int)
-    T = pool.map(calc_for_each_size, sizeset)
-
-    sizeset = np.array(sizeset)
+    sizeset = np.unique(np.logspace(3., 8., num=50, base=2, dtype=np.int))
+    it = pool.imap(calc_for_each_size, sizeset)
+    T = []
+    for ret in tqdm(it, total=len(sizeset)):
+        T.append(ret)
     T = np.array(T)
     #==========================================================================
 
     #=-========================================================================
     # save the data for plotting, and so on
-    np.savez("2016-05-31.npz", trial=trial, sizeset=sizeset, T=T)
+    # np.savez("2016-05-31.npz", trial=trial, sizeset=sizeset, T=T)
+    np.savez("2016-06-02.npz", trial=trial, sizeset=sizeset, T=T)
     #==========================================================================
 
     # プロット準備
