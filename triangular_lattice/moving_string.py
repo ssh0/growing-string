@@ -225,8 +225,8 @@ class Main:
         return string
 
 
-trial = 3000 # for npy
-# trial = 1000
+# trial = 3000 # for npy
+trial = 100
 params = dict(Lx=40, Ly=40, lattice_scale=10, plot=False)
 # def calc_for_each_size(size):
 #     summation = 0.
@@ -265,18 +265,20 @@ if __name__ == '__main__':
     #=-========================================================================
     # save the data for plotting, and so on
     # np.savez("2016-05-31.npz", trial=trial, sizeset=sizeset, T=T)
-    np.savez("2016-06-02.npz", trial=trial, sizeset=sizeset, T=T)
+    # np.savez("2016-06-02.npz", trial=trial, sizeset=sizeset, T=T)
+    # np.savez("2016-06-03_80.npz", trial=trial, sizeset=sizeset, T=T)
+    np.savez("2016-06-03.npz", trial=trial, sizeset=sizeset, T=T)
     #==========================================================================
 
     # プロット準備
-    # fig, ax = plt.subplots()
-    # ax.set_title("Deadlock time for the string size N on triangular lattice")
+    fig, ax = plt.subplots()
+    ax.set_title("Deadlock time for the string size N on triangular lattice")
 
     #=0========================================================================
     # 普通に表示
-    # ax.plot(sizeset, T, marker='o')
-    # ax.set_xlabel("$N$")
-    # ax.set_ylabel("$T$")
+    ax.plot(sizeset, T, marker='o')
+    ax.set_xlabel("$N$")
+    ax.set_ylabel("$T$")
     # 反比例のように見えた
     #==========================================================================
 
@@ -298,4 +300,4 @@ if __name__ == '__main__':
     # 厳密には直線ではなさそうだった。
     #==========================================================================
 
-    # plt.show()
+    plt.show()
