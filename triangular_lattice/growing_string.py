@@ -21,7 +21,7 @@ def print_debug(arg):
 
 class Main:
 
-    def __init__(self, Lx=40, Ly=40, lattice_scale=10., N=4, size=[5, 4, 10, 12]):
+    def __init__(self, Lx=40, Ly=40, lattice_scale=10., N=4, size=[5, 4, 10, 12], plot=True):
         # Create triangular lattice with given parameters
         self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
                           scale=lattice_scale, boundary='periodic')
@@ -32,8 +32,17 @@ class Main:
         # Put the strings to the lattice
         self.strings = self.create_random_strings(N, size)
 
+        self.plot = plot
+
         # Plot triangular-lattice points, string on it, and so on
-        self.plot_all()
+        if self.plot:
+            self.plot_all()
+        else:
+            while True:
+                try:
+                    self.update()
+                except StopIteration:
+                    break
 
     def plot_all(self):
         frames = 1000
@@ -46,6 +55,8 @@ class Main:
         Y_min, Y_max = min(self.lattice_Y) - 0.1, max(self.lattice_Y) + 0.1
         self.ax.set_xlim([X_min, X_max])
         self.ax.set_ylim([Y_min, Y_max])
+        self.ax.set_xticklabels([])
+        self.ax.set_yticklabels([])
 
         triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
         self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
@@ -118,7 +129,9 @@ class Main:
         # for s in self.strings:
         #     print s.pos, s.vec
 
-        return ret
+        if self.plot:
+            ret = self.plot_string()
+            return ret
 
     def get_next_xy(self, x, y):
         nnx, nny = self.lattice.neighborhoods[x, y]
@@ -151,7 +164,7 @@ class Main:
             self.occupied[x, y] = True
 
             S = size[n]
-            pos = [(x, y, 'dummy')]
+            pos = [(x, y, np.random.choice(6))]
             trial, nmax = 0, 10
             double = 0
             while len(pos) < S:
@@ -206,6 +219,8 @@ class Main:
 
         return strings
 
+
 if __name__ == '__main__':
     # main = Main()
-    main = Main(N=10, size=[random.randint(4, 12)]*10)
+    N = 5
+    main = Main(Lx=100, Ly=100, N=N, size=[random.randint(4, 12)]*N)
