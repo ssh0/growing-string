@@ -11,9 +11,10 @@ import numpy as np
 
 # Load data ===================================================================
 # data = np.load("2016-05-31.npz")
-data = np.load("2016-06-02.npz")
+# data = np.load("2016-06-02.npz")
 # data = np.load("2016-06-03_80.npz")
 # data = np.load("2016-06-03_120.npz")
+data = np.load("2016-06-07_40.npz")
 T = data['T']
 sizeset = data['sizeset']
 
@@ -43,11 +44,11 @@ n = 256
 if not n in sizeset:
     raise UserWarning("n is not in sizeset")
 
-# df[n].plot.hist(ax=ax, bins=150, logy=True, ylim=(0, 1000))
-# ax.set_title("Deadlock time distribution for string size $N = {}$".format(n))
+df[n].plot.hist(ax=ax, bins=100, normed=True, logy=True)
+ax.set_title("Deadlock time distribution for string size $N = {}$".format(n))
 
-# for n in [10, 32, 117, 256]:
-#     df[n].plot.hist(ax=ax, bins=150, logy=True, ylim=(0, 1000))
+# for n in [8, 30, 256]:
+#     df[n].plot.hist(ax=ax, bins=50, normed=True, logy=True)
 # ax.set_title("Deadlock time distribution for string size $N$")
 
 # Lx=80のときと比較 ================
@@ -61,13 +62,13 @@ if not n in sizeset:
 # ==================================
 
 # Lx=120のときと比較 ================
-data3 = np.load("2016-06-03_120.npz")
-T3 = data3['T']
-sizeset3 = data3['sizeset']
-df3 = pd.DataFrame(T3, index=sizeset3)
-df3 = df3.T
-df[n].plot.hist(ax=ax, bins=150, logy=True, ylim=(0, 1000), alpha=0.6)
-df3[n].plot.hist(ax=ax, bins=150, logy=True, ylim=(0, 1000), alpha=0.6)
+# data3 = np.load("2016-06-03_120.npz")
+# T3 = data3['T']
+# sizeset3 = data3['sizeset']
+# df3 = pd.DataFrame(T3, index=sizeset3)
+# df3 = df3.T
+# df[n].plot.hist(ax=ax, bins=150, logy=True, ylim=(0, 1000), alpha=0.6)
+# df3[n].plot.hist(ax=ax, bins=150, logy=True, ylim=(0, 1000), alpha=0.6)
 # ==================================
 
 ax.set_xlabel("Deadlock time $T$")
