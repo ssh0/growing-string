@@ -2,7 +2,7 @@
 -[x] moving string deadlockするまでの時間T
 -[x] あるNに対するdeadlockするまでの時間分布f(T)
 -[x] string size Nに対するTの平均値の分布
--[ ] 曲げ弾性の効果を確率的選択によって入れた時のstringの挙動
+-[x] 曲げ弾性の効果を確率的選択によって入れた時のstringの挙動
 -[ ] stringの成長を再現
 
 
