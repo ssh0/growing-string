@@ -226,8 +226,8 @@ class Main:
 
 
 # trial = 3000 # for npy
-trial = 3000
-params = dict(Lx=120, Ly=120, lattice_scale=10, plot=False)
+trial = 10000
+params = dict(Lx=40, Ly=40, lattice_scale=10, plot=False)
 # def calc_for_each_size(size):
 #     summation = 0.
 #     for t in range(trial):
@@ -253,7 +253,7 @@ if __name__ == '__main__':
 
     #==========================================================================
     # Create data
-    pool = Pool()
+    pool = Pool(6)
     sizeset = np.unique(np.logspace(3., 8., num=50, base=2, dtype=np.int))
     it = pool.imap(calc_for_each_size, sizeset)
     T = []
@@ -267,7 +267,8 @@ if __name__ == '__main__':
     # np.savez("2016-05-31.npz", trial=trial, sizeset=sizeset, T=T)
     # np.savez("2016-06-02.npz", trial=trial, sizeset=sizeset, T=T)
     # np.savez("2016-06-03_80.npz", trial=trial, sizeset=sizeset, T=T)
-    np.savez("2016-06-03_120.npz", trial=trial, sizeset=sizeset, T=T)
+    # np.savez("2016-06-03_120.npz", trial=trial, sizeset=sizeset, T=T)
+    np.savez("2016-06-07_40.npz", trial=trial, sizeset=sizeset, T=T)
     #==========================================================================
 
     # プロット準備
