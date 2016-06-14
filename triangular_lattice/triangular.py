@@ -51,11 +51,11 @@ class LatticeTriangular(object):
 
         def get_for_i_reflective(i):
             if i == 0:
-                xu = None
+                xu = -1
                 xd = 1
             elif i == self.Lx - 1:
                 xu = self.Lx - 2
-                xd = None
+                xd = -1
             else:
                 xu = i - 1
                 xd = i + 1
@@ -68,11 +68,11 @@ class LatticeTriangular(object):
 
         def get_for_j_reflective(j):
             if j == int(i / 2):
-                yl = None
+                yl = -1
                 yr = (j + 1) % self.Ly
             elif j == (self.Ly - 1 + int(i / 2)) % self.Ly:
                 yl = j - 1
-                yr = None
+                yr = -1
             else:
                 yl = (j - 1) % self.Ly
                 yr = (j + 1) % self.Ly
