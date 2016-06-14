@@ -131,7 +131,13 @@ class Main:
 
     def get_next_xy(self, x, y):
         nnx, nny = self.lattice.neighborhoods[x, y]
-        vectors = [i for i in range(6) if not self.occupied[nnx[i], nny[i]]]
+        vectors = []
+        for i in range(6):
+            if i == -1:
+                continue
+            elif not self.occupied[nnx[i], nny[i]]:
+                vectors.append(i)
+        # vectors = [i for i in range(6) if not self.occupied[nnx[i], nny[i]]]
         if len(vectors) == 0:
             print_debug("no neighbors")
             return False
