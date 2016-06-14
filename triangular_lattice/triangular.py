@@ -99,9 +99,9 @@ class LatticeTriangular(object):
         self.dx = unit_lengh
         self.dy = unit_lengh * (np.sqrt(3) / 2)
         positions = np.array([])
-        X = [((0.5 * i + j) * dx) % self.scale + self.x0
+        X = [((0.5 * i + j) * self.dx) % self.scale + self.x0
              for i in range(self.Lx) for j in range(self.Ly)]
-        Y = [(0.5 + i) * dy + self.y0
+        Y = [(0.5 + i) * self.dy + self.y0
              for i in range(self.Lx) for j in range(self.Ly)]
         return np.array(X), np.array(Y)
 
