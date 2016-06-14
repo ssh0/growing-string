@@ -125,10 +125,6 @@ class Main:
 
         ret = self.plot_string()
 
-        # print self.occupied
-        # for s in self.strings:
-        #     print s.pos, s.vec
-
         if self.plot:
             ret = self.plot_string()
             return ret
