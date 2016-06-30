@@ -119,7 +119,7 @@ class Main:
 
             # update starting position
             x, y, vec = X
-            rmx, rmy = s.follow((x, y, (vec+3)%6))
+            rmx, rmy = s.follow((x, y, (vec + 3) % 6))
             self.occupied[x, y] = True
             self.occupied[rmx, rmy] = False
 

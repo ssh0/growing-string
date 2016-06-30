@@ -44,12 +44,12 @@ n = 256
 if not n in sizeset:
     raise UserWarning("n is not in sizeset")
 
-df[n].plot.hist(ax=ax, bins=100, normed=True, logy=True)
-ax.set_title("Deadlock time distribution for string size $N = {}$".format(n))
+# df[n].plot.hist(ax=ax, bins=100, normed=True, logy=True)
+# ax.set_title("Deadlock time distribution for string size $N = {}$".format(n))
 
-# for n in [8, 30, 256]:
-#     df[n].plot.hist(ax=ax, bins=50, normed=True, logy=True)
-# ax.set_title("Deadlock time distribution for string size $N$")
+for n in [8, 30, 256]:
+    df[n].plot.hist(ax=ax, bins=50, normed=True, logy=True, alpha=0.4)
+ax.set_title("Deadlock time distribution for string size $N$")
 
 # Lx=80のときと比較 ================
 # data2 = np.load("2016-06-03_80.npz")

@@ -144,8 +144,8 @@ class Main:
 
         # 確率的に方向を決定
         # 先頭ベクトルを0とした時の相対ベクトルごとの選ばれやすさを設定
-        # weights = [0., 1., 2., 3., 2., 1.]
-        weights = [0., 0., 1., 4., 1., 0.]
+        weights = [0., 1., 2., 3., 2., 1.]
+        # weights = [0., 0., 1., 4., 1., 0.]
         # weights = [0., 0., 2., 1., 2., 0.]
         # weights = [0., 0., 0., 1., 0., 0.]
         # 有効なものだけ取り出す
@@ -234,5 +234,5 @@ class Main:
 
 if __name__ == '__main__':
     # main = Main()
-    N = 3
-    main = Main(Lx=100, Ly=100, N=N, size=[random.randint(4, 12)]*N)
+    N = 4
+    main = Main(Lx=100, Ly=100, N=N, size=[random.randint(10, 20) for i in range(N)])
