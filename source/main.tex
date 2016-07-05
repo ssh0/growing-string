@@ -1,0 +1,105 @@
+% Preamble {{{
+\documentclass{jsarticle}
+
+% For code
+\usepackage{moreverb}
+
+% rendeing with dvipdfmx
+\usepackage[dvipdfmx]{graphicx}
+
+% 日本語での栞の文字化けを防ぐ
+\usepackage{atbegshi}
+\ifnum 42146=\euc"A4A2 \AtBeginShipoutFirst{\special{pdf:tounicode EUC-UCS2}}\else
+\AtBeginShipoutFirst{\special{pdf:tounicode 90ms-RKSJ-UCS2}}\fi
+
+\usepackage[dvipdfmx]{hyperref}
+
+% floating image
+\usepackage{float}
+
+% ams series
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{ascmac}
+
+% otf font
+\usepackage{otf}
+
+% 改ページの許可
+\allowdisplaybreaks[1]
+
+% definition, theorem
+\theoremstyle{definition}
+\newtheorem{theorem}{定理}
+\newtheorem*{theorem*}{定理}
+\newtheorem{definition}[theorem]{定義}
+\newtheorem*{definition*}{定義}
+\renewcommand\proofname{\bf 証明}
+
+% "\vector{a}" でベクトル
+\def\vector#1{\mbox{\boldmath \(#1\)}}
+
+\hypersetup{breaklinks=true,
+            bookmarks=true,
+            pdfauthor={藤本將太郎},
+            pdftitle={成長する線分要素の挙動に関して},
+            colorlinks=true,
+            citecolor=black,
+            urlcolor=black,
+            linkcolor=black,
+            pdfborder={0 0 0}}
+\urlstyle{same}  % don't use monospace font for urls
+% }}}
+\title{成長する線分要素の挙動に関して}
+\author{藤本將太郎}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{研究背景}\label{background}
+
+\begin{itemize}
+\itemsep1pt\parskip0pt\parsep0pt
+\item
+  本田先生の研究
+\item
+  脇田先生の研究
+\item
+  2次元平面内での界面の運動の解析
+\item
+  軸を定めて1つの関数で表すことのできないときの挙動の記述の可能性
+\end{itemize}
+
+\section{研究目的}\label{purpose}
+
+\begin{itemize}
+\itemsep1pt\parskip0pt\parsep0pt
+\item
+  2次元平面内でのひも状構造体の挙動に関する実際の物理を再現するモデルを作成し,
+  現象の背後にある統計性などに注目できるフレームワークを作成する（?）
+\end{itemize}
+
+\section{研究方法}
+
+本研究では，Bacillus subtilisが養分濃度が高く，固い寒天上で成長するとき，
+その成長初期段階に見られる座屈と折りたたみ現象の数理的解析を行う。
+また，簡単な数理モデルを作成してシミュレーションを行うことにより，現象の理解を試みる。
+
+\section{モデル化}\label{about_model}
+
+\subsection{ひも状細胞を弾性体としてとらえるモデル}
+\input{growing_natural_length_model.tex}
+
+\subsection{自然長，バネ定数を一定に保つモデル}
+\input{constant_length_model}
+
+\subsection{三角格子上で動くひも状オブジェクト}
+\input{triangular_lattice.tex}
+
+% % bib reference
+% \bibliographystyle{junsrt}
+% \bibliography{reference}
+
+\end{document}
