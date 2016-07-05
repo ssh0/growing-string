@@ -64,7 +64,4 @@ target/
 # for README and pydoc
 *.html
 
-# text
-source/
-main.*
 
