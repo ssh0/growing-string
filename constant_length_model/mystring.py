@@ -103,7 +103,7 @@ class MyString:
 
         # 点を追加
         new_positions = self.update_point_position(k, x_k, x_k1, y_k, y_k1)
-        x_k, x_k1, x_k2, y_k, y_k1, y_k2 = new_positions
+        # x_k, x_k1, x_k2, y_k, y_k1, y_k2 = new_positions
 
         # 距離を記録
         # d_new_left = norm((x_k1 - x_k, y_k1 - y_k))

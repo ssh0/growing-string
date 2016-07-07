@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 #
-# written by Shotaro Fujimoto
+# writte by Shotaro Fujimoto
 # 2016-04-22
 
 import numpy as np
@@ -28,6 +28,7 @@ class String_Simulation():
         if type(parameters) != dict:
             raise TypeError("params should be dictionary")
         self.__dict__ = parameters
+        self.t = 0.
 
         # debugging
         if self.debug_mode:
@@ -75,20 +76,17 @@ class String_Simulation():
 
         バネ弾性，曲げ弾性による力を計算するための変換行列を生成する。
         """
-        print X[0]
-        print X[1]
         distances = self.point.distances(X[0], X[1])
 
         # 圧縮由来の力を表す行列Zを作成
         zz = self.point.natural_length - distances
-        print zz
         # 自然長より長く伸びた場合には通常のフックの法則より強い力が働くようにする
         # 但し，境界条件 f(0) = 0を満たすような関数f
         # x = natural_length - distances
         # f(x) = - exp(x) + 1 / (1 - x)
         # U(x) = exp(|x|) - log(|x| + 1)
         # U'(x) = exp(-x) - ( 1 / (-x + 1))
-        zz[zz < 0] = np.exp(- zz[zz < 0]) + 1 / (zz[zz < 0] - 1)
+        # zz[zz < 0] = np.exp(- zz[zz < 0]) - 1 / (-zz[zz < 0] + 1)
         zz = zz / distances
         if self.point.is_open:
             # 開曲線のとき，先頭はゼロにする
@@ -298,21 +296,25 @@ class String_Simulation():
 
         # solver = RK4(self.force)  # Runge-Kutta method
         # solver = RK4(self.force_with_more_viscosity)  # Runge-Kutta method
-        solver = Euler(self.force)  # Euler method
-        # solver = Euler(self.force_with_more_viscosity)  # Euler method
+        # solver = Euler(self.force)  # Euler method
+        solver = Euler(self.force_with_more_viscosity)  # Euler method
 
-        self.t, t_count, count_grow, frame = 0., 0, 0, 0
+        count_grow, frame = 1, 0
         grow_interval = 1000
-        plot_interval = 12
+        plot_interval = 8
         while self.t < self.t_max:
+            print self.t
             if not self.pause:
+                print "solver"
                 X = solver.solve(X, self.t, self.h)
                 # update values
                 self.point.position_x, self.point.position_y = X[0], X[1]
                 self.point.vel_x, self.point.vel_y = X[2], X[3]
 
                 # ある時間間隔で新しく線素を追加する
+                print self.h * grow_interval * count_grow
                 if self.t > self.h * grow_interval * count_grow:
+                    print "add point"
                     X = self.point.add()
                     count_grow += 1
 
@@ -338,7 +340,7 @@ class String_Simulation():
                                np.append(self.point.position_y,
                                          self.point.position_y[0])]
                     frame += 1
-                self.t += self.h
+                self.t = self.t + self.h
             else:
                 time.sleep(0.1)
                 if self.point.is_open:

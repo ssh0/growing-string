@@ -33,11 +33,11 @@ params = {
     },
 
     "close 4": {
-        'x': np.array([0., 1., 1., 0.]),
-        'y': np.array([0., 0., 1., 1.]),
-        'nl': np.array([1., 1., 1., 1.]),
+        'x': np.array([0., 2., 2., 0.]),
+        'y': np.array([0., 0., 2., 2.]),
+        'nl': np.array([2., 2., 2., 2.]),
         'K': np.array([300., 300., 300., 300.]),
-        'length_limit': 2.,
+        'length_limit': 4.,
     },
 
     "close 3": {
@@ -56,7 +56,7 @@ params.update({
         'y': np.array([0. + 0.1 * (random.random() - 0.5) for n in
                         range(len(x))]),
         'nl': np.array([1.] * (len(x) - 1)),
-        'K': np.array([15.] * (len(x) - 1)),
+        'K': np.array([300.] * (len(x) - 1)),
         'length_limit': 4.,
     }
 })
@@ -70,7 +70,7 @@ for k in params.iterkeys():
         'e': 500.,
         'D': 10.,
         'debug_mode': args.debug_mode,
-        'self_avoiding': False
+        'self_avoiding': True
     }
     for kk in params_after.iterkeys():
         if kk in params[k]:
@@ -78,4 +78,5 @@ for k in params.iterkeys():
     params[k].update(params_after)
 
 sim = String_Simulation(params['open many'])
+# sim = String_Simulation(params['close 4'])
 sim.run()

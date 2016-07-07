@@ -29,6 +29,7 @@ class String_Simulation():
         if type(parameters) != dict:
             raise TypeError("params should be dictionary")
         self.__dict__ = parameters
+        self.t = 0.
 
         # debugging
         if self.debug_mode:
@@ -321,7 +322,7 @@ class String_Simulation():
         # solver = Euler(self.force)  # Euler method
         solver = Euler(self.force_with_more_viscosity)  # Euler method
 
-        self.t, t_count, frame = 0., 0, 0
+        t_count, frame = 0, 0
         while self.t < self.t_max:
             if not self.pause:
                 X = solver.solve(X, self.t, self.h)

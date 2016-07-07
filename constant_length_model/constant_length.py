@@ -63,8 +63,9 @@ params.update({
         'y': np.array([0. + 0.1 * (random.random() - 0.5) for n in
                         range(len(x))]),
         'nl': 1.,
-        'K': 15.,
+        'K': 150.,
         'length_limit': 4.,
+        'is_open': True,
     }
 })
 
@@ -84,5 +85,5 @@ for k in params.iterkeys():
             params_after[kk] = params[k][kk]
     params[k].update(params_after)
 
-sim = String_Simulation(params['close 3'])
+sim = String_Simulation(params['open many'])
 sim.run()
