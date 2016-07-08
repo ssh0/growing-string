@@ -84,7 +84,7 @@ class Main:
                                % self.T)
             self.ax2.set_ylim([0, 1.])
             ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
-                                          interval=0, blit=True, repeat=False)
+                                          interval=1, blit=True, repeat=False)
             plt.show()
         else:
             for i in range(100):
@@ -187,6 +187,6 @@ class Main:
         return m
 
 if __name__ == '__main__':
-    main = Main(Lx=10, Ly=10, rho=0.9, T=1.5, frames=1000, plot=True)
+    main = Main(Lx=10, Ly=10, rho=0.6, T=1.5, frames=1000, plot=True)
     # main = Main(Lx=40, Ly=40, T=0.6, frames=1000, plot=True)
 
