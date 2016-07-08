@@ -225,4 +225,5 @@ class Main:
 if __name__ == '__main__':
     # main = Main()
     N = 5
-    main = Main(Lx=100, Ly=100, N=N, size=[random.randint(4, 12)]*N)
+    # main = Main(Lx=100, Ly=100, N=N, size=[random.randint(4, 12)]*N)
+    main = Main(Lx=40, Ly=40, N=N, size=[random.randint(4, 12)]*N)
