@@ -73,8 +73,12 @@ class Main:
                                                 self.lattice.Ly)
         self.plot_string()
 
+        def init_func(*arg):
+            return self.lines
+
         ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
-                                      interval=100, blit=True, repeat=False)
+                                      init_func=init_func,
+                                      interval=50, blit=True, repeat=False)
         plt.show()
 
     def plot_string(self):
@@ -235,4 +239,4 @@ class Main:
 if __name__ == '__main__':
     # main = Main()
     N = 4
-    main = Main(Lx=40, Ly=40, N=N, size=[random.randint(10, 20) for i in range(N)])
+    main = Main(Lx=40, Ly=40, N=N, size=[random.randint(4, 12) for i in range(N)])
