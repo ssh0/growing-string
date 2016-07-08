@@ -85,7 +85,7 @@ class Main:
                                % self.T)
             self.ax2.set_ylim([0, 1.])
             ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
-                                          interval=100, blit=True, repeat=False)
+                                          interval=1, blit=True, repeat=False)
             plt.show()
         else:
             for i in range(100):
