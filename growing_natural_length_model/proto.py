@@ -67,10 +67,10 @@ for k in params.iterkeys():
         'h': 0.005,
         't_max': 300.,
         'm': 1.,
-        'e': 500.,
+        'e': 50.,
         'D': 10.,
         'debug_mode': args.debug_mode,
-        'self_avoiding': True
+        'self_avoiding': False
     }
     for kk in params_after.iterkeys():
         if kk in params[k]:
