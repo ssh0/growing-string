@@ -2,21 +2,25 @@
 # -*- coding:utf-8 -*-
 #
 # written by Shotaro Fujimoto
-# 2016-06-06
+# 2016-07-12
+
 
 from triangular import LatticeTriangular as LT
 from String import String
-from base import Main as base
+import matplotlib.pyplot as plt
+import matplotlib.tri as tri
+import matplotlib.animation as animation
 import numpy as np
+from numpy import linalg as la
 import random
-
+import time
 
 def print_debug(arg):
     # print arg
     pass
 
 
-class Main(base):
+class Main:
 
     def __init__(self, Lx=40, Ly=40, N=4, size=[5, 4, 10, 12], plot=True):
         # Create triangular lattice with given parameters
@@ -31,10 +35,83 @@ class Main(base):
 
         self.plot = plot
 
+
+    def plot_all(self):
+        frames = 1000
+        self.fig, self.ax = plt.subplots(figsize=(8, 8))
+
+        self.lattice_X = self.lattice.coordinates_x
+        self.lattice_Y = self.lattice.coordinates_y
+
+        X_min, X_max = min(self.lattice_X) - 0.1, max(self.lattice_X) + 0.1
+        Y_min, Y_max = min(self.lattice_Y) - 0.1, max(self.lattice_Y) + 0.1
+        self.ax.set_xlim([X_min, X_max])
+        self.ax.set_ylim([Y_min, Y_max])
+        self.ax.set_xticklabels([])
+        self.ax.set_yticklabels([])
+
+        triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
+        self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
+
+        self.lines = [self.ax.plot([], [], marker='o', linestyle='-',
+                                   color='black',
+                                   markerfacecolor='black',
+                                   markeredgecolor='black')[0]
+                      for i in range(self.number_of_lines)]
+
+        self.lattice_X = self.lattice_X.reshape(self.lattice.Lx,
+                                                self.lattice.Ly)
+        self.lattice_Y = self.lattice_Y.reshape(self.lattice.Lx,
+                                                self.lattice.Ly)
+        self.plot_string()
+
+        def init_func(*arg):
+            return self.lines
+
+        ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
+                                      init_func=init_func,
+                                      interval=50, blit=True, repeat=False)
+        plt.show()
+
+    def plot_string(self):
+        # print self.string.pos, self.string.vec
+
+        i = 0  # to count how many line2D object
+        for s in self.strings:
+            start = 0
+            for j, pos1, pos2 in zip(range(len(s.pos) - 1), s.pos[:-1], s.pos[1:]):
+                dist_x = abs(self.lattice_X[pos1[0], pos1[1]] -
+                            self.lattice_X[pos2[0], pos2[1]])
+                dist_y = abs(self.lattice_Y[pos1[0], pos1[1]] -
+                            self.lattice_Y[pos2[0], pos2[1]])
+                # print j, pos1, pos2
+                # print dist_x, dist_y
+                if dist_x > 1.5 * self.lattice.dx or dist_y > 1.5 * self.lattice.dy:
+                    x = s.pos_x[start:j + 1]
+                    y = s.pos_y[start:j + 1]
+                    X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]
+                    Y = [self.lattice_Y[_x, _y] for _x, _y in zip(x, y)]
+                    self.lines[i].set_data(X, Y)
+                    start = j + 1
+                    i += 1
+            else:
+                x = s.pos_x[start:]
+                y = s.pos_y[start:]
+                X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]
+                Y = [self.lattice_Y[_x, _y] for _x, _y in zip(x, y)]
+                self.lines[i].set_data(X, Y)
+                i += 1
+        # 最終的に，iの数だけ線を引けばよくなる
+        # それ以上のオブジェクトはリセット
+        for j in range(i, len(self.lines)):
+            self.lines[j].set_data([], [])
+
+        return self.lines
+
     def update(self, num=0):
         # move head part of each strings (if possible)
         for s in self.strings:
-            X = self.get_next_xy(s.x, s.y, s.vec[0])
+            X = self.get_next_xy(s.x, s.y)
             if not X:
                 raise StopIteration
 
@@ -50,27 +127,21 @@ class Main(base):
             ret = self.plot_string()
             return ret
 
-    def get_next_xy(self, x, y, vec):
-        # 曲げ弾性の効果を再現するために，位置関係によって次の点の
-        # 選ばれやすさが異なるようにする
+    def get_next_xy(self, x, y, *vec):
         nnx, nny = self.lattice.neighborhoods[x, y]
-        vectors = [i for i in range(6) if not self.occupied[nnx[i], nny[i]]]
+        vectors = []
+        for i in range(6):
+            if i == -1:
+                continue
+            elif not self.occupied[nnx[i], nny[i]]:
+                vectors.append(i)
+        # vectors = [i for i in range(6) if not self.occupied[nnx[i], nny[i]]]
         if len(vectors) == 0:
             print_debug("no neighbors")
             return False
 
         # 確率的に方向を決定
-        # 先頭ベクトルを0とした時の相対ベクトルごとの選ばれやすさを設定
-        weights = [0., 1., 2., 3., 2., 1.]
-        # weights = [0., 0., 1., 4., 1., 0.]
-        # weights = [0., 0., 2., 1., 2., 0.]
-        # weights = [0., 0., 0., 1., 0., 0.]
-        # 有効なものだけ取り出す
-        weights = np.array([weights[(i + 6 - vec) % 6] for i in vectors])
-        # 規格化
-        weights = weights / np.sum(weights)
-        # vectorsから一つ選択
-        vector = np.random.choice(vectors, p=weights)
+        vector = random.choice(vectors)
         # 点の格子座標を返す
         x, y = nnx[vector], nny[vector]
         return x, y, vector
@@ -102,7 +173,7 @@ class Main(base):
                         self.occupied[_x, _y] = False
                     print_debug("All reset")
                     break
-                X = self.get_next_xy(x, y, pos[-1][2])
+                X = self.get_next_xy(x, y)
                 if not X:
                     if len(pos) == 1:
                         print_debug("len(pos) == 1")
@@ -150,8 +221,7 @@ class Main(base):
 
 
 if __name__ == '__main__':
-    N = 4
-    main = Main(Lx=40, Ly=40, N=N, size=[random.randint(4, 12) for i in range(N)])
+    main = Main()
     # Plot triangular-lattice points, string on it, and so on
     if main.plot:
         main.plot_all()

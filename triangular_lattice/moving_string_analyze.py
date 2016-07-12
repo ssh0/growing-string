@@ -14,7 +14,8 @@ import numpy as np
 # data = np.load("2016-06-02.npz")
 # data = np.load("2016-06-03_80.npz")
 # data = np.load("2016-06-03_120.npz")
-data = np.load("2016-06-07_40.npz")
+# data = np.load("2016-06-07_40.npz")
+data = np.load("2016-07-12_40.npz")
 T = data['T']
 sizeset = data['sizeset']
 

@@ -4,7 +4,6 @@
 # written by Shotaro Fujimoto
 # 2016-05-22
 
-
 from triangular import LatticeTriangular as LT
 from base import Main as base
 import numpy as np
