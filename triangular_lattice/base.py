@@ -37,6 +37,10 @@ class Main:
 
 
     def plot_all(self):
+        """軸の設定，三角格子の描画，線分描画要素の用意などを行う
+
+        ここからFuncAnimationを使ってアニメーション表示を行うようにする
+        """
         frames = 1000
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
 
@@ -74,6 +78,8 @@ class Main:
         plt.show()
 
     def plot_string(self):
+        """self.strings内に格納されているStringを参照し，グラフ上に図示する
+        """
         # print self.string.pos, self.string.vec
 
         i = 0  # to count how many line2D object
@@ -109,6 +115,10 @@ class Main:
         return self.lines
 
     def update(self, num=0):
+        """FuncAnimationから各フレームごとに呼び出される関数
+
+        1時間ステップの間に行う計算はすべてここに含まれる。
+        """
         # move head part of each strings (if possible)
         for s in self.strings:
             X = self.get_next_xy(s.x, s.y)

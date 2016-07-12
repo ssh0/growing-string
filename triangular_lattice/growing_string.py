@@ -4,16 +4,12 @@
 # written by Shotaro Fujimoto
 # 2016-07-12
 
+
 from triangular import LatticeTriangular as LT
-from moving_string import Main as move_string
+from base import Main as base
 from String import String
-import matplotlib.pyplot as plt
-import matplotlib.tri as tri
-import matplotlib.animation as animation
 import numpy as np
-from numpy import linalg as la
 import random
-import time
 
 def print_debug(arg):
     """Print argument if needed.
@@ -31,7 +27,7 @@ results = (1., 0.5, -0.5, -1., -0.5, 0.5)
 dot = lambda v, w: results[(w + 6 - v) % 6]
 
 
-class Main(move_string):
+class Main(base):
     """任意に設定したstringの近傍点に点を追加し成長させるモデル
 
     グラフ上で左端と右端に固定されたstringの近傍点を探索，ランダム(後には曲げ
@@ -54,10 +50,6 @@ class Main(move_string):
         self.number_of_lines = sum(size) * Lx
 
         # Put the strings to the lattice
-        # self.strings = self.create_random_strings(N, size)
-        # 今回は一本のstringを，Ly方向に伸ばした形で考える
-        # self.strings = [String(self.lattice, 1, int(Lx / 2), - int(Lx / 4) % Ly,
-        #                        vec=[0] * (Ly - 1))]
         self.strings = self.create_random_strings(len(size), size)
         self.occupied[self.strings[0].pos_x, self.strings[0].pos_y] = True
 
@@ -73,77 +65,6 @@ class Main(move_string):
                 except StopIteration:
                     break
 
-    def plot_all(self):
-        """軸の設定，三角格子の描画，線分描画要素の用意などを行う
-
-        ここからFuncAnimationを使ってアニメーション表示を行うようにする
-        """
-        frames = 2000
-        self.fig, self.ax = plt.subplots(figsize=(8, 8))
-
-        self.lattice_X = self.lattice.coordinates_x
-        self.lattice_Y = self.lattice.coordinates_y
-
-        X_min, X_max = min(self.lattice_X) - 0.1, max(self.lattice_X) + 0.1
-        Y_min, Y_max = min(self.lattice_Y) - 0.1, max(self.lattice_Y) + 0.1
-        self.ax.set_xlim([X_min, X_max])
-        self.ax.set_ylim([Y_min, Y_max])
-        self.ax.set_xticklabels([])
-        self.ax.set_yticklabels([])
-
-        triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
-        self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
-
-        self.lines = [self.ax.plot([], [], marker='o', linestyle='-',
-                                   color='black',
-                                   markerfacecolor='black',
-                                   markeredgecolor='black')[0]
-                      for i in range(self.number_of_lines)]
-
-        self.lattice_X = self.lattice_X.reshape(self.lattice.Lx,
-                                                self.lattice.Ly)
-        self.lattice_Y = self.lattice_Y.reshape(self.lattice.Lx,
-                                                self.lattice.Ly)
-        self.plot_string()
-
-        ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
-                                      interval=0, blit=True, repeat=False)
-        plt.show()
-
-    def plot_string(self):
-        """self.strings内に格納されているStringを参照し，グラフ上に図示する
-        """
-        # print self.string.pos, self.string.vec
-
-        i = 0  # to count how many line2D object
-        for s in self.strings:
-            start = 0
-            for j, pos1, pos2 in zip(range(len(s.pos) - 1), s.pos[:-1], s.pos[1:]):
-                dist_x = abs(self.lattice_X[pos1[0], pos1[1]] - self.lattice_X[pos2[0], pos2[1]] )
-                dist_y = abs(self.lattice_Y[pos1[0], pos1[1]] - self.lattice_Y[pos2[0], pos2[1]] )
-                # print j, pos1, pos2
-                # print dist_x, dist_y
-                if dist_x > 1.5 * self.lattice.dx or dist_y > 1.5 * self.lattice.dy:
-                    x = s.pos_x[start:j+1]
-                    y = s.pos_y[start:j+1]
-                    X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]
-                    Y = [self.lattice_Y[_x, _y] for _x, _y in zip(x, y)]
-                    self.lines[i].set_data(X, Y)
-                    start = j + 1
-                    i += 1
-            else:
-                x = s.pos_x[start:]
-                y = s.pos_y[start:]
-                X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]
-                Y = [self.lattice_Y[_x, _y] for _x, _y in zip(x, y)]
-                self.lines[i].set_data(X, Y)
-                i += 1
-        # 最終的に，iの数だけ線を引けばよくなる
-        # それ以上のオブジェクトはリセット
-        for j in range(i, len(self.lines)):
-            self.lines[j].set_data([], [])
-
-        return self.lines
 
     def update(self, num=0):
         """FuncAnimationから各フレームごとに呼び出される関数
