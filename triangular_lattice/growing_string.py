@@ -2,9 +2,10 @@
 # -*- coding:utf-8 -*-
 #
 # written by Shotaro Fujimoto
-# 2016-06-09
+# 2016-07-12
 
 from triangular import LatticeTriangular as LT
+from moving_string import Main as move_string
 from String import String
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri
@@ -30,8 +31,8 @@ results = (1., 0.5, -0.5, -1., -0.5, 0.5)
 dot = lambda v, w: results[(w + 6 - v) % 6]
 
 
-class Main:
-    """両端を固定されたstringの近傍点に点を追加し成長させるモデル
+class Main(move_string):
+    """任意に設定したstringの近傍点に点を追加し成長させるモデル
 
     グラフ上で左端と右端に固定されたstringの近傍点を探索，ランダム(後には曲げ
     弾性による重み付けの効果を追加)に選択し，stringを成長させていくモデル
@@ -50,13 +51,14 @@ class Main:
                           scale=lattice_scale, boundary='periodic')
 
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
-        self.number_of_lines = sum(size)
+        self.number_of_lines = sum(size) * Lx
 
         # Put the strings to the lattice
         # self.strings = self.create_random_strings(N, size)
         # 今回は一本のstringを，Ly方向に伸ばした形で考える
-        self.strings = [String(self.lattice, 1, int(Lx / 2), - int(Lx / 4) % Ly,
-                               vec=[0] * (Ly - 1))]
+        # self.strings = [String(self.lattice, 1, int(Lx / 2), - int(Lx / 4) % Ly,
+        #                        vec=[0] * (Ly - 1))]
+        self.strings = self.create_random_strings(len(size), size)
         self.occupied[self.strings[0].pos_x, self.strings[0].pos_y] = True
 
         self.plot = plot
@@ -223,8 +225,10 @@ class Main:
 
 
 if __name__ == '__main__':
-    # main = Main()
-    Ly = 40
-    main = Main(Lx=100, Ly=Ly, size=[Ly])
+    # Ly = 40
+    # main = Main(Lx=100, Ly=Ly, size=[Ly])
+
     # Ly = 5
     # main = Main(Lx=10, Ly=Ly, size=[Ly])
+
+    main = Main(Lx=30, Ly=30, size=[random.randint(4, 12)] * 2)
