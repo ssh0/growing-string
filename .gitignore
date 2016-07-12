@@ -64,4 +64,10 @@ target/
 # for README and pydoc
 *.html
 
+# TeX
+*.bbl
+*.dvi
+*.nav
+*.snm
 
+*.xbb
