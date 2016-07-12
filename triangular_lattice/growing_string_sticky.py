@@ -50,6 +50,7 @@ class Main:
         # 今回は一本のstringを，Ly方向に伸ばした形で考える
         self.strings = [String(self.lattice, 1, int(Lx / 2), - int(Lx / 4) % Ly,
                                vec=[0] * (Ly - 1))]
+        self.occupied[self.strings[0].pos_x, self.strings[0].pos_y] = True
 
         self.plot = plot
 
@@ -68,7 +69,7 @@ class Main:
 
         ここからFuncAnimationを使ってアニメーション表示を行うようにする
         """
-        frames = 1000
+        frames = 2000
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
 
         self.lattice_X = self.lattice.coordinates_x
@@ -96,8 +97,8 @@ class Main:
                                                 self.lattice.Ly)
         self.plot_string()
 
-        # ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
-        #                               interval=1000, blit=True, repeat=False)
+        ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
+                                      interval=0, blit=True, repeat=False)
         plt.show()
 
     def plot_string(self):
@@ -147,10 +148,10 @@ class Main:
                 raise StopIteration
 
             # update starting position
-            x, y, vec = X
-            rmx, rmy = s.follow((x, y, (vec + 3) % 6))
-            self.occupied[x, y] = True
-            self.occupied[rmx, rmy] = False
+            i, r, r_rev = X
+            s.vec[i] = r
+            s.insert(i + 1, r_rev)
+            self.occupied[s.pos_x[i + 1], s.pos_y[i + 1]] = True
 
         ret = self.plot_string()
 
@@ -171,21 +172,20 @@ class Main:
             nnx, nny = self.lattice.neighborhoods[x, y]
             # 6方向全てに関して
             for r in range(6):
-                # 反射境界条件のとき除外される点の場合，次の近接点に
                 nx, ny = nnx[r], nny[r]
+                # 反射境界条件のとき除外される点の場合，次の近接点に
                 if nx == -1 or ny == -1:
                     continue
                 # 既に占有されているとき，次の近接点に
-                if self.occupied[nx, ny]:
+                elif self.occupied[nx, ny]:
                     continue
                 # それ以外(近傍点のうち占有されていない点であるとき)
                 # 既にstringの近傍として登録されている場合
-                if neighbors_set.has_key((nx, ny)):
+                elif neighbors_set.has_key((nx, ny)):
                     # 一つ前に登録された点が現在の評価点の近傍点である場合
-                    # -> bonding_pairsに[(前のxy), (s近傍のxy), (後のxy)]を追加
                     if neighbors_set[(nx, ny)][-1][0] == i - 1:
-                        # 現在の評価点から近接点へのベクトルの逆向きのベクトル
-                        r_rev = r + 3 % 6
+                        # r_rev: 現在の点から近接点へのベクトル
+                        r_rev = (r + 3) % 6
                         # [i-1, [r_{i}, r_{rev}]]
                         bonding_pairs.append([i - 1,
                                               [neighbors_set[(nx, ny)][-1][1],
@@ -195,25 +195,28 @@ class Main:
                 # -> 新たに登録
                 else:
                     neighbors_set[(nx, ny)] = [(i, r), ]
+        
+        # print s.pos
+        # print s.vec
+        # print bonding_pairs
+        # print self.occupied
 
         # この後やること ===
         # bonding_pairsの選ばれやすさを適切に重みを付けて評価
+        i, (r, r_rev) = random.choice(bonding_pairs)
+        # print "i = %d" % i
+        # print "r = %d" % r
+        # print "r_rev = %d" % r_rev
         ## さらに付け加えるなら ---
         ## 選ばれやすさはr_{i}とr_{rev}によって決まる角度によって決まる
         ## 重みつきでランダムに選択
 
-        if len(vectors) == 0:
-            print_debug("no neighbors")
-            return False
-
-        # 確率的に方向を決定
-        vector = random.choice(vectors)
-        # 点の格子座標を返す
-        x, y = nnx[vector], nny[vector]
-        return x, y, vector
+        return i, r, r_rev
 
 
 if __name__ == '__main__':
     # main = Main()
     Ly = 40
     main = Main(Lx=100, Ly=Ly, size=[Ly])
+    # Ly = 5
+    # main = Main(Lx=10, Ly=Ly, size=[Ly])
