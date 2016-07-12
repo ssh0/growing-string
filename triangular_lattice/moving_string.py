@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 #
 # written by Shotaro Fujimoto
-# 2016-05-30
+# 2016-05-22
 
 from triangular import LatticeTriangular as LT
 from String import String
@@ -13,9 +13,6 @@ import numpy as np
 from numpy import linalg as la
 import random
 import time
-import sys
-from tqdm import tqdm
-from multiprocessing import Pool
 
 def print_debug(arg):
     # print arg
@@ -24,19 +21,16 @@ def print_debug(arg):
 
 class Main:
 
-    def __init__(self, Lx=40, Ly=40, lattice_scale=10., size=10, plot=True):
+    def __init__(self, Lx=40, Ly=40, lattice_scale=10., N=4, size=[5, 4, 10, 12], plot=True):
         # Create triangular lattice with given parameters
         self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
                           scale=lattice_scale, boundary='periodic')
 
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
-        self.number_of_lines = size
+        self.number_of_lines = sum(size)
 
-        # Put the string to the lattice
-        self.string = self.create_random_string(size)
-
-        # Record the number of time-steps to reach the deadlocks
-        self.num_deadlock = 0
+        # Put the strings to the lattice
+        self.strings = self.create_random_strings(N, size)
 
         self.plot = plot
 
@@ -51,7 +45,7 @@ class Main:
                     break
 
     def plot_all(self):
-        frames = 10000
+        frames = 1000
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
 
         self.lattice_X = self.lattice.coordinates_x
@@ -61,6 +55,8 @@ class Main:
         Y_min, Y_max = min(self.lattice_Y) - 0.1, max(self.lattice_Y) + 0.1
         self.ax.set_xlim([X_min, X_max])
         self.ax.set_ylim([Y_min, Y_max])
+        self.ax.set_xticklabels([])
+        self.ax.set_yticklabels([])
 
         triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
         self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
@@ -78,35 +74,35 @@ class Main:
         self.plot_string()
 
         ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
-                                      interval=1, blit=True, repeat=False)
+                                      interval=50, blit=True, repeat=False)
         plt.show()
 
     def plot_string(self):
         # print self.string.pos, self.string.vec
 
         i = 0  # to count how many line2D object
-        s = self.string
-        start = 0
-        for j, pos1, pos2 in zip(range(len(s.pos) - 1), s.pos[:-1], s.pos[1:]):
-            dist_x = abs(self.lattice_X[pos1[0], pos1[1]] - self.lattice_X[pos2[0], pos2[1]] )
-            dist_y = abs(self.lattice_Y[pos1[0], pos1[1]] - self.lattice_Y[pos2[0], pos2[1]] )
-            # print j, pos1, pos2
-            # print dist_x, dist_y
-            if dist_x > 1.5 * self.lattice.dx or dist_y > 1.5 * self.lattice.dy:
-                x = s.pos_x[start:j+1]
-                y = s.pos_y[start:j+1]
+        for s in self.strings:
+            start = 0
+            for j, pos1, pos2 in zip(range(len(s.pos) - 1), s.pos[:-1], s.pos[1:]):
+                dist_x = abs(self.lattice_X[pos1[0], pos1[1]] - self.lattice_X[pos2[0], pos2[1]] )
+                dist_y = abs(self.lattice_Y[pos1[0], pos1[1]] - self.lattice_Y[pos2[0], pos2[1]] )
+                # print j, pos1, pos2
+                # print dist_x, dist_y
+                if dist_x > 1.5 * self.lattice.dx or dist_y > 1.5 * self.lattice.dy:
+                    x = s.pos_x[start:j+1]
+                    y = s.pos_y[start:j+1]
+                    X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]
+                    Y = [self.lattice_Y[_x, _y] for _x, _y in zip(x, y)]
+                    self.lines[i].set_data(X, Y)
+                    start = j + 1
+                    i += 1
+            else:
+                x = s.pos_x[start:]
+                y = s.pos_y[start:]
                 X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]
                 Y = [self.lattice_Y[_x, _y] for _x, _y in zip(x, y)]
                 self.lines[i].set_data(X, Y)
-                start = j + 1
                 i += 1
-        else:
-            x = s.pos_x[start:]
-            y = s.pos_y[start:]
-            X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]
-            Y = [self.lattice_Y[_x, _y] for _x, _y in zip(x, y)]
-            self.lines[i].set_data(X, Y)
-            i += 1
         # 最終的に，iの数だけ線を引けばよくなる
         # それ以上のオブジェクトはリセット
         for j in range(i, len(self.lines)):
@@ -115,26 +111,19 @@ class Main:
         return self.lines
 
     def update(self, num=0):
-        # TODO: numを記録して，ロックが起こるまでの時間を測る。
-        # いくつかのstringサイズ，格子サイズの上でどのように変動するだろうか
-        # 詳しいパラメータの設定などはメモ参照。
-        # move head part of string (if possible)
-        X = self.get_next_xy(self.string.x, self.string.y)
-        if not X:
-            print_debug(self.num_deadlock)
-            raise StopIteration
+        # move head part of each strings (if possible)
+        for s in self.strings:
+            X = self.get_next_xy(s.x, s.y)
+            if not X:
+                raise StopIteration
 
-        # update starting position
-        x, y, vec = X
-        rmx, rmy = self.string.follow((x, y, (vec+3)%6))
-        self.occupied[x, y] = True
-        self.occupied[rmx, rmy] = False
+            # update starting position
+            x, y, vec = X
+            rmx, rmy = s.follow((x, y, (vec + 3) % 6))
+            self.occupied[x, y] = True
+            self.occupied[rmx, rmy] = False
 
-        # Record time steps
-        self.num_deadlock += 1
-
-        # print self.occupied
-        # print self.string.pos, self.string.vec
+        ret = self.plot_string()
 
         if self.plot:
             ret = self.plot_string()
@@ -142,7 +131,13 @@ class Main:
 
     def get_next_xy(self, x, y):
         nnx, nny = self.lattice.neighborhoods[x, y]
-        vectors = [i for i in range(6) if not self.occupied[nnx[i], nny[i]]]
+        vectors = []
+        for i in range(6):
+            if i == -1:
+                continue
+            elif not self.occupied[nnx[i], nny[i]]:
+                vectors.append(i)
+        # vectors = [i for i in range(6) if not self.occupied[nnx[i], nny[i]]]
         if len(vectors) == 0:
             print_debug("no neighbors")
             return False
@@ -153,13 +148,14 @@ class Main:
         x, y = nnx[vector], nny[vector]
         return x, y, vector
 
-    def create_random_string(self, size=10):
-        """Create a string which size is specified with 'size'.
+    def create_random_strings(self, N=3, size=[10, 5, 3]):
+        """Create N strings of each size is specified with 'size'.
 
         This process is equivalent to self-avoiding walk on triangular lattice.
         """
+        strings = []
 
-        n, N = 0, 1
+        n = 0
         while n < N:
             # set starting point
             x = random.randint(0, self.lattice.Lx - 1)
@@ -169,8 +165,8 @@ class Main:
                 continue
             self.occupied[x, y] = True
 
-            S = size
-            pos = [(x, y, 'dummy')]
+            S = size[n]
+            pos = [(x, y, np.random.choice(6))]
             trial, nmax = 0, 10
             double = 0
             while len(pos) < S:
@@ -219,86 +215,15 @@ class Main:
             else:
                 print_debug("Done. Add string")
                 vec = [v[2] for v in pos][1:]
-                string = String(self.lattice, n, pos[0][0], pos[0][1], vec=vec)
+                strings.append(String(self.lattice, n, pos[0][0], pos[0][1],
+                                      vec=vec))
                 n += 1
 
-        return string
-
-
-# trial = 3000 # for npy
-trial = 10000
-params = dict(Lx=40, Ly=40, lattice_scale=10, plot=False)
-# def calc_for_each_size(size):
-#     summation = 0.
-#     for t in range(trial):
-#         main = Main(size=size, **params)
-#         summation += main.num_deadlock
-#     return summation / trial
-
-def calc_for_each_size(size):
-    ret = []
-    for t in range(trial):
-        main = Main(size=size, **params)
-        ret.append(main.num_deadlock)
-    return ret
+        return strings
 
 
 if __name__ == '__main__':
-    # Simple observation of moving string.
-    # main = Main(Lx=40, Ly=40, lattice_scale=10., size=100, plot=True)
-
-    # Calcurate the deadlock time without plots.
-    # main = Main(Lx=40, Ly=40, lattice_scale=10., size=10, plot=False)
-    # print main.num_deadlock
-
-    #==========================================================================
-    # Create data
-    pool = Pool(6)
-    sizeset = np.unique(np.logspace(3., 8., num=50, base=2, dtype=np.int))
-    it = pool.imap(calc_for_each_size, sizeset)
-    T = []
-    for ret in tqdm(it, total=len(sizeset)):
-        T.append(ret)
-    T = np.array(T)
-    #==========================================================================
-
-    #=-========================================================================
-    # save the data for plotting, and so on
-    # np.savez("2016-05-31.npz", trial=trial, sizeset=sizeset, T=T)
-    # np.savez("2016-06-02.npz", trial=trial, sizeset=sizeset, T=T)
-    # np.savez("2016-06-03_80.npz", trial=trial, sizeset=sizeset, T=T)
-    # np.savez("2016-06-03_120.npz", trial=trial, sizeset=sizeset, T=T)
-    np.savez("2016-06-07_40.npz", trial=trial, sizeset=sizeset, T=T)
-    #==========================================================================
-
-    # プロット準備
-    # fig, ax = plt.subplots()
-    # ax.set_title("Deadlock time for the string size N on triangular lattice")
-
-    #=0========================================================================
-    # 普通に表示
-    # ax.plot(sizeset, T, marker='o')
-    # ax.set_xlabel("$N$")
-    # ax.set_ylabel("$T$")
-    # 反比例のように見えた
-    #==========================================================================
-
-    #=1========================================================================
-    # loglogで表示
-    # ax.loglog(sizeset, T, marker='o')
-    # ax.set_xlabel("$N$")
-    # ax.set_ylabel("$T$")
-    # 反比例のように見えた
-    #==========================================================================
-
-    #=2========================================================================
-    # 1/log(N)とlog(T)の関係を見た
-    # logsizeset = np.log10(sizeset)
-    # logT = np.log10(T)
-    # ax.plot(1 / logsizeset, logT, marker='o')
-    # ax.set_xlabel("$N$")
-    # ax.set_ylabel("$T$")
-    # 厳密には直線ではなさそうだった。
-    #==========================================================================
-
-    # plt.show()
+    # main = Main()
+    N = 5
+    # main = Main(Lx=100, Ly=100, N=N, size=[random.randint(4, 12)]*N)
+    main = Main(Lx=40, Ly=40, N=N, size=[random.randint(4, 12)]*N)
