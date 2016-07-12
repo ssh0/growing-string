@@ -23,6 +23,13 @@ def print_debug(arg):
     pass
 
 
+results = (1., 0.5, -0.5, -1., -0.5, 0.5)
+# results = (3., 0., -0.5, -1., -0.5, 0.)
+# 0〜5で表された6つのベクトルの内積を計算する。
+# v, w (int): ベクトル(0〜5の整数で表す)
+dot = lambda v, w: results[(w + 6 - v) % 6]
+
+
 class Main:
     """両端を固定されたstringの近傍点に点を追加し成長させるモデル
 
@@ -186,16 +193,16 @@ class Main:
                     if neighbors_set[(nx, ny)][-1][0] == i - 1:
                         # r_rev: 現在の点から近接点へのベクトル
                         r_rev = (r + 3) % 6
-                        # [i-1, [r_{i}, r_{rev}]]
+                        # [i-1, r_{i}, r_{rev}]
                         bonding_pairs.append([i - 1,
-                                              [neighbors_set[(nx, ny)][-1][1],
-                                               r_rev]])
+                                              neighbors_set[(nx, ny)][-1][1],
+                                               r_rev])
                     neighbors_set[(nx, ny)].append((i, r))
                 # stringの近傍として登録されていない場合
                 # -> 新たに登録
                 else:
                     neighbors_set[(nx, ny)] = [(i, r), ]
-        
+
         # print s.pos
         # print s.vec
         # print bonding_pairs
@@ -203,7 +210,21 @@ class Main:
 
         # この後やること ===
         # bonding_pairsの選ばれやすさを適切に重みを付けて評価
-        i, (r, r_rev) = random.choice(bonding_pairs)
+        weights = []
+        for i, r, r_rev in bonding_pairs:
+            if i == 0 or i == len(s.vec) - 1:
+                weight = 3
+            else:
+                weight = dot(s.vec[i - 1], r) + dot(r_rev, s.vec[i + 1]) + 1
+            weights.append(weight)
+        weights = np.array(weights)
+        weights = weights / np.sum(weights)
+
+        choiced_index = np.random.choice(range(len(weights)), p=weights)
+        i, r, r_rev = bonding_pairs[choiced_index]
+
+        # i, (r, r_rev) = random.choice(bonding_pairs)
+
         # print "i = %d" % i
         # print "r = %d" % r
         # print "r_rev = %d" % r_rev
