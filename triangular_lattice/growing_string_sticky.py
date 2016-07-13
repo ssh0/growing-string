@@ -55,6 +55,7 @@ class Main(base):
         self.occupied[self.strings[0].pos_x, self.strings[0].pos_y] = True
 
         self.plot = plot
+        self.interval = 10
 
         # Plot triangular-lattice points, string on it, and so on
         if self.plot:

@@ -51,9 +51,12 @@ class Main(base):
 
         # Put the strings to the lattice
         self.strings = self.create_random_strings(len(size), size)
+        self.strings = [String(self.lattice, 1, int(Lx / 2), - int(Lx / 4) % Ly,
+                               vec=[0] * ((Ly - 1) / 2) + [1] + [3] * ((Ly - 1) / 2) + [4])]
         self.occupied[self.strings[0].pos_x, self.strings[0].pos_y] = True
 
         self.plot = plot
+        self.interval = 10
 
         # Plot triangular-lattice points, string on it, and so on
         if self.plot:
@@ -64,7 +67,6 @@ class Main(base):
                     self.update()
                 except StopIteration:
                     break
-
 
     def update(self, num=0):
         """FuncAnimationから各フレームごとに呼び出される関数
