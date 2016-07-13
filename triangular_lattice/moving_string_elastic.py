@@ -30,6 +30,7 @@ class Main(base):
         self.strings = self.create_random_strings(N, size)
 
         self.plot = plot
+        self.interval = 100
 
     def update(self, num=0):
         # move head part of each strings (if possible)
@@ -61,8 +62,8 @@ class Main(base):
 
         # 確率的に方向を決定
         # 先頭ベクトルを0とした時の相対ベクトルごとの選ばれやすさを設定
-        weights = [0., 1., 2., 3., 2., 1.]
-        # weights = [0., 0., 1., 4., 1., 0.]
+        # weights = [0., 1., 2., 3., 2., 1.]
+        weights = [0., 0., 1., 4., 1., 0.]
         # weights = [0., 0., 2., 1., 2., 0.]
         # weights = [0., 0., 0., 1., 0., 0.]
         # 有効なものだけ取り出す
@@ -150,8 +151,8 @@ class Main(base):
 
 
 if __name__ == '__main__':
-    N = 4
-    main = Main(Lx=40, Ly=40, N=N, size=[random.randint(4, 12) for i in range(N)])
+    N = 10
+    main = Main(Lx=40, Ly=40, N=N, size=[random.randint(4, 8) for i in range(N)])
     # Plot triangular-lattice points, string on it, and so on
     if main.plot:
         main.plot_all()

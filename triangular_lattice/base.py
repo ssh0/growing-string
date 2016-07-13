@@ -22,7 +22,8 @@ def print_debug(arg):
 
 class Main:
 
-    def __init__(self, Lx=40, Ly=40, N=4, size=[5, 4, 10, 12], plot=True):
+    def __init__(self, Lx=40, Ly=40, N=4, size=[5, 4, 10, 12], interval=50,
+                 plot=True):
         # Create triangular lattice with given parameters
         self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
                           scale=10., boundary='periodic')
@@ -34,7 +35,7 @@ class Main:
         self.strings = self.create_random_strings(N, size)
 
         self.plot = plot
-
+        self.interval = interval
 
     def plot_all(self):
         """軸の設定，三角格子の描画，線分描画要素の用意などを行う
@@ -74,7 +75,8 @@ class Main:
 
         ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
                                       init_func=init_func,
-                                      interval=50, blit=True, repeat=False)
+                                      interval=self.interval,
+                                      blit=True, repeat=False)
         plt.show()
 
     def plot_string(self):

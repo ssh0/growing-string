@@ -39,7 +39,6 @@ class Main(base):
             except StopIteration:
                 break
 
-
     def update(self, num=0):
         # numを記録して，ロックが起こるまでの時間を測る。
         # いくつかのstringサイズ，格子サイズの上でどのように変動するだろうか
@@ -125,7 +124,7 @@ if __name__ == '__main__':
     # np.savez("2016-06-03_80.npz", trial=trial, sizeset=sizeset, T=T)
     # np.savez("2016-06-03_120.npz", trial=trial, sizeset=sizeset, T=T)
     # np.savez("2016-06-07_40.npz", trial=trial, sizeset=sizeset, T=T)
-    np.savez("2016-07-12_40.npz", trial=trial, sizeset=sizeset, T=T)
+    # np.savez("2016-07-12_40.npz", trial=trial, sizeset=sizeset, T=T)
     #==========================================================================
 
     # プロット準備

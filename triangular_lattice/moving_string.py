@@ -25,6 +25,7 @@ class Main(base):
         self.strings = self.create_random_strings(N, size)
 
         self.plot = plot
+        self.interval = 100
 
 
 if __name__ == '__main__':
