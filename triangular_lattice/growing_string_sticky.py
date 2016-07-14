@@ -20,6 +20,7 @@ def print_debug(arg):
 
 
 results = (1., 0.5, -0.5, -1., -0.5, 0.5)
+weight_const = 3.
 # results = (3., 0., -0.5, -1., -0.5, 0.)
 # 0〜5で表された6つのベクトルの内積を計算する。
 # v, w (int): ベクトル(0〜5の整数で表す)
@@ -78,11 +79,22 @@ class Main(base):
             if not X:
                 raise StopIteration
 
-            # update starting position
-            i, r, r_rev = X
-            s.vec[i] = r
-            s.insert(i + 1, r_rev)
-            self.occupied[s.pos_x[i + 1], s.pos_y[i + 1]] = True
+            # update positions
+
+            if len(X) == 4:
+                i, r, nx, ny = X
+                s.x, s.y = nx, ny
+                s.insert(i, r)
+                self.occupied[s.pos_x[i], s.pos_y[i]] = True
+            elif len(X) == 2:
+                i, r = X
+                s.insert(i + 1, r)
+                self.occupied[s.pos_x[i + 1], s.pos_y[i + 1]] = True
+            else:
+                i, r, r_rev = X
+                s.vec[i] = r
+                s.insert(i + 1, r_rev)
+                self.occupied[s.pos_x[i + 1], s.pos_y[i + 1]] = True
 
         ret = self.plot_string()
 
@@ -125,25 +137,42 @@ class Main(base):
                 # stringの近傍として登録されていない場合
                 # -> 新たに登録
                 else:
+                    if i == 0:
+                        r_rev = (r + 3) % 6
+                        bonding_pairs.append([0, r_rev, nx, ny])
+                    if i == len(s.vec) - 1:
+                        bonding_pairs.append([len(s.vec), r])
+
                     neighbors_set[(nx, ny)] = [(i, r), ]
 
+        if len(bonding_pairs) == 0:
+            return False
         # bonding_pairsの選ばれやすさを適切に重みを付けて評価
         weights = []
-        for i, r, r_rev in bonding_pairs:
-            if i == 0 or i == len(s.vec) - 1:
-                # 端の場合，定数
-                weight = 3
+        for bonding in bonding_pairs:
+            if len(bonding) == 2:
+                i, r = bonding
+                # weight = dot(s.vec[i - 1], r) + 2.
+                weight = 1.5 * (dot(s.vec[i - 1], r) + 1.)
+            elif len(bonding) == 4:
+                i, r_rev, nx, ny = bonding
+                # weight = dot(r, s.vec[i + 1]) + 2.
+                weight = 1.5 * (dot(r, s.vec[i + 1]) + 1.)
             else:
-                # 重みは内積の和で表現
-                weight = dot(s.vec[i - 1], r) + dot(r_rev, s.vec[i + 1]) + 1
+                i, r, r_rev = bonding
+                if i == 0 or i == len(s.vec) - 1:
+                    # 端の場合，定数
+                    weight = weight_const
+                else:
+                    # 重みは内積の和で表現
+                    weight = dot(s.vec[i - 1], r) + dot(r_rev, s.vec[i + 1]) + 1
             weights.append(weight)
         weights = np.array(weights)
         weights = weights / np.sum(weights)
 
         choiced_index = np.random.choice(range(len(weights)), p=weights)
-        i, r, r_rev = bonding_pairs[choiced_index]
 
-        return i, r, r_rev
+        return bonding_pairs[choiced_index]
 
 
 if __name__ == '__main__':
