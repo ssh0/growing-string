@@ -13,13 +13,19 @@ from numpy import linalg as la
 import random
 import time
 
+
+rint = random.randint
+randm = random.random
+
+
 class Point:
+
     def __init__(self, id, ix, iy):
-        self.id = id
-        self.x = ix
-        self.y = iy
-        # vel is unified and the value of it implies the direction of the velocity
-        self.vel = np.random.randint(0, 5)
+        self.id, self.x, self.y = id, ix, iy
+        # vel is unified and the value of it implies the direction of the
+        # velocity
+        self.vel = rint(0, 5)
+
 
 class Points:
     def __init__(self, N, Lx, Ly):
@@ -32,7 +38,9 @@ class Points:
             self.points.append(Point(n, ix, iy))
             n += 1
 
+
 class Main:
+
     def __init__(self, Lx=6, Ly=6, rho=0.9, lattice_scale=10, T=0.4, plot=True,
                  frames=100):
         self.lattice = LT(- np.ones((Lx, Ly), dtype=np.int),
