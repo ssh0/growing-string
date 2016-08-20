@@ -15,3 +15,5 @@
     - `distance.py` and `distance.png`
 -[x] 2ベクトルのなす角の出現割合
     - `count_bending.py`
+-[ ] 連続直線長さの分布
+    - `straight_lines.py`
