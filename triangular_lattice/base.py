@@ -26,7 +26,7 @@ class Main:
                  plot=True):
         # Create triangular lattice with given parameters
         self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
-                          scale=10., boundary='periodic')
+                          scale=float(max(Lx, Ly)), boundary='periodic')
 
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
         self.number_of_lines = sum(size)
@@ -42,12 +42,14 @@ class Main:
 
         ここからFuncAnimationを使ってアニメーション表示を行うようにする
         """
-        frames = 1000
+        if self.__dict__.has_key('frames'):
+            frames = self.frames
+        else:
+            frames = 1000
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
 
         self.lattice_X = self.lattice.coordinates_x
         self.lattice_Y = self.lattice.coordinates_y
-
         X_min, X_max = min(self.lattice_X) - 0.1, max(self.lattice_X) + 0.1
         Y_min, Y_max = min(self.lattice_Y) - 0.1, max(self.lattice_Y) + 0.1
         self.ax.set_xlim([X_min, X_max])
@@ -238,8 +240,10 @@ if __name__ == '__main__':
     if main.plot:
         main.plot_all()
     else:
-        while True:
+        t = 0
+        while t < main.frames:
             try:
                 main.update()
+                t += 1
             except StopIteration:
                 break

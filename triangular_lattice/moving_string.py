@@ -26,6 +26,7 @@ class Main(base):
 
         self.plot = plot
         self.interval = 100
+        self.frames = 1000
 
 
 if __name__ == '__main__':
