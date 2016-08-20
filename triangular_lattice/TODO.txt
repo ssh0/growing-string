@@ -6,3 +6,5 @@
 -[x] stringの成長を再現
 
 
+    -[x] 慣性半径とステップの関係
+        - `radius.py` and `figure_radius_linear.png` `figure_radius_loglog.png`
