@@ -12,7 +12,9 @@
     -[x] roughness
         - `roughness.py`
 -[x] 距離とみちのりの関係
-    - `distance.py` and `distance.png`
+    - `distance.py` and `figure_distance_path_heat.png` `figure_distance_path_scatter.png`
+    -[ ] ランダムに2点を選んでその間の距離とパス長を記録するのではなく，あるパス長の2点の距離を記録していく方法でやってみる
+        - (ヒートマップにした時に，パス長の短い領域は出やすいため，関係を調べるのには不向きであるから)
 -[x] 2ベクトルのなす角の出現割合
     - `count_bending.py`
 -[x] 連続直線長さの分布
