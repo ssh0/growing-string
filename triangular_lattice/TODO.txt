@@ -4,12 +4,12 @@
 -[x] string size Nに対するTの平均値の分布
 -[x] 曲げ弾性の効果を確率的選択によって入れた時のstringの挙動
 -[x] stringの成長を再現
-
-
     -[x] 慣性半径とステップの関係
         - `radius.py` and `figure_radius_linear.png` `figure_radius_loglog.png`
     -[x] 半径rとその内部の質量との間の関係
         - `mass_in_r.py` `figure_mass_in_r_linear.png` `figure_mass_in_r_loglog.png`
+    -[x] roughness
+        - `roughness.py`
 -[x] 距離とみちのりの関係
     - `distance.py` and `distance.png`
 -[x] 2ベクトルのなす角の出現割合
