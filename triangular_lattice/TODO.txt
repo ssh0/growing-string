@@ -15,8 +15,9 @@
     - `distance.py` and `distance.png`
 -[x] 2ベクトルのなす角の出現割合
     - `count_bending.py`
--[ ] 連続直線長さの分布
-    - `straight_lines.py`
+-[x] 連続直線長さの分布
+    - `straight_lines.py` `figure_straight_lines_3d.png`
+    - 2つ以上連続で出てくる頻度も線形に増加
 -[ ] 分岐による描像
     - 山本さんのD論: Hortonの分岐
     - とりあえずやってみる
