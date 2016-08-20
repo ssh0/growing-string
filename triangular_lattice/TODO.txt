@@ -8,3 +8,5 @@
 
     -[x] 慣性半径とステップの関係
         - `radius.py` and `figure_radius_linear.png` `figure_radius_loglog.png`
+-[x] 距離とみちのりの関係
+    - `distance.py` and `distance.png`
