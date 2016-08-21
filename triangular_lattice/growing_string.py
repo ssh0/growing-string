@@ -57,8 +57,10 @@ class Main(base):
         if strings is None:
             # Put the strings to the lattice
             self.strings = self.create_random_strings(len(size), size)
-            # self.strings = [String(self.lattice, 1, int(Lx / 2), - int(Lx / 4) % Ly,
-            #                        vec=[0] * ((Ly - 1) / 2) + [1] + [3] * ((Ly - 1) / 2) + [4])]
+            # self.strings = [String(lattice=self.lattice, id=1,
+            #                        x=int(Lx / 2), y=-int(Lx / 4) % Ly,
+            #                        vec=[0] * ((Ly - 1) / 2) + [1] 
+            #                        + [3] * ((Ly - 1) / 2) + [4])]
         else:
             self.strings = [String(self.lattice, **st) for st in strings]
         self.occupied[self.strings[0].pos_x, self.strings[0].pos_y] = True
@@ -91,11 +93,11 @@ class Main(base):
         """0〜5で表された6つのベクトルの内積を計算する。
 
         v, w (int): ベクトル(0〜5の整数で表す)"""
-        results = (1., 0.5, -0.5, -1., -0.5, 0.5)
+        # results = (1., 0.5, -0.5, -1., -0.5, 0.5)
         # results = (2., 0.0, -0.5, -1., -0.5, 0.)
         # results = (1., 1., 1., 1., 1., 1.)
         # results = (3., 0., -0.5, -1., -0.5, 0.)
-        return results[(w + 6 - v) % 6]
+        return self.dot_result[(w + 6 - v) % 6]
 
     def update(self, num=0):
         """FuncAnimationから各フレームごとに呼び出される関数
@@ -103,7 +105,7 @@ class Main(base):
         1時間ステップの間に行う計算はすべてここに含まれる。
         """
 
-        # move head part of each strings (if possible)
+        # update each string
         for i, s in enumerate(self.strings):
             if self.pre_function is not None:
                 self.pre_func_res.append(self.pre_function(self, i, s))
@@ -142,6 +144,13 @@ class Main(base):
         s (String): 対象とするStringクラスのインスタンス
         """
         self.neighbors_set = {}
+        bonding_pairs = self.get_bonding_pairs(s)
+        if len(bonding_pairs) == 0:
+            return False
+        choosed_pair = self.choose_one_bonding_pair(s, bonding_pairs)
+        return choosed_pair
+
+    def get_bonding_pairs(self, s):
         bonding_pairs = []
         # sのx, y座標に関して
         for i, (x, y) in enumerate(s.pos):
@@ -161,52 +170,50 @@ class Main(base):
                 elif self.neighbors_set.has_key((nx, ny)):
                     # 一つ前に登録された点が現在の評価点の近傍点である場合
                     if self.neighbors_set[(nx, ny)][-1][0] == i - 1:
-                        # r_rev: 現在の点から近接点へのベクトル
-                        r_rev = (r + 3) % 6
+                        bonding_pair = [i - 1,
+                                        self.neighbors_set[(nx, ny)][-1][1],
+                                        (r + 3) % 6]
                         # [i-1, r_{i}, r_{rev}]
-                        bonding_pairs.append([i - 1,
-                                              self.neighbors_set[(nx, ny)][-1][1],
-                                              r_rev])
+                        # r_rev: 現在の点から近接点へのベクトル
+                        bonding_pairs.append(bonding_pair)
                     self.neighbors_set[(nx, ny)].append((i, r))
-                # stringの近傍として登録されていない場合
-                # -> 新たに登録
+                # stringの近傍として登録されていない場合 -> 新たに登録
                 else:
                     if i == 0:
-                        r_rev = (r + 3) % 6
-                        bonding_pairs.append([0, r_rev, nx, ny])
+                        # r_rev = (r + 3) % 6
+                        bonding_pairs.append([0, (r + 3) % 6, nx, ny])
                     if i == len(s.vec) - 1:
                         bonding_pairs.append([len(s.vec), r])
 
-                    self.neighbors_set[(nx, ny)] = [(i, r), ]
+                    self.neighbors_set[(nx, ny)] = [(i, r),]
+        return bonding_pairs
 
-        if len(bonding_pairs) == 0:
-            return False
-        # bonding_pairsの選ばれやすさを適切に重みを付けて評価
-        weights = []
-        for bonding in bonding_pairs:
-            if len(bonding) == 2:
-                i, r = bonding
-                # weight = self.dot(s.vec[i - 1], r) + 2.
-                weight = 1.5 * (self.dot(s.vec[i - 1], r) + 1.)
-            elif len(bonding) == 4:
-                i, r_rev, nx, ny = bonding
-                # weight = self.dot(r, s.vec[i + 1]) + 2.
-                weight = 1.5 * (self.dot(r, s.vec[i + 1]) + 1.)
+    def calc_weight(self, s, bonding_pair):
+        if len(bonding_pair) == 2:
+            i, r = bonding_pair
+            # weight = self.dot(s.vec[i - 1], r) + 2.
+            weight = 1.5 * (self.dot(s.vec[i - 1], r) + 1.)
+        elif len(bonding_pair) == 4:
+            i, r_rev, nx, ny = bonding_pair
+            # weight = self.dot(r, s.vec[i + 1]) + 2.
+            weight = 1.5 * (self.dot(r_rev, s.vec[i + 1]) + 1.)
+        else:
+            i, r, r_rev = bonding_pair
+            if i == 0 or i == len(s.vec) - 1:
+                # 端の場合，定数
+                weight = self.weight_const
             else:
-                i, r, r_rev = bonding
-                if i == 0 or i == len(s.vec) - 1:
-                    # 端の場合，定数
-                    weight_const = 3.
-                    weight = weight_const
-                else:
-                    # 重みは内積の和で表現
-                    weight = self.dot(s.vec[i - 1], r) + self.dot(r_rev, s.vec[i + 1]) + 1
-            weights.append(weight)
-        weights = np.array(weights)
+                # 重みは内積の和で表現
+                weight = self.dot(s.vec[i - 1], r) + \
+                        self.dot(r_rev, s.vec[i + 1]) + 1
+        return weight
+
+    def choose_one_bonding_pair(self, s, bonding_pairs):
+        # bonding_pairsの選ばれやすさを適切に重みを付けて評価
+        weights = np.array([self.calc_weight(s, p) for p in bonding_pairs])
         weights = weights / np.sum(weights)
 
         choiced_index = np.random.choice(range(len(weights)), p=weights)
-
         return bonding_pairs[choiced_index]
 
 
