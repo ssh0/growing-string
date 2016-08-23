@@ -12,7 +12,7 @@ from tqdm import tqdm
 from multiprocessing import Pool
 
 # constants
-num_strings = 100
+num_strings = 10
 steps = 1000
 L = 60
 # note: stepsとLの大きさに注意
@@ -61,7 +61,10 @@ def is_straight(_self, i, s):
     return get_straight_lines(is_equal(s.vec[:-1], s.vec[1:]))
 
 def count_straight_lines(s):
+    # main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=steps,
+    #             pre_function=is_straight)
     main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=steps,
+                dot_result=(1., 1., 1., 1., 1., 1.),
                 pre_function=is_straight)
     return main.pre_func_res
 
@@ -98,7 +101,7 @@ if __name__ == '__main__':
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     X, Y = np.meshgrid(range(1, len(histogram[0]) + 1), range(steps))
-    ax.plot_wireframe(X, Y, histogram, rstride=steps / 20)
+    ax.plot_wireframe(X, Y, np.log(histogram), rstride=steps / 20)
     ax.set_title("Series of $n$ straight lines per one string cluster")
     ax.set_ylim(0, steps)
     ax.set_xlabel("Series of $n$ straight lines")
