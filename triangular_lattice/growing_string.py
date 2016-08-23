@@ -9,7 +9,6 @@ from triangular import LatticeTriangular as LT
 from base import Main as base
 from String import String
 import numpy as np
-import multiprocessing as mp
 import random
 
 def print_debug(arg):
@@ -184,7 +183,6 @@ class Main(base):
                         bonding_pairs.append([0, (r + 3) % 6, nx, ny])
                     if i == len(s.vec) - 1:
                         bonding_pairs.append([len(s.vec), r])
-
                     self.neighbors_set[(nx, ny)] = [(i, r),]
         return bonding_pairs
 
