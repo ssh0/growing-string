@@ -20,15 +20,14 @@ class Count_in_r(Main):
 
 def count_point_in_r(self, s, N_r):
     N = float(len(s.vec) + 1)
-
     pos = list(s.pos.T)
-    X = np.sum(self.lattice_X[pos]) / N
-    Y = np.sum(self.lattice_Y[pos]) / N
-    R = np.sqrt(np.sum((self.lattice_X[pos] - X) ** 2
-                       + (self.lattice_Y[pos] - Y) ** 2) / N)
+    x = self.lattice_X[pos]
+    y = self.lattice_Y[pos]
+    X = np.average(x)
+    Y = np.average(y)
+    R = np.sqrt(np.sum((x - X) ** 2 + (y - Y) ** 2) / N)
     r = np.logspace(1, int(np.log2(R)) + 1, num=N_r, base=2.)
-    dist = np.sqrt((self.lattice_X[pos] - X) ** 2
-                   + (self.lattice_Y[pos] - Y) ** 2)
+    dist = np.sqrt((x - X) ** 2 + (y - Y) ** 2)
     res = []
     for _r in r:
         res.append(len(np.where(dist < _r)[0]))
