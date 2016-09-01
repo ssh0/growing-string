@@ -6,6 +6,7 @@
 
 
 from growing_string import Main
+from Optimize import Optimize_powerlaw
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -111,6 +112,18 @@ def plot_result(x, y):
     ax.set_xlabel(r'width')
     ax.set_ylabel(r'$\sigma$')
 
+def fitting(x, y, index_start, index_end):
+    optimizer = Optimize_powerlaw(args=(x[index_start:index_end],
+                                        y[index_start:index_end]),
+                                  parameters=[0., 0.5])
+    result = optimizer.fitting()
+    print result['D']
+    ax.loglog(x[index_start:index_end],
+              optimizer.fitted(x[index_start:index_end]),
+              lw=2, label='D = %f' % result['D'])
+    ax.legend(loc='best')
+
+
 if __name__ == '__main__':
 
     main = Roughness(L=120, frames=3000)
@@ -121,3 +134,6 @@ if __name__ == '__main__':
 
     res_width, res_std = eval_std_various_width(theta, r, R_t)
     plot_result(res_width, res_std)
+    fitting(res_width, res_std, 5, 33)
+
+    plt.show()
