@@ -11,10 +11,9 @@ import numpy as np
 
 
 class Roughness(Main):
-    def __init__(self):
-        L = 60
+    def __init__(self, L=60, frames=1000):
         Main.__init__(self, Lx=L, Ly=L, size=[3,] * 1, plot=False,
-                      frames=1000,
+                      frames=frames,
                       strings=[{'id': 1, 'x': L/2, 'y': L/4, 'vec': [0, 4]}]
                       )
 
@@ -69,14 +68,56 @@ def plot_to_veirfy(theta, r, R_t):
     ax_right.set_ylabel(r'$r_{i} - R$')
 
     ax_left.set_title('Real space')
-    plt.show()
 
+def eval_std_various_width(theta, r, R_t):
+    L = theta * R_t
+    L_max = 2. * np.pi * R_t
+
+    res_width = []
+    res_std = []
+    width_sample = 50
+    samples_N = 100
+
+    log_width_min = np.log2(L_max / len(L)) + 1.
+    log_width_max = np.log2(L_max)
+    for width in np.logspace(log_width_min, log_width_max,
+                             base=2., num=width_sample):
+        stds = []
+        for samples_start in np.linspace(0., L_max - width, num=samples_N):
+            try:
+                index_start = np.min(np.where(L > samples_start)[0])
+                index_end = np.max(np.where(L < samples_start + width)[0])
+            except ValueError:
+                continue
+
+            # if there are no points in
+            if index_start > index_end:
+                continue
+
+            stds.append(np.std(r[index_start:index_end + 1]))
+
+        if len(stds) == 0:
+            continue
+        else:
+            res_width.append(width)
+            res_std.append(np.mean(stds))
+
+    return res_width, res_std
+
+def plot_result(x, y):
+    fig, ax = plt.subplots()
+    ax.loglog(x, y, 'o-')
+    ax.set_title('Roughness (averaged) at some width')
+    ax.set_xlabel(r'width')
+    ax.set_ylabel(r'$\sigma$')
 
 if __name__ == '__main__':
 
-    main = Roughness()
-    roughness_t, R_t = eval_fluctuation_on_surface(main, main.strings[0])
-    theta_i, r_i = np.argsort(roughness_t.T, axis=0).T
-    theta, r = roughness_t[0][theta_i], roughness_t[1][theta_i]
+    main = Roughness(L=120, frames=3000)
+    (theta, r), R_t = eval_fluctuation_on_surface(main, main.strings[0])
+    index_sorted = np.argsort(theta)
+    theta, r = theta[index_sorted], r[index_sorted]
+    # plot_to_veirfy(theta, r, R_t)
 
-    plot_to_veirfy(theta, r, R_t)
+    res_width, res_std = eval_std_various_width(theta, r, R_t)
+    plot_result(res_width, res_std)
