@@ -60,7 +60,7 @@ class Main:
         triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
         self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
 
-        self.lines = [self.ax.plot([], [], marker='o', linestyle='-',
+        self.lines = [self.ax.plot([], [], marker='.', linestyle='-',
                                    color='black',
                                    markerfacecolor='black',
                                    markeredgecolor='black')[0]
@@ -143,13 +143,10 @@ class Main:
 
     def get_next_xy(self, x, y, *vec):
         nnx, nny = self.lattice.neighborhoods[x, y]
-        vectors = []
-        for i in range(6):
-            if i == -1:
-                continue
-            elif not self.occupied[nnx[i], nny[i]]:
-                vectors.append(i)
-        # vectors = [i for i in range(6) if not self.occupied[nnx[i], nny[i]]]
+        vectors = [i for i in range(6)
+                   if not (self.occupied[nnx[i], nny[i]]
+                   or (nnx[i] == -1 or nny[i] == -1))
+                   ]
         if len(vectors) == 0:
             print_debug("no neighbors")
             return False
