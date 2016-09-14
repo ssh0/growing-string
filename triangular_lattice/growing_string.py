@@ -30,8 +30,9 @@ class Main(base):
     def __init__(self, Lx=40, Ly=40, lattice_scale=10.,
                  size=[5, 4, 10, 12], plot=True,
                  frames=1000,
-                 dot_result=(1., 0.5, -0.5, -1., -0.5, 0.5),
-                 weight_const=3.,
+                 dot_alpha=1.5,
+                 dot_beta=1.,
+                 weight_const=1.5,
                  strings=None,
                  pre_function=None,
                  post_function=None):
@@ -68,7 +69,7 @@ class Main(base):
         self.interval = 1
         self.frames = frames
 
-        self.dot_result = dot_result
+        self.dot_result = self.create_dot_result(dot_alpha, dot_beta)
         self.weight_const = weight_const
 
         self.pre_function = pre_function
@@ -88,14 +89,15 @@ class Main(base):
                 except StopIteration:
                     break
 
+    def create_dot_result(self, dot_alpha, dot_beta):
+        """dot_alphaを高さとしてdot_resultの分布を決定する。
+        """
+        return [dot_alpha * (abs(3 - i) / 3.) ** dot_beta for i in range(6)]
+
     def dot(self, v, w):
         """0〜5で表された6つのベクトルの内積を計算する。
 
         v, w (int): ベクトル(0〜5の整数で表す)"""
-        # results = (1., 0.5, -0.5, -1., -0.5, 0.5)
-        # results = (2., 0.0, -0.5, -1., -0.5, 0.)
-        # results = (1., 1., 1., 1., 1., 1.)
-        # results = (3., 0., -0.5, -1., -0.5, 0.)
         return self.dot_result[(w + 6 - v) % 6]
 
     def update(self, num=0):
@@ -123,10 +125,10 @@ class Main(base):
 
         # update positions
         if len(X) == 4:
-            i, r, nx, ny = X
+            i, r_rev, nx, ny = X
             s.x, s.y = nx, ny
-            s.insert(i, r)
-            self.occupied[s.pos_x[i], s.pos_y[i]] = True
+            s.insert(0, r_rev)
+            self.occupied[s.pos_x[0], s.pos_y[0]] = True
         elif len(X) == 2:
             i, r = X
             s.insert(i + 1, r)
@@ -181,29 +183,27 @@ class Main(base):
                     if i == 0:
                         # r_rev = (r + 3) % 6
                         bonding_pairs.append([0, (r + 3) % 6, nx, ny])
-                    if i == len(s.vec) - 1:
-                        bonding_pairs.append([len(s.vec), r])
+                    if i == len(s.pos) - 1:
+                        bonding_pairs.append([i, r])
                     self.neighbors_set[(nx, ny)] = [(i, r),]
         return bonding_pairs
 
     def calc_weight(self, s, bonding_pair):
         if len(bonding_pair) == 2:
             i, r = bonding_pair
-            # weight = self.dot(s.vec[i - 1], r) + 2.
-            weight = 1.5 * (self.dot(s.vec[i - 1], r) + 1.)
+            weight = self.weight_const + self.dot(s.vec[i - 1], r)
         elif len(bonding_pair) == 4:
             i, r_rev, nx, ny = bonding_pair
-            # weight = self.dot(r, s.vec[i + 1]) + 2.
-            weight = 1.5 * (self.dot(r_rev, s.vec[i + 1]) + 1.)
+            weight = self.weight_const + self.dot(r_rev, s.vec[0])
         else:
             i, r, r_rev = bonding_pair
-            if i == 0 or i == len(s.vec) - 1:
-                # 端の場合，定数
-                weight = self.weight_const
+            if i == 0:
+                weight = self.dot(s.vec[i], r) + self.dot_result[0]
+            elif i == len(s.vec) - 1:
+                weight = self.dot(r_rev, s.vec[i - 1]) + self.dot_result[0]
             else:
-                # 重みは内積の和で表現
                 weight = self.dot(s.vec[i - 1], r) + \
-                        self.dot(r_rev, s.vec[i + 1]) + 1
+                    self.dot(r_rev, s.vec[i + 1])
         return weight
 
     def choose_one_bonding_pair(self, s, bonding_pairs):

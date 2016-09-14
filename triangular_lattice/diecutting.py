@@ -82,6 +82,9 @@ if __name__ == '__main__':
 
 
     main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=steps,
+                dot_alpha=1.5,
+                dot_beta=1.,
+                weight_const=1.5,
                 strings=[{'id': 1, 'x': L/2, 'y': L/4, 'vec': [0, 4]}]
                 )
     s = main.strings[0]

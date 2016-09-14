@@ -64,7 +64,7 @@ def count_straight_lines(s):
     # main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=steps,
     #             pre_function=is_straight)
     main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=steps,
-                dot_result=(1., 1., 1., 1., 1., 1.),
+                dot_alpha=2.,
                 pre_function=is_straight)
     return main.pre_func_res
 
