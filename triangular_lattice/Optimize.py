@@ -26,3 +26,23 @@ class Optimize_powerlaw:
 
     def fitted(self, x):
         return self.c * (x ** self.D)
+
+class Optimize_linear:
+    def __init__(self, args, parameters):
+        self.args = args
+        self.parameters = parameters
+
+    def func(self, parameters, x, y):
+        a = parameters[0]
+        b = parameters[1]
+        residual = y - (a * x + b)
+        return residual
+
+    def fitting(self):
+        result = optimize.leastsq(self.func, x0=self.parameters, args=self.args)
+        self.a = result[0][0]
+        self.b = result[0][1]
+        return {'a': self.a, 'b': self.b}
+
+    def fitted(self, x):
+        return self.a * x + self.b
