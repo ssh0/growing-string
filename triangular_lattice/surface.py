@@ -7,9 +7,9 @@
 import numpy as np
 
 
-def get_surface_points(self, s):
+def get_surface_points(self, pos):
     surface_points = []
-    for i, (x, y) in enumerate(s.pos):
+    for i, (x, y) in enumerate(pos):
         nnx, nny = self.lattice.neighborhoods[x, y]
         for r in [0, 1, 2, 3, 4, 5]:
             nx, ny = nnx[r], nny[r]
@@ -20,7 +20,7 @@ def get_surface_points(self, s):
             else:
                 surface_points.append(i)
     pos_index = list(set(surface_points))
-    return list(np.array(s.pos[pos_index]).T)
+    return list(np.array(pos[pos_index]).T)
 
 
 def set_labels(self, position):
@@ -60,8 +60,8 @@ def set_labels(self, position):
     return label
 
 
-def get_labeled_position(self, s, test=False):
-    position = get_surface_points(self, s)
+def get_labeled_position(self, pos, test=False):
+    position = get_surface_points(self, pos)
     label_lattice = set_labels(self, position)
     label_list = label_lattice[position]
     if test:
@@ -72,7 +72,3 @@ def get_labeled_position(self, s, test=False):
         tag = np.argmax(np.bincount(label_list))
         pos = np.where(label_lattice == tag)
     return pos
-
-
-if __name__ == '__main__':
-    main()
