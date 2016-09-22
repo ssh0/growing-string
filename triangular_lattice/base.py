@@ -56,6 +56,7 @@ class Main:
         self.ax.set_ylim([Y_min, Y_max])
         self.ax.set_xticklabels([])
         self.ax.set_yticklabels([])
+        self.ax.set_aspect('equal')
 
         triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
         self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
@@ -135,8 +136,6 @@ class Main:
             self.occupied[x, y] = True
             self.occupied[rmx, rmy] = False
 
-        ret = self.plot_string()
-
         if self.plot:
             ret = self.plot_string()
             return ret
@@ -170,7 +169,7 @@ class Main:
             x = random.randint(0, self.lattice.Lx - 1)
             y = random.randint(0, self.lattice.Ly - 1)
             if self.occupied[x, y]:  # reset
-                print_debug("(%d, %d) is occupied already. continue." % (x, y))
+                # print_debug("(%d, %d) is occupied already. continue." % (x, y))
                 continue
             self.occupied[x, y] = True
 
@@ -182,21 +181,21 @@ class Main:
                 if trial > nmax:
                     for _x, _y, vec in pos:
                         self.occupied[_x, _y] = False
-                    print_debug("All reset")
+                    # print_debug("All reset")
                     break
                 X = self.get_next_xy(x, y)
                 if not X:
                     if len(pos) == 1:
-                        print_debug("len(pos) == 1")
+                        # print_debug("len(pos) == 1")
                         double = 0
                         trial += 1
                         break
                     else:
-                        print_debug("back one step")
-                        print_debug(pos)
+                        # print_debug("back one step")
+                        # print_debug(pos)
                         if double == 1:
-                            print_debug("two time. back two step")
-                            print_debug(pos)
+                            # print_debug("two time. back two step")
+                            # print_debug(pos)
                             oldx, oldy, oldvec = pos[-1]
                             del pos[-1]
                             self.occupied[oldx, oldy] = False
@@ -205,24 +204,24 @@ class Main:
                             self.occupied[oldx, oldy] = False
                             x, y, vector = pos[-1]
                             trial += 1
-                            print_debug(pos)
+                            # print_debug(pos)
                             break
                         oldx, oldy, oldvec = pos[-1]
                         del pos[-1]
                         self.occupied[oldx, oldy] = False
                         x, y, vector = pos[-1]
                         trial += 1
-                        print_debug(pos)
+                        # print_debug(pos)
                         continue
                 else:
                     double = 0
                     x, y, vector = X
                     self.occupied[x, y] = True
                     pos.append((x, y, vector))
-                    print_debug("add step normally")
-                    print_debug(pos)
+                    # print_debug("add step normally")
+                    # print_debug(pos)
             else:
-                print_debug("Done. Add string")
+                # print_debug("Done. Add string")
                 vec = [v[2] for v in pos][1:]
                 strings.append(String(self.lattice, n, pos[0][0], pos[0][1],
                                       vec=vec))
