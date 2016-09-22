@@ -52,7 +52,7 @@ def eval_subclusters(main, x, y, cutting_size_x, cutting_size_y, x0, y0,
         y = main.lattice_Y[pos]
         ax.plot(x, y, marker='.', color='k', alpha=0.5)
         rect = plt.Rectangle((x0, y0), cutting_size_x, cutting_size_y,
-                            facecolor='#f5f5f5')
+                            facecolor='#f5f5f5', edgecolor='#ff0000', lw=2)
         plt.gca().add_patch(rect)
         for _sub_cluster in sub_cluster:
             pos = list(np.array(main.strings[0].pos[_sub_cluster]).T)
@@ -62,6 +62,7 @@ def eval_subclusters(main, x, y, cutting_size_x, cutting_size_y, x0, y0,
         ax.set_xlim((np.min(main.lattice_X), np.max(main.lattice_X)))
         ax.set_ylim((np.min(main.lattice_Y), np.max(main.lattice_Y)))
         ax.set_title('Strings in rectangular region')
+        ax.set_aspect('equal')
         plt.show()
     # =========================================================================
 
@@ -125,8 +126,8 @@ if __name__ == '__main__':
     cutting_sizes = np.array([cutting_size_xs, cutting_size_ys]).T
 
     for cutting_size_x, cutting_size_y in cutting_sizes:
-        # sample = 3
-        sample = 100
+        sample = 3
+        # sample = 100
         indexes = diecutting_one_cluster(
             x, y,
             cutting_size_max_width * 2 - cutting_size_x,
@@ -146,7 +147,7 @@ if __name__ == '__main__':
                 cutting_size_x, cutting_size_y,
                 x0 = int(x0 * 2) / 2. - 0.25,
                 y0 = y0 - (np.sqrt(3) / 4),
-                plot=False
+                plot=True
             )
             _num_of_sub_clusters.append(len(subclusters))
             _max_size_of_sub_cluster.append(max(map(len, subclusters)))
