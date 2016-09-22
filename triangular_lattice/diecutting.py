@@ -95,10 +95,10 @@ if __name__ == '__main__':
     Y = np.average(y)
 
     # # 最大のカットサイズを求める
-    position = get_surface_points(main, s)
+    position = get_surface_points(main, s.pos)
     label_lattice = set_labels(main, position)
     label_list = label_lattice[position]
-    pos = get_labeled_position(main, s, test=False)
+    pos = get_labeled_position(main, s.pos, test=False)
     x_surface = main.lattice_X[pos]
     y_surface = main.lattice_Y[pos]
     r_surface = np.sqrt((x_surface - X) ** 2 + (y_surface - Y) ** 2)

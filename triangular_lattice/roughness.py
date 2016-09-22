@@ -20,22 +20,22 @@ class Roughness(Main):
                       )
 
 
-def eval_fluctuation_on_surface(self, s, test=False):
-    position = get_surface_points(self, s)
+def eval_fluctuation_on_surface(self, pos, test=False):
+    position = get_surface_points(self, pos)
     label_lattice = set_labels(self, position)
     label_list = label_lattice[position]
-    pos = get_labeled_position(self, s, test)
+    index = get_labeled_position(self, pos, test)
 
-    X = np.average(self.lattice_X[pos])
-    Y = np.average(self.lattice_Y[pos])
-    x = self.lattice_X[pos] - X
-    y = self.lattice_Y[pos] - Y
+    X = np.average(self.lattice_X[index])
+    Y = np.average(self.lattice_Y[index])
+    x = self.lattice_X[index] - X
+    y = self.lattice_Y[index] - Y
     r = np.sqrt(x ** 2 + y ** 2)
     R = np.sqrt(np.average(x ** 2 + y ** 2))
     theta = np.arctan(y / x)
     theta[x < 0] = theta[x < 0] + np.pi
     theta = theta % (2 * np.pi)
-    label_list = label_lattice[pos]
+    label_list = label_lattice[index]
     return np.array([theta, r]), R, label_list
 
 
@@ -90,7 +90,9 @@ def eval_std_various_width(theta, r, R_t):
             if index_start > index_end:
                 continue
 
-            stds.append(np.std(r[index_start:index_end + 1]))
+            h = np.average(np.array(r[index_start:index_end + 1]))
+            w = np.sqrt(np.sum((r[index_start:index_end + 1] - h) ** 2) / float(width))
+            stds.append(w)
 
         if len(stds) == 0:
             continue
@@ -129,8 +131,8 @@ if __name__ == '__main__':
 
     fig, ax = plt.subplots()
     for i in range(1):
-        main = Roughness(L=60, frames=1000)
-        # main = Roughness(L=120, frames=3000)
+        # main = Roughness(L=60, frames=1000)
+        main = Roughness(L=120, frames=3000)
 
         # 隣接格子点に同じラベルを振る
         # 元
@@ -142,7 +144,7 @@ if __name__ == '__main__':
 
         # 最大クラスターのみ表示
         (theta, r), R_t, label_list = eval_fluctuation_on_surface(main,
-                                                                main.strings[0])
+                                                                main.strings[0].pos)
         index_sorted = np.argsort(theta)
         theta = theta[index_sorted]
         r = r[index_sorted]
@@ -155,8 +157,8 @@ if __name__ == '__main__':
         ax = plot_result(res_width, res_std, ax)
 
         # FIXME: フィッティング領域の選択の自動化
-        fitting(ax, res_width, res_std, 7, 38)  # <- {L: 60, frames=1000}
-        # fitting(ax, res_width, res_std, 5, 32)  # <- {L: 120, frames=3000}
+        # fitting(ax, res_width, res_std, 7, 38)  # <- {L: 60, frames=1000}
+        fitting(ax, res_width, res_std, 7, 35)  # <- {L: 120, frames=3000}
 
     plt.show()
 
