@@ -11,14 +11,6 @@ from String import String
 import numpy as np
 import random
 
-def print_debug(arg):
-    """Print argument if needed.
-
-    You can use this function in any parts and its behavior is toggled here.
-    """
-    # print arg
-    pass
-
 
 class Main(base):
     """任意に設定したstringの近傍点に点を追加し成長させるモデル
@@ -225,4 +217,7 @@ if __name__ == '__main__':
 
     # main = Main(Lx=6, Ly=6, size=[random.randint(4, 12)] * 1, plot=False)
     # main = Main(Lx=50, Ly=50, size=[random.randint(4, 12)] * 1, plot=False)
-    main = Main(Lx=50, Ly=50, size=[random.randint(4, 12)] * 1)
+    # main = Main(Lx=50, Ly=50, size=[random.randint(4, 12)] * 1)
+
+    main = Main(Lx=60, Ly=60, size=[3,] * 1,
+                strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}])
