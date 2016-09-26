@@ -44,7 +44,9 @@ class Eden():
         center_x, center_y = Lx / 2, Ly / 4
         self.points = [(center_x, center_y)]
         self.occupied[center_x, center_y] = True
-        self.neighbors = list(map(tuple, self.lattice.neighborhoods[center_x, center_y].T))
+        self.neighbors = list(map(
+            tuple, self.lattice.neighborhoods[center_x, center_y].T
+        ))
 
         self.plot = plot
         self.interval = 1

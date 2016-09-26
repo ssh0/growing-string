@@ -221,3 +221,6 @@ if __name__ == '__main__':
 
     main = Main(Lx=60, Ly=60, size=[3,] * 1,
                 strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}])
+
+    # main = Main(Lx=60, Ly=60, size=[4,] * 1,
+    #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4, 2]}])
