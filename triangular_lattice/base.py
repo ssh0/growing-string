@@ -29,7 +29,7 @@ class Main:
                           scale=float(max(Lx, Ly)), boundary='periodic')
 
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
-        self.number_of_lines = sum(size)
+        self.number_of_lines = len(size)
 
         # Put the strings to the lattice
         self.strings = self.create_random_strings(N, size)
