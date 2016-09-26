@@ -19,7 +19,7 @@ class Main(base):
     弾性による重み付けの効果を追加)に選択し，stringを成長させていくモデル
     """
 
-    def __init__(self, Lx=40, Ly=40, lattice_scale=10.,
+    def __init__(self, Lx=40, Ly=40, boundary='periodic',
                  size=[5, 4, 10, 12], plot=True,
                  frames=1000,
                  dot_alpha=1.5,
@@ -32,11 +32,12 @@ class Main(base):
 
         Lx (int (even)): 格子のx方向(グラフではy軸)の格子点数
         Ly (int (even)): 格子のy方向(グラフではx軸)の格子点数
-        lattice_scale (int or float): グラフのx，y軸の実際のスケール(関係ない)
         """
         # Create triangular lattice with given parameters
+        # self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
+        #                   scale=float(max(Lx, Ly)), boundary=boundary)
         self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
-                          scale=float(max(Lx, Ly)), boundary='periodic')
+                          scale=float(max(Lx, Ly)), boundary=boundary)
 
         self.lattice_X = self.lattice.coordinates_x.reshape(self.lattice.Lx,
                                                 self.lattice.Ly)
@@ -55,7 +56,8 @@ class Main(base):
             #                        + [3] * ((Ly - 1) / 2) + [4])]
         else:
             self.strings = [String(self.lattice, **st) for st in strings]
-        self.occupied[self.strings[0].pos_x, self.strings[0].pos_y] = True
+        for string in self.strings:
+            self.occupied[string.pos_x, string.pos_y] = True
 
         self.plot = plot
         self.interval = 1
@@ -136,17 +138,17 @@ class Main(base):
 
         s (String): 対象とするStringクラスのインスタンス
         """
-        self.neighbors_set = {}
-        bonding_pairs = self.get_bonding_pairs(s)
+        bonding_pairs = self.get_bonding_pairs(s.pos[:])
         if len(bonding_pairs) == 0:
             return False
         choosed_pair = self.choose_one_bonding_pair(s, bonding_pairs)
         return choosed_pair
 
-    def get_bonding_pairs(self, s):
+    def get_bonding_pairs(self, pos):
         bonding_pairs = []
+        neighbors_set = {}
         # sのx, y座標に関して
-        for i, (x, y) in enumerate(s.pos):
+        for i, (x, y) in enumerate(pos):
             # それぞれの近傍点を取得
             nnx, nny = self.lattice.neighborhoods[x, y]
             # 6方向全てに関して
@@ -160,24 +162,24 @@ class Main(base):
                     continue
                 # それ以外(近傍点のうち占有されていない点であるとき)
                 # 既にstringの近傍として登録されている場合
-                elif self.neighbors_set.has_key((nx, ny)):
+                elif neighbors_set.has_key((nx, ny)):
                     # 一つ前に登録された点が現在の評価点の近傍点である場合
-                    if self.neighbors_set[(nx, ny)][-1][0] == i - 1:
+                    if neighbors_set[(nx, ny)][-1][0] == i - 1:
                         bonding_pair = [i - 1,
-                                        self.neighbors_set[(nx, ny)][-1][1],
+                                        neighbors_set[(nx, ny)][-1][1],
                                         (r + 3) % 6]
                         # [i-1, r_{i}, r_{rev}]
                         # r_rev: 現在の点から近接点へのベクトル
                         bonding_pairs.append(bonding_pair)
-                    self.neighbors_set[(nx, ny)].append((i, r))
+                    neighbors_set[(nx, ny)].append((i, r))
                 # stringの近傍として登録されていない場合 -> 新たに登録
                 else:
                     if i == 0:
                         # r_rev = (r + 3) % 6
                         bonding_pairs.append([0, (r + 3) % 6, nx, ny])
-                    if i == len(s.pos) - 1:
+                    if i == len(pos) - 1:
                         bonding_pairs.append([i, r])
-                    self.neighbors_set[(nx, ny)] = [(i, r),]
+                    neighbors_set[(nx, ny)] = [(i, r),]
         return bonding_pairs
 
     def calc_weight(self, s, bonding_pair):
@@ -208,7 +210,6 @@ class Main(base):
 
 
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
     # Ly = 40
     # main = Main(Lx=100, Ly=Ly, size=[Ly])
 
@@ -217,10 +218,11 @@ if __name__ == '__main__':
 
     # main = Main(Lx=6, Ly=6, size=[random.randint(4, 12)] * 1, plot=False)
     # main = Main(Lx=50, Ly=50, size=[random.randint(4, 12)] * 1, plot=False)
-    # main = Main(Lx=50, Ly=50, size=[random.randint(4, 12)] * 1)
+    main = Main(Lx=50, Ly=50, size=[random.randint(4, 12) for i in range(3)])
 
-    main = Main(Lx=60, Ly=60, size=[3,] * 1,
-                strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}])
+    # main = Main(Lx=60, Ly=60, size=[3,] * 1,
+    #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}])
 
     # main = Main(Lx=60, Ly=60, size=[4,] * 1,
     #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4, 2]}])
+
