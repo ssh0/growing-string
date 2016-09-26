@@ -58,6 +58,7 @@ class Eden():
         self.pre_func_res = []
         self.post_func_res = []
 
+    def execute(self):
         if self.plot:
             self.plot_all()
         else:
@@ -143,8 +144,9 @@ class Eden():
         self.occupied[x, y] = True
         self.points.append((x, y))
 
-        new_n = self.toset(self.lattice.neighborhoods[x, y].T)
-        updated_n = self.toset(self.neighbors) | new_n
+        new_n = set(((nx, ny) for nx, ny in self.lattice.neighborhoods[x, y].T
+                    if nx != -1 and ny != -1))
+        updated_n = set(tuple(map(tuple, self.neighbors))) | new_n
         self.neighbors = [pos for pos in updated_n if not self.occupied[pos]]
 
         if self.post_function is not None:
@@ -153,17 +155,11 @@ class Eden():
         if self.plot:
             return self.plot_points() 
 
-    def toset(self, arr):
-        """
-        arr: [[x1, y1], [x2, y2], [x3, y3], ...]
-        """
-        return set(tuple(map(tuple, arr)))
-
 
 if __name__ == '__main__':
     eden = Eden()
-
     # eden = Eden(plot=False)
+    eden.execute()
 
     print_debug(eden.occupied)
     print_debug(len(eden.neighbors))
