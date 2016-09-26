@@ -26,11 +26,12 @@ def print_debug(arg):
 class Eden():
 
     def __init__(self, Lx=60, Ly=60, plot=True, frames=1000,
+                 boundary='periodic',
                  pre_function=None,
                  post_function=None):
         # Create triangular lattice with given parameters
         self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
-                          scale=float(max(Lx, Ly)), boundary='periodic')
+                          scale=float(max(Lx, Ly)), boundary=boundary)
 
         self.lattice_X = self.lattice.coordinates_x
         self.lattice_Y = self.lattice.coordinates_y

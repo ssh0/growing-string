@@ -42,51 +42,59 @@ class LatticeTriangular(object):
         self.neighborhoods = np.array(self.neighborhoods)
         self.coordinates_x, self.coordinates_y = self.to_realspace()
 
+    def get_for_i_periodic(self, i):
+        xu = (i - 1) % self.Lx
+        xd = (i + 1) % self.Lx
+        return xu, xd
+
+    def get_for_i_reflective(self, i):
+        if i == 0:
+            xu = -1
+            xd = 1
+        elif i == self.Lx - 1:
+            xu = i - 1
+            xd = -1
+        else:
+            xu = i - 1
+            xd = i + 1
+        return xu, xd
+
+    def get_for_j_periodic(self, j):
+        yl = (j - 1) % self.Ly
+        yr = (j + 1) % self.Ly
+        return yl, yr
+
+    def get_for_j_reflective(self, j):
+        if j == 0:
+            yl = -1
+            yr = 1
+        elif j == self.Ly - 1:
+            yl = j - 1
+            yr = -1
+        else:
+            yl = j - 1
+            yr = j + 1
+        # if j == int(i / 2):
+        #     yl = -1
+        #     yr = (j + 1) % self.Ly
+        # elif j == (self.Ly - 1 + int(i / 2)) % self.Ly:
+        #     yl = j - 1
+        #     yr = -1
+        # else:
+        #     yl = (j - 1) % self.Ly
+        #     yr = (j + 1) % self.Ly
+        return yl, yr
+
     def neighbor_of(self, i, j):
 
-        def get_for_i_periodic(i):
-            xu = (i - 1) % self.Lx
-            xd = (i + 1) % self.Lx
-            return xu, xd
-
-        def get_for_i_reflective(i):
-            if i == 0:
-                xu = -1
-                xd = 1
-            elif i == self.Lx - 1:
-                xu = self.Lx - 2
-                xd = -1
-            else:
-                xu = i - 1
-                xd = i + 1
-            return xu, xd
-
-        def get_for_j_periodic(j):
-            yl = (j - 1) % self.Ly
-            yr = (j + 1) % self.Ly
-            return yl, yr
-
-        def get_for_j_reflective(j):
-            if j == int(i / 2):
-                yl = -1
-                yr = (j + 1) % self.Ly
-            elif j == (self.Ly - 1 + int(i / 2)) % self.Ly:
-                yl = j - 1
-                yr = -1
-            else:
-                yl = (j - 1) % self.Ly
-                yr = (j + 1) % self.Ly
-            return yl, yr
-
         if self.boundary == 'periodic':
-            xu, xd = get_for_i_periodic(i)
-            yl, yr = get_for_j_periodic(j)
+            xu, xd = self.get_for_i_periodic(i)
+            yl, yr = self.get_for_j_periodic(j)
             neighbors = (np.array([i, xu, xu, i, xd, xd], dtype=np.int),
                          np.array([yr, yr, j, yl, yl, j], dtype=np.int))
         elif self.boundary == 'reflective':
-            # something wrong in this part TODO : to be fixed
-            xu, xd = get_for_i_reflective(i)
-            yl, yr = get_for_j_reflective(j)
+            xu, xd = self.get_for_i_reflective(i)
+            yl, yr = self.get_for_j_reflective(j)
             neighbors_x = [i, xu, xu, i, xd, xd]
             neighbors_y = [yr, yr, j, yl, yl, j]
             neighbors = (neighbors_x, neighbors_y)
@@ -98,10 +106,18 @@ class LatticeTriangular(object):
         unit_lengh = min(dx, (2 / np.sqrt(3)) * dy)
         self.dx = unit_lengh
         self.dy = unit_lengh * (np.sqrt(3) / 2)
-        X = [((0.5 * i + j) * self.dx) % (self.dx * self.Ly) + self.x0
-             for i in range(self.Lx) for j in range(self.Ly)]
-        Y = [(0.5 + i) * self.dy + self.y0
-             for i in range(self.Lx) for j in range(self.Ly)]
+        # self.dx = 1, self.dy = sqrt(3) / 2
+
+        if self.boundary == 'periodic':
+            X = [((0.5 * i + j) * self.dx) % (self.dx * self.Ly) + self.x0
+                for i in range(self.Lx) for j in range(self.Ly)]
+            Y = [(0.5 + i) * self.dy + self.y0
+                for i in range(self.Lx) for j in range(self.Ly)]
+        elif self.boundary == 'reflective':
+            X = [((0.5 * i + j) * self.dx) + self.x0
+                for i in range(self.Lx) for j in range(self.Ly)]
+            Y = [(0.5 + i) * self.dy + self.y0
+                for i in range(self.Lx) for j in range(self.Ly)]
         return np.array(X), np.array(Y)
 
 if __name__ == '__main__':
