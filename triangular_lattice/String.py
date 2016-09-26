@@ -15,6 +15,10 @@ class String:
         self.x, self.y = x, y
         self.vec = vec
         self.update_pos()
+        if self.x == self.pos_x[-1] and self.y == self.pos_y[-1]:
+            self.loop = True
+        else:
+            self.loop = False
 
     def update_pos(self):
         self.pos_x, self.pos_y = [self.x], [self.y]
