@@ -218,10 +218,22 @@ if __name__ == '__main__':
 
     # main = Main(Lx=6, Ly=6, size=[random.randint(4, 12)] * 1, plot=False)
     # main = Main(Lx=50, Ly=50, size=[random.randint(4, 12)] * 1, plot=False)
-    main = Main(Lx=50, Ly=50, size=[random.randint(4, 12) for i in range(3)])
+    # main = Main(Lx=50, Ly=50, size=[random.randint(4, 12) for i in range(3)])
+
+    import timeit
+    print(timeit.timeit("Main(Lx=60, Ly=60, size=[3,] * 1, \
+                              strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}], \
+                              plot=False)",
+                        setup="from __main__ import Main",
+                        number=10
+                        ))
 
     # main = Main(Lx=60, Ly=60, size=[3,] * 1,
-    #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}])
+    #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}]
+    #             )
+
+    # main = Main(Lx=10, Ly=10, size=[3,] * 1,
+    #             strings=[{'id': 1, 'x': 5, 'y': 2, 'vec': [0, 4]}])
 
     # main = Main(Lx=60, Ly=60, size=[4,] * 1,
     #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4, 2]}])
