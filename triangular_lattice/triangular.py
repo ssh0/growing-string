@@ -124,17 +124,28 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import matplotlib.tri as tri
 
-    Lx, Ly = 4, 5
-    lattice = np.random.randint(0, 6, size=(Lx, Ly))
-    trilattice = LatticeTriangular(lattice, boundary='periodic')
+    fig, ax = plt.subplots(figsize=(8, 8))
 
-    # print trilattice.neighborhoods[0, 0]
+    Lx, Ly = 50, 30
+    lattice = LatticeTriangular(
+        np.zeros((Lx, Ly), dtype=np.int),
+        scale=float(max(Lx, Ly)),
+        boundary='periodic'
+    )
 
-    X, Y = trilattice.to_realspace()
-    triang = tri.Triangulation(X, Y)
+    lattice_X = lattice.coordinates_x
+    lattice_Y = lattice.coordinates_y
+    X_min, X_max = min(lattice_X) + 0.5, max(lattice_X) - 0.5
+    Y_min, Y_max = min(lattice_Y) + 0.2, max(lattice_Y) - 0.2
+    ax.set_xlim([X_min, X_max])
+    ax.set_ylim([Y_min, Y_max])
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.set_aspect('equal')
 
-    plt.figure()
-    plt.triplot(triang, 'bo-')
+    triang = tri.Triangulation(lattice_X, lattice_Y)
+    ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
+
 
     # trilattice.lattice[neighbors] = 2
     # colorseq = np.zeros((Lx, Ly))
