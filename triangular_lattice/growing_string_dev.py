@@ -7,6 +7,9 @@
 
 from __future__ import print_function
 from triangular import LatticeTriangular as LT
+import matplotlib.pyplot as plt
+import matplotlib.tri as tri
+import matplotlib.animation as animation
 from base import Main as base
 from String import String
 import numpy as np
@@ -25,7 +28,9 @@ class Main(base):
     """
 
     def __init__(self, Lx=40, Ly=40, boundary='periodic',
-                 size=[5, 4, 10, 12], plot=True,
+                 size=[5, 4, 10, 12],
+                 plot=True,
+                 plot_surface=True,
                  frames=1000,
                  dot_alpha=1.5,
                  dot_beta=1.,
@@ -67,7 +72,9 @@ class Main(base):
 
 
         self.plot = plot
-        self.interval = 1000
+        self.plot_surface = plot_surface
+        # self.interval = 500
+        self.interval = 1
         self.frames = frames
 
         self.dot_result = self.create_dot_result(dot_alpha, dot_beta)
@@ -81,12 +88,17 @@ class Main(base):
             )
 
             # TODO: 隣接点がないとき，全体のシミュレーションを終了する
-            if len(value) == 0:
-                return False
+            # if len(value) == 0:
+            #     return False
 
             self.bonding_pairs[key] = value
 
-        pp.pprint(self.bonding_pairs)
+        # pp.pprint(self.bonding_pairs)
+        # print(self.strings[0].pos)
+        # pp.pprint(self.bonding_pairs[0])
+
+
+        # pp.pprint(self.bonding_pairs)
         # return None
 
         self.pre_function = pre_function
@@ -106,16 +118,117 @@ class Main(base):
                 except StopIteration:
                     break
 
-    def create_dot_result(self, dot_alpha, dot_beta):
-        """dot_alphaを高さとしてdot_resultの分布を決定する。
-        """
-        return [dot_alpha * (abs(3 - i) / 3.) ** dot_beta for i in range(6)]
-
     def dot(self, v, w):
         """0〜5で表された6つのベクトルの内積を計算する。
 
         v, w (int): ベクトル(0〜5の整数で表す)"""
         return self.dot_result[(w + 6 - v) % 6]
+
+    def plot_all(self):
+        """軸の設定，三角格子の描画，線分描画要素の用意などを行う
+
+        ここからFuncAnimationを使ってアニメーション表示を行うようにする
+        """
+        if self.__dict__.has_key('frames'):
+            frames = self.frames
+        else:
+            frames = 1000
+        self.fig, self.ax = plt.subplots(figsize=(8, 8))
+
+        self.lattice_X = self.lattice.coordinates_x
+        self.lattice_Y = self.lattice.coordinates_y
+        X_min, X_max = min(self.lattice_X) - 0.1, max(self.lattice_X) + 0.1
+        Y_min, Y_max = min(self.lattice_Y) - 0.1, max(self.lattice_Y) + 0.1
+        self.ax.set_xlim([X_min, X_max])
+        self.ax.set_ylim([Y_min, Y_max])
+        self.ax.set_xticklabels([])
+        self.ax.set_yticklabels([])
+        self.ax.set_aspect('equal')
+
+        triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
+        self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
+
+        self.lines = [self.ax.plot([], [], marker='.', linestyle='-',
+                                   color='black',
+                                   markerfacecolor='black',
+                                   markeredgecolor='black')[0]
+                      for i in range(self.number_of_lines)]
+        if self.plot_surface:
+            self.lines.append(self.ax.plot([], [], 'o', color='#ff0000')[0])
+
+        self.lattice_X = self.lattice_X.reshape(self.lattice.Lx,
+                                                self.lattice.Ly)
+        self.lattice_Y = self.lattice_Y.reshape(self.lattice.Lx,
+                                                self.lattice.Ly)
+        self.plot_string()
+
+        def init_func(*arg):
+            return self.lines
+
+        ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
+                                      init_func=init_func,
+                                      interval=self.interval,
+                                      blit=True, repeat=False)
+        plt.show()
+
+    def plot_string(self):
+        """self.strings内に格納されているStringを参照し，グラフ上に図示する
+        """
+        # print self.string.pos, self.string.vec
+        i = 0  # to count how many line2D object
+        for s in self.strings:
+            start = 0
+            for j, pos1, pos2 in zip(range(len(s.pos) - 1), s.pos[:-1], s.pos[1:]):
+                dist_x = abs(self.lattice_X[pos1[0], pos1[1]] -
+                            self.lattice_X[pos2[0], pos2[1]])
+                dist_y = abs(self.lattice_Y[pos1[0], pos1[1]] -
+                            self.lattice_Y[pos2[0], pos2[1]])
+                # print j, pos1, pos2
+                # print dist_x, dist_y
+                if dist_x > 1.5 * self.lattice.dx or dist_y > 1.5 * self.lattice.dy:
+                    x = s.pos_x[start:j + 1]
+                    y = s.pos_y[start:j + 1]
+                    X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]
+                    Y = [self.lattice_Y[_x, _y] for _x, _y in zip(x, y)]
+                    self.lines[i].set_data(X, Y)
+                    start = j + 1
+                    i += 1
+            else:
+                x = s.pos_x[start:]
+                y = s.pos_y[start:]
+                X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]
+                Y = [self.lattice_Y[_x, _y] for _x, _y in zip(x, y)]
+                self.lines[i].set_data(X, Y)
+                i += 1
+
+        if self.plot_surface:
+            neighbors = []
+            for bonding_pairs in self.bonding_pairs.values():
+                # print(bonding_pairs)
+                for pos in bonding_pairs.keys():
+                    neighbors.append(pos)
+            neighbors = list(np.array(neighbors).T)
+            # print(neighbors)
+            X, Y = self.lattice_X[neighbors], self.lattice_Y[neighbors]
+            # print(X, Y)
+            self.lines[-1].set_data(X, Y)
+
+
+        # 最終的に，iの数だけ線を引けばよくなる
+        # それ以上のオブジェクトはリセット
+        if self.plot_surface:
+            max_obj = len(self.lines) - 1
+        else:
+            max_obj = len(self.lines)
+        for j in range(i, max_obj):
+            self.lines[j].set_data([], [])
+
+        return self.lines
+
+    def create_dot_result(self, dot_alpha, dot_beta):
+        """dot_alphaを高さとしてdot_resultの分布を決定する。
+        """
+        return [dot_alpha * (abs(3 - i) / 3.) ** dot_beta for i in range(6)]
 
     def update(self, num=0):
         """FuncAnimationから各フレームごとに呼び出される関数
@@ -124,7 +237,7 @@ class Main(base):
         """
 
         # update each string
-        for i, s in enumerate(self.strings):
+        for i, s in enumerate(self.strings): 
             if self.pre_function is not None:
                 self.pre_func_res.append(self.pre_function(self, i, s))
             ret = self.update_each_string(i)
@@ -140,6 +253,7 @@ class Main(base):
         if not X:
             raise StopIteration
 
+        # print(X)
         s = self.strings[key]
         # update positions
         if len(X) == 4:
@@ -150,7 +264,7 @@ class Main(base):
         elif len(X) == 2:
             i, r = X
             s.insert(i + 1, r)
-            x, y = s.pos_x[i + 1], s.pos_y[i + 1]
+            x, y = s.pos_x[-1], s.pos_y[-1]
         else:
             i, r, r_rev = X
             s.vec[i] = r
@@ -159,38 +273,75 @@ class Main(base):
 
         self.occupied[x, y] = True
 
-        if self.bonding_pairs[key].has_key((x, y)):
-            del self.bonding_pairs[key][(x, y)]
-            print("del self.bonding_pairs[key][%d, %d]" % (x, y))
+        # print("== start == (%d, %d)" % (x, y))
 
+        # pp.pprint(self.bonding_pairs[key])
+
+        for k, bonding_pairs in self.bonding_pairs.items():
+            if bonding_pairs.has_key((x, y)):
+                del self.bonding_pairs[k][(x, y)]
+                # print("del self.bonding_pairs[%d][(%d, %d)]" % (k, x, y))
+
+        # pp.pprint(self.bonding_pairs[key])
 
         if i == 0:
-            if s.loop:
-                indexes = [[len(s.vec - 1), len(s.vec)], [0, 2]]
-            else:
-                indexes = [[0, 2]]
-        elif i == len(s.vec) - 1:
-            if s.loop:
-                indexes = [[len(s.vec - 2), len(s.vec)], [0, 1]]
-            else:
-                indexes = [[len(s.vec - 2), len(s.vec)]]
+            # if s.loop:
+            #     indexes = [[len(s.vec) - 2, len(s.vec)], [0, 2]]
+            # else:
+            # indexes = [[0, 2]]
+            indexes = [[0, len(s.pos)]]
+        elif i == len(s.pos) - 1:
+            # if s.loop:
+            #     indexes = [[len(s.vec) - 2, len(s.vec)], [0, 1]]
+            # else:
+                # indexes = [[len(s.vec) - 2, len(s.vec)]]
+            indexes = [[max(0, len(s.pos)), len(s.pos)]]
         else:
-            indexes = [[i - 1, i + 2]]
+            # indexes = [[i, len(s.pos)]]
+            indexes = [[i, len(s.pos)]]
+
+        self.cleanup_bonding_pairs(
+            key=key,
+            indexes=indexes
+        )
 
         value = self.get_bonding_pairs(
             s=self.strings[key],
             indexes=indexes
         )
 
+
+        # pp.pprint(value)
+        # pp.pprint(self.bonding_pairs[key])
+
         for k, v in value.items():
-            dict = self.bonding_pairs[key]
-            if dict.has_key(k):
-                dict[k] += v
+            if self.bonding_pairs[key].has_key(k):
+                self.bonding_pairs[key][k] += v
             else:
-                dict[k] = v
+                self.bonding_pairs[key][k] = v
             # self.bonding_pairs[key] = value
 
-        pp.pprint(self.bonding_pairs[key])
+        # pp.pprint(self.bonding_pairs[key])
+
+        # print("== end ==")
+
+        # pp.pprint(self.strings[key].pos)
+        # pp.pprint(self.bonding_pairs[key].keys())
+
+
+    def cleanup_bonding_pairs(self, key, indexes):
+        rang = []
+        for (start, stop) in indexes:
+            rang += range(start, stop)
+        for (x, y), l in self.bonding_pairs[key].items():
+            tmp = []
+            for i, (bonding_pair, w) in enumerate(l):
+                if not bonding_pair[0] in rang:
+                    tmp.append(l[i])
+            if len(tmp) == 0:
+                del self.bonding_pairs[key][(x, y)]
+            else:
+                self.bonding_pairs[key][(x, y)] = tmp
 
     def get_neighbor_xy(self, key):
         """Stringクラスのインスタンスsの隣接する非占有格子点の座標を取得する
@@ -211,17 +362,17 @@ class Main(base):
 
         weights = np.array(weights)
         weights = weights / np.sum(weights)
+        # print(weights)
 
         choiced_index = np.random.choice(range(len(weights)), p=weights)
+        # print(bonding_pairs[choiced_index])
         return bonding_pairs[choiced_index]
-
 
     def __update_dict(self, dict, key, value):
         if dict.has_key(key):
             dict[key].append(value)
         else:
             dict[key] = [value]
-
 
     def get_bonding_pairs(self, s, indexes):
         bonding_pairs = {}
@@ -234,67 +385,38 @@ class Main(base):
             x, y = s.pos[i]
             nnx, nny = self.lattice.neighborhoods[x, y]
 
-
-            new_n = set(((nx, ny) for nx, ny in self.lattice.neighborhoods[x, y].T
-                        if nx != -1 and ny != -1))
-            updated_n = set(tuple(map(tuple, neighbors_dict))) | new_n
-            self.neighbors = [pos for pos in updated_n if not self.occupied[pos]]
-
-
             for r in [0, 1, 2, 3, 4, 5]:
                 nx, ny = nnx[r], nny[r]
                 if self.occupied[nx, ny] or nx == -1 or ny == -1:
                     continue
 
-                if neighbors_dict.get((nx, ny), False):
+                r_rev = (r + 3) % 6
+                if neighbors_dict.has_key((nx, ny)):
                     if neighbors_dict[(nx, ny)][-1][0] == i - 1:
                         r_i = neighbors_dict[(nx, ny)][-1][1]
-                        r_rev = (r + 3) % 6
 
-                        if i == 0:
-                            w = self.dot(s.vec[i], r_i) + self.dot_result[0]
+                        if i == 1:
+                            w = self.dot(r_rev, s.vec[i]) + self.dot_result[0]
                         elif i == len(s.pos) - 1:
-                            w = self.dot(r_rev, s.vec[i - 1]) + self.dot_result[0]
+                            w = self.dot(s.vec[i - 1], r_i) + self.dot_result[0]
                         else:
                             w = self.dot(s.vec[i - 1], r_i) + \
-                                self.dot(r_rev, s.vec[(i + 1) % len(s.vec)])
+                                self.dot(r_rev, s.vec[i % len(s.vec)])
 
                         self.__update_dict(bonding_pairs, (nx, ny),
-                                           ((i - 1, r_i, r_rev), w))
+                                        [[i - 1, r_i, r_rev], w])
                     neighbors_dict[(nx, ny)].append((i, r))
                 else:
-                    r_rev = (r + 3) % 6
                     if i == 0:
                         w = self.weight_const + self.dot(r_rev, s.vec[0])
 
                         self.__update_dict(bonding_pairs, (nx, ny),
-                                           ((0, r_rev, nx, ny), w))
-                    elif i == len(pos) - 1:
-                        w = self.weight_const + self.dot(s.vec[i - 1], r_rev)
-                        self.__update_dict(bonding_pairs, (nx, ny),
-                                           ((i, r_rev), w))
-
+                                           [[0, r_rev, nx, ny], w])
+                    elif i == len(s.pos) - 1:
+                        w = self.weight_const + self.dot(s.vec[i - 1], r)
+                        self.__update_dict(bonding_pairs, (nx, ny), [[i, r], w])
                     neighbors_dict[(nx, ny)] = [(i, r),]
         return bonding_pairs
-
-    def calc_weight(self, s, bonding_pair):
-        if len(bonding_pair) == 2:
-            i, r = bonding_pair
-            weight = self.weight_const + self.dot(s.vec[i - 1], r)
-        elif len(bonding_pair) == 4:
-            i, r_rev, nx, ny = bonding_pair
-            weight = self.weight_const + self.dot(r_rev, s.vec[0])
-        else:
-            i, r, r_rev = bonding_pair
-            if i == 0:
-                weight = self.dot(s.vec[i], r) + self.dot_result[0]
-            elif i == len(s.vec) - 1:
-                weight = self.dot(r_rev, s.vec[i - 1]) + self.dot_result[0]
-            else:
-                weight = self.dot(s.vec[i - 1], r) + \
-                    self.dot(r_rev, s.vec[i + 1])
-        return weight
-
 
 
 if __name__ == '__main__':
@@ -305,12 +427,22 @@ if __name__ == '__main__':
     # main = Main(Lx=10, Ly=Ly, size=[Ly])
 
     # main = Main(Lx=6, Ly=6, size=[random.randint(4, 12)] * 1, plot=False)
-    # main = Main(Lx=50, Ly=50, size=[random.randint(4, 12)] * 1, plot=False)
+    # main = Main(Lx=50, Ly=50, size=[random.randint(4, 12)] * 1)
     # main = Main(Lx=30, Ly=30, size=[random.randint(4, 12) for i in range(3)])
 
-    main = Main(Lx=60, Ly=60, size=[3,] * 1,
-                strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}])
+    import timeit
+    print(timeit.timeit("Main(Lx=60, Ly=60, size=[3,] * 1, \
+                              strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}], \
+                              plot=False)",
+                        setup="from __main__ import Main",
+                        number=10
+                        ))
+
+    # main = Main(Lx=60, Ly=60, size=[3,] * 1,
+    #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}])
+
+    # main = Main(Lx=10, Ly=10, size=[3,] * 1,
+    #             strings=[{'id': 1, 'x': 5, 'y': 2, 'vec': [0, 4]}])
 
     # main = Main(Lx=60, Ly=60, size=[4,] * 1,
     #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4, 2]}])
-
