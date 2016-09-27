@@ -93,7 +93,7 @@ class Eden():
 
         self.scatter = [
             self.ax.plot([], [], '.', color='black')[0],
-            self.ax.plot([], [], 'o', color='#d5d5d5')[0]
+            self.ax.plot([], [], 'o', color='#ff0000')[0]
         ]
         plt.scatter
 
