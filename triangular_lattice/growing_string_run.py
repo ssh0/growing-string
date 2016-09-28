@@ -4,7 +4,7 @@
 # written by Shotaro Fujimoto
 # 2016-09-27
 
-from growing_string_dev import Main
+from growing_string import Main
 import random
 
 if __name__ == '__main__':
@@ -38,8 +38,9 @@ if __name__ == '__main__':
 
     params = {
         'dot_alpha': 1.5,
-        'dot_beta': 1.,
-        'weight_const': 1.5,
+        'dot_beta': 0.,
+        'weight_const': 10.,
+        'boundary': {'h': 'periodic', 'v': 'periodic'},
         'plot': True,
         'plot_surface': True
     }
@@ -48,16 +49,19 @@ if __name__ == '__main__':
     #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}],
     #             **params
     #             )
-    main = Main(Lx=120, Ly=120, size=[3,] * 1,
-                strings=[{'id': 1, 'x': 60, 'y': 30, 'vec': [0, 4]}],
-                frames=4000,
-                **params
-                )
+
+    # main = Main(Lx=120, Ly=120, size=[3,] * 1,
+    #             strings=[{'id': 1, 'x': 60, 'y': 30, 'vec': [0, 4]}],
+    #             frames=4000,
+    #             **params
+    #             )
 
     # print main.post_func_res
 
     # main = Main(Lx=10, Ly=10, size=[3,] * 1,
     #             strings=[{'id': 1, 'x': 5, 'y': 2, 'vec': [0, 4]}])
 
-    # main = Main(Lx=60, Ly=60, size=[4,] * 1,
-    #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4, 2]}])
+    main = Main(Lx=60, Ly=60, size=[4,] * 1,
+                strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4, 2]}],
+                **params
+                )
