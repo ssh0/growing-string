@@ -26,7 +26,8 @@ class Main:
                  plot=True):
         # Create triangular lattice with given parameters
         self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
-                          scale=float(max(Lx, Ly)), boundary='periodic')
+                          scale=float(max(Lx, Ly)),
+                          boundary={'h': 'periodic', 'v': 'periodic'})
 
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
         self.number_of_lines = len(size)

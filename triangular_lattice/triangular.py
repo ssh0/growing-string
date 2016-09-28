@@ -9,11 +9,17 @@ import numpy as np
 
 class LatticeTriangular(object):
 
-    def __init__(self, lattice=None, boundary='periodic', scale=10, x0=0, y0=0):
+    def __init__(self, lattice=None, boundary={'h': 'periodic', 'v': 'periodic'},
+                 scale=10, x0=0, y0=0
+                 ):
         """Initialize triangular lattice
 
         --- Arguments ---
-        boundary: Boundary condition ('periodic' or 'reflective')
+        boundary: Boundary conditions
+                  {h: <condition>,  # horizontal boundary condition
+                   v: <condition>   # vertical boundary condition
+                  }
+                  condition : ('periodic' or 'reflective')
         lattice (ndarray): Initial lattice condition (if given (ndarray of int))
         """
         if lattice is not None and type(lattice) is not np.ndarray:
@@ -25,9 +31,10 @@ class LatticeTriangular(object):
         if self.Lx % 2:
             raise UserWarning("Expected even row number for 'lattice' \
                               (given: %d)." % self.Lx)
-        if boundary not in ('periodic', 'reflective'):
-            raise UserWarning("'boundary' must be 'periodic' or 'reflective' \
-                              (given: boudary = %s)." % boundary)
+        for condition in boundary.values():
+            if condition not in ('periodic', 'reflective'):
+                raise UserWarning("'boundary' must be 'periodic' or 'reflective' \
+                                (given: boudary = %s)." % boundary)
 
         self.boundary = boundary
         self.scale = float(scale)
@@ -86,18 +93,11 @@ class LatticeTriangular(object):
         return yl, yr
 
     def neighbor_of(self, i, j):
-
-        if self.boundary == 'periodic':
-            xu, xd = self.get_for_i_periodic(i)
-            yl, yr = self.get_for_j_periodic(j)
-            neighbors = (np.array([i, xu, xu, i, xd, xd], dtype=np.int),
-                         np.array([yr, yr, j, yl, yl, j], dtype=np.int))
-        elif self.boundary == 'reflective':
-            xu, xd = self.get_for_i_reflective(i)
-            yl, yr = self.get_for_j_reflective(j)
-            neighbors_x = [i, xu, xu, i, xd, xd]
-            neighbors_y = [yr, yr, j, yl, yl, j]
-            neighbors = (neighbors_x, neighbors_y)
+        xu, xd = getattr(self, 'get_for_i_' + self.boundary['v'])(i)
+        yl, yr = getattr(self, 'get_for_j_' + self.boundary['h'])(j)
+        neighbors_x = np.array([i, xu, xu, i, xd, xd], dtype=np.int)
+        neighbors_y = np.array([yr, yr, j, yl, yl, j], dtype=np.int)
+        neighbors = (neighbors_x, neighbors_y)
         return neighbors
 
     def to_realspace(self):
@@ -108,17 +108,17 @@ class LatticeTriangular(object):
         self.dy = unit_lengh * (np.sqrt(3) / 2)
         # self.dx = 1, self.dy = sqrt(3) / 2
 
-        if self.boundary == 'periodic':
+        if self.boundary['h'] == 'periodic':
             X = [((0.5 * i + j) * self.dx) % (self.dx * self.Ly) + self.x0
                 for i in range(self.Lx) for j in range(self.Ly)]
-            Y = [(0.5 + i) * self.dy + self.y0
-                for i in range(self.Lx) for j in range(self.Ly)]
-        elif self.boundary == 'reflective':
+        elif self.boundary['h'] == 'reflective':
             X = [((0.5 * i + j) * self.dx) + self.x0
                 for i in range(self.Lx) for j in range(self.Ly)]
-            Y = [(0.5 + i) * self.dy + self.y0
-                for i in range(self.Lx) for j in range(self.Ly)]
+
+        Y = [(0.5 + i) * self.dy + self.y0
+            for i in range(self.Lx) for j in range(self.Ly)]
         return np.array(X), np.array(Y)
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -130,7 +130,8 @@ if __name__ == '__main__':
     lattice = LatticeTriangular(
         np.zeros((Lx, Ly), dtype=np.int),
         scale=float(max(Lx, Ly)),
-        boundary='periodic'
+        boundary={'h': 'periodic',
+                  'v': 'reflective'}
     )
 
     lattice_X = lattice.coordinates_x

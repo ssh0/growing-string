@@ -16,7 +16,7 @@ class Main(base):
     def __init__(self, Lx=40, Ly=40, N=4, size=[5, 4, 10, 12], plot=True):
         # Create triangular lattice with given parameters
         self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
-                          scale=10., boundary='periodic')
+                          scale=10., boundary={'h': 'periodic', 'v': 'periodic'})
 
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
         self.number_of_lines = sum(size)

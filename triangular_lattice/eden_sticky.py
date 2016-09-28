@@ -20,7 +20,7 @@ def print_debug(arg):
 
 if __name__ == '__main__':
     Lx, Ly = 60, 200
-    eden = Eden(Lx, Ly, frames=5000, boundary='reflective')
+    eden = Eden(Lx, Ly, frames=5000, boundary={'h': 'periodic', 'v': 'reflective'})
     # eden = Eden(plot=False)
     eden.points = [(0, i) for i in range(Ly)]
     eden.occupied[list(np.array(eden.points).T)] = True

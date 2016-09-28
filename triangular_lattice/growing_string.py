@@ -19,8 +19,8 @@ class Main(base):
     弾性による重み付けの効果を追加)に選択し，stringを成長させていくモデル
     """
 
-    def __init__(self, Lx=40, Ly=40, boundary='periodic',
                  size=[5, 4, 10, 12], plot=True,
+    def __init__(self, Lx=40, Ly=40, boundary={'h': 'periodic', 'v': 'periodic'},
                  frames=1000,
                  dot_alpha=1.5,
                  dot_beta=1.,
@@ -36,14 +36,17 @@ class Main(base):
         # Create triangular lattice with given parameters
         # self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
         #                   scale=float(max(Lx, Ly)), boundary=boundary)
-        self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
-                          scale=float(max(Lx, Ly)), boundary=boundary)
 
         self.lattice_X = self.lattice.coordinates_x.reshape(self.lattice.Lx,
                                                 self.lattice.Ly)
         self.lattice_Y = self.lattice.coordinates_y.reshape(self.lattice.Lx,
                                                 self.lattice.Ly)
 
+        self.lattice = LT(
+            np.zeros((Lx, Ly), dtype=np.int),
+            scale=float(max(Lx, Ly)),
+            boundary=boundary
+        )
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
         self.number_of_lines = sum(size) * Lx
 

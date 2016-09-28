@@ -26,7 +26,7 @@ def print_debug(arg):
 class Eden():
 
     def __init__(self, Lx=60, Ly=60, plot=True, frames=1000,
-                 boundary='periodic',
+                 boundary={'h': 'periodic', 'v': 'periodic'},
                  pre_function=None,
                  post_function=None):
         # Create triangular lattice with given parameters
