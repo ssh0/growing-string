@@ -17,11 +17,13 @@ class Roughness_Eden(Eden):
     def __init__(self, L=60, frames=1000):
         Eden.__init__(self, Lx=L, Ly=L, plot=False, frames=frames)
 
+
 if __name__ == '__main__':
 
     fig, ax = plt.subplots()
     for i in range(1):
         main = Roughness_Eden(L=60, frames=1000)
+        main.execute()
         # main = Roughness(L=120, frames=3000)
 
         # 隣接格子点に同じラベルを振る

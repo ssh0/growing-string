@@ -33,6 +33,7 @@ if __name__ == '__main__':
     fig, ax = plt.subplots()
 
     main = Radius()
+    main.execute()
     radius_of_rotation = main.post_func_res
 
     steps = np.arange((len(radius_of_rotation)))

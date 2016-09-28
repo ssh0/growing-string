@@ -4,7 +4,9 @@
 # written by Shotaro Fujimoto
 # 2016-06-09
 
-from growing_string import Main
+# from growing_string import Main
+from growing_string_dev import Main
+
 
 if __name__ == '__main__':
     # reflective

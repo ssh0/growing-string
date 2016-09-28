@@ -37,6 +37,7 @@ if __name__ == '__main__':
     fig, ax = plt.subplots()
 
     main = Count_in_r()
+    main.execute()
     r, res = count_point_in_r(main, N_r)
 
     ax.loglog(r, res)
