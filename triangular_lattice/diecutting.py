@@ -14,13 +14,12 @@ import itertools
 
 
 class DieCutting(object):
-    def __init__(self, L=60, frames=1000, sample=3, alpha=1.5, beta=1., c=1.5,
+    def __init__(self, L=60, frames=1000, sample=3, beta=2., c=1.5,
                  plot=False):
         self.L = L
         self.frames = frames
         self.sample = sample
-        self.dot_alpha = alpha
-        self.dot_beta = beta
+        self.beta = beta
         self.weight_const = c
         self.plot_for_veirification = plot
 
@@ -31,8 +30,7 @@ class DieCutting(object):
             size=[3,] * 1,
             plot=False,
             frames=self.frames,
-            dot_alpha=self.dot_alpha,
-            dot_beta=self.dot_beta,
+            beta=self.beta,
             weight_const=self.weight_const,
             strings=[{'id': 1, 'x': self.L/2, 'y': self.L/4, 'vec': [0, 4]}]
         )

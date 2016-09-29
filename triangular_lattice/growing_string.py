@@ -26,13 +26,13 @@ class Main(base):
     弾性による重み付けの効果を追加)に選択し，stringを成長させていくモデル
     """
 
-    def __init__(self, Lx=40, Ly=40, boundary={'h': 'periodic', 'v': 'periodic'},
+    def __init__(self, Lx=40, Ly=40,
+                 boundary={'h': 'periodic', 'v': 'periodic'},
                  size=[5, 4, 10, 12],
                  plot=True,
                  plot_surface=True,
                  frames=1000,
-                 dot_alpha=1.5,
-                 dot_beta=1.,
+                 beta = 2.,
                  weight_const=1.5,
                  strings=None,
                  pre_function=None,
@@ -76,7 +76,12 @@ class Main(base):
         self.interval = 1
         self.frames = frames
 
-        self.dot_result = self.create_dot_result(dot_alpha, dot_beta)
+        # 逆温度
+        self.beta = beta
+        # self.beta = 100. # まっすぐ(≒低温極限)
+        # self.beta = 10. # まっすぐ
+        # self.beta = 0. # 高温極限
+        # self.beta = 5. # 中間的
         self.weight_const = weight_const
 
         self.bonding_pairs = {i: {} for i in range(len(self.strings))}
@@ -121,7 +126,7 @@ class Main(base):
         """0〜5で表された6つのベクトルの内積を計算する。
 
         v, w (int): ベクトル(0〜5の整数で表す)"""
-        return self.dot_result[(w + 6 - v) % 6]
+        return [1., 0.5, -0.5, -1., -0.5, 0.5][(w + 6 - v) % 6]
 
     def plot_all(self):
         """軸の設定，三角格子の描画，線分描画要素の用意などを行う
@@ -223,11 +228,6 @@ class Main(base):
             self.lines[j].set_data([], [])
 
         return self.lines
-
-    def create_dot_result(self, dot_alpha, dot_beta):
-        """dot_alphaを高さとしてdot_resultの分布を決定する。
-        """
-        return [dot_alpha * (abs(3 - i) / 3.) ** dot_beta for i in range(6)]
 
     def update(self, num=0):
         """FuncAnimationから各フレームごとに呼び出される関数
@@ -370,8 +370,19 @@ class Main(base):
     def __update_dict(self, dict, key, value):
         if dict.has_key(key):
             dict[key].append(value)
+    def calc_weight(self, s, i, r_i=None, r_rev=None):
+        """ベクトルの内積を元に，Boltzmann分布に従って成長点選択の重みを決定
+        """
+
+        if (i == 0) and (not s.loop):
+            w = self.dot(r_rev, s.vec[0]) + self.dot(r_rev, s.vec[i])
+        elif (i == len(s.pos) - 1) and (not s.loop):
+            w = self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[0])
         else:
-            dict[key] = [value]
+            w = self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[i % len(s.vec)])
+
+        W = np.exp(self.beta * w)
+        return W
 
     def get_bonding_pairs(self, s, indexes):
         bonding_pairs = {}
@@ -393,45 +404,30 @@ class Main(base):
                     continue
 
                 r_rev = (r + 3) % 6
-                if neighbors_dict.has_key((nx, ny)):
+
+                if not neighbors_dict.has_key((nx, ny)):
+                    if not s.loop:
+                        if i == 0:
+                            w = self.weight_const + self.dot(r_rev, s.vec[0])
+                            W = np.exp(self.beta * w)
+                            self.__update_dict(bonding_pairs,
+                                               (nx, ny),
+                                               [[0, r_rev, nx, ny], W])
+                        elif i == len(s.pos) - 1:
+                            w = self.dot(s.vec[i - 2], r) + self.weight_const
+                            W = np.exp(self.beta * w)
+                            self.__update_dict(bonding_pairs,
+                                               (nx, ny),
+                                               [[i, r], W])
+                    neighbors_dict[(nx, ny)] = [(i, r),]
+                else:
                     if neighbors_dict[(nx, ny)][-1][0] == i - 1:
                         r_i = neighbors_dict[(nx, ny)][-1][1]
-
-                        if i == 0 and s.loop:
-                            r_i = neighbors_dict[(nx, ny)][-1][1]
-                            w = self.dot(s.vec[-2], r_i) + self.dot(r_rev, s.vec[0])
-                            self.__update_dict(bonding_pairs, (nx, ny),
-                                            [[len(s.vec) - 1, r_i, r_rev], w])
-                        elif i == 1:
-                            if s.loop:
-                                w = self.dot(s.vec[-1], r) + self.dot(r_rev, s.vec[i])
-                            else:
-                                w = self.dot_result[0] + self.dot(r_rev, s.vec[i])
-                        elif i == len(s.pos) - 1:
-                            if s.loop:
-                                w = self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[0])
-                            else:
-                                w = self.dot(s.vec[i - 2], r_i) + self.dot_result[0]
-                        else:
-                            w = self.dot(s.vec[i - 2], r_i) + \
-                                self.dot(r_rev, s.vec[i % len(s.vec)])
-
-                        self.__update_dict(bonding_pairs, (nx, ny),
-                                        [[i - 1, r_i, r_rev], w])
+                        w = self.calc_weight(s, i, r_i, r_rev)
+                        self.__update_dict(bonding_pairs,
+                                           (nx, ny),
+                                           [[i - 1, r_i, r_rev], w])
                     neighbors_dict[(nx, ny)].append((i, r))
-                else:
-                    if i == 0:
-                        if not s.loop:
-                            w = self.weight_const + self.dot(r_rev, s.vec[0])
-                            self.__update_dict(bonding_pairs, (nx, ny),
-                                            [[0, r_rev, nx, ny], w])
-                    elif i == len(s.pos) - 1:
-                        if not s.loop:
-                            w = self.dot(s.vec[i - 2], r) + self.weight_const
-                            self.__update_dict(bonding_pairs, (nx, ny), [[i, r], w])
-                    neighbors_dict[(nx, ny)] = [(i, r),]
-
-
         return bonding_pairs
 
 

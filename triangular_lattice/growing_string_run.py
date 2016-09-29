@@ -37,9 +37,8 @@ if __name__ == '__main__':
 
 
     params = {
-        'dot_alpha': 1.5,
-        'dot_beta': 0.,
         'weight_const': 10.,
+        'beta': 1.,
         'boundary': {'h': 'periodic', 'v': 'periodic'},
         'plot': True,
         'plot_surface': True
