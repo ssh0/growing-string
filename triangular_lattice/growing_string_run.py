@@ -8,16 +8,6 @@ from growing_string import Main
 import random
 
 if __name__ == '__main__':
-    # Ly = 40
-    # main = Main(Lx=100, Ly=Ly, size=[Ly])
-
-    # Ly = 5
-    # main = Main(Lx=10, Ly=Ly, size=[Ly])
-
-    # main = Main(Lx=6, Ly=6, size=[random.randint(4, 12)] * 1, plot=False)
-    # main = Main(Lx=50, Ly=50, size=[random.randint(4, 12)] * 1)
-    # main = Main(Lx=30, Ly=30, size=[random.randint(4, 12) for i in range(3)])
-
     # import timeit
     # print(timeit.timeit("Main(Lx=60, Ly=60, size=[3,] * 1, \
     #                           strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}], \
@@ -35,32 +25,31 @@ if __name__ == '__main__':
         """
         return self.bonding_pairs[i]
 
+    L = 60
+    frames = 1000
 
     params = {
-        'weight_const': 10.,
+        'Lx': L,
+        'Ly': L,
+        'frames': frames,
         'beta': 1.,
+        'weight_const': 0.,
         'boundary': {'h': 'periodic', 'v': 'periodic'},
+        # 'boundary': {'h': 'reflective', 'v': 'reflective'},
         'plot': True,
-        'plot_surface': True
+        'plot_surface': True,
+        'interval': 0,
     }
 
-    # main = Main(Lx=60, Ly=60, size=[3,] * 1,
-    #             strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}],
+    # # open
+    # main = Main(size=[3,] * 1,
+    #             strings=[{'id': 1, 'x': L / 2, 'y': L / 4, 'vec': [0, 4]}],
     #             **params
     #             )
 
-    # main = Main(Lx=120, Ly=120, size=[3,] * 1,
-    #             strings=[{'id': 1, 'x': 60, 'y': 30, 'vec': [0, 4]}],
-    #             frames=4000,
-    #             **params
-    #             )
-
-    # print main.post_func_res
-
-    # main = Main(Lx=10, Ly=10, size=[3,] * 1,
-    #             strings=[{'id': 1, 'x': 5, 'y': 2, 'vec': [0, 4]}])
-
-    main = Main(Lx=60, Ly=60, size=[4,] * 1,
-                strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4, 2]}],
+    # # loop
+    main = Main(size=[4,] * 1,
+                strings=[{'id': 1, 'x': L / 2, 'y': L / 4, 'vec': [0, 4, 2]}],
                 **params
                 )
+

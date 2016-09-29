@@ -12,12 +12,8 @@ from tqdm import tqdm
 
 
 class Radius(Main):
-    def __init__(self):
-        L = 60
-        Main.__init__(self, Lx=L, Ly=L, size=[3,] * 1, plot=False,
-                      frames=1000,
-                      strings=[{'id': 1, 'x': L/2, 'y': L/4, 'vec': [0, 4]}],
-                      pre_function=calc_radius_of_rotation)
+    def __init__(self, params):
+        Main.__init__(self, **params)
 
 def calc_radius_of_rotation(self, i, s):
     # calc center
@@ -40,7 +36,19 @@ if __name__ == '__main__':
     #     main = Radius()
     #     radius_of_rotation.append(main.pre_func_res)
 
-    main = Radius()
+    L = 120
+    params = {
+        'Lx': L,
+        'Ly': L,
+        'frames': 3000,
+        'size': [3,] * 1,
+        'plot': False,
+        'beta': 0.,
+        'strings': [{'id': 1, 'x': L/2, 'y': L/4, 'vec': [0, 4]}],
+        'pre_function': calc_radius_of_rotation
+    }
+
+    main = Radius(params)
     radius_of_rotation = [main.pre_func_res]
 
     steps = range(len(radius_of_rotation[0]))

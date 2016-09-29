@@ -13,9 +13,10 @@ import numpy as np
 
 
 class Roughness(Main):
-    def __init__(self, L=60, frames=1000):
+    def __init__(self, L=60, frames=1000, beta=0.):
         Main.__init__(self, Lx=L, Ly=L, size=[3,] * 1, plot=False,
                       frames=frames,
+                      beta=beta,
                       strings=[{'id': 1, 'x': L/2, 'y': L/4, 'vec': [0, 4]}]
                       )
 
@@ -132,7 +133,7 @@ if __name__ == '__main__':
     fig, ax = plt.subplots()
     for i in range(1):
         # main = Roughness(L=60, frames=1000)
-        main = Roughness(L=120, frames=3000)
+        main = Roughness(L=120, frames=2000, beta=5.)
 
         # 隣接格子点に同じラベルを振る
         # 元

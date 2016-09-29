@@ -33,6 +33,7 @@ class Main(base):
                  plot_surface=True,
                  frames=1000,
                  beta = 2.,
+                 interval=1,
                  weight_const=1.5,
                  strings=None,
                  pre_function=None,
@@ -73,7 +74,7 @@ class Main(base):
         self.plot = plot
         self.plot_surface = plot_surface
         # self.interval = 100
-        self.interval = 1
+        self.interval = interval
         self.frames = frames
 
         # 逆温度
@@ -122,6 +123,12 @@ class Main(base):
                 except StopIteration:
                     break
 
+    def __update_dict(self, dict, key, value):
+        if dict.has_key(key):
+            dict[key].append(value)
+        else:
+            dict[key] = [value]
+
     def dot(self, v, w):
         """0〜5で表された6つのベクトルの内積を計算する。
 
@@ -152,7 +159,7 @@ class Main(base):
         triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
         self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
 
-        self.lines = [self.ax.plot([], [], marker='.', linestyle='-',
+        self.lines = [self.ax.plot([], [], linestyle='-',
                                    color='black',
                                    markerfacecolor='black',
                                    markeredgecolor='black')[0]
@@ -367,9 +374,6 @@ class Main(base):
         # print(bonding_pairs[choiced_index])
         return bonding_pairs[choiced_index]
 
-    def __update_dict(self, dict, key, value):
-        if dict.has_key(key):
-            dict[key].append(value)
     def calc_weight(self, s, i, r_i=None, r_rev=None):
         """ベクトルの内積を元に，Boltzmann分布に従って成長点選択の重みを決定
         """
