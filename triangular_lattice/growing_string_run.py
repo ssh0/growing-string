@@ -10,7 +10,7 @@ import random
 if __name__ == '__main__':
     # import timeit
     # print(timeit.timeit("Main(Lx=60, Ly=60, size=[3,] * 1, \
-    #                           strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}], \
+    #                           strings=[{'id': 1, 'x': 15, 'y': 30, 'vec': [0, 4]}], \
     #                           plot=False)",
     #                     setup="from __main__ import Main",
     #                     number=10
@@ -42,14 +42,12 @@ if __name__ == '__main__':
     }
 
     # # open
-    # main = Main(size=[3,] * 1,
-    #             strings=[{'id': 1, 'x': L / 2, 'y': L / 4, 'vec': [0, 4]}],
+    # main = Main(strings=[{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4]}],
     #             **params
     #             )
 
-    # # loop
-    main = Main(size=[4,] * 1,
-                strings=[{'id': 1, 'x': L / 2, 'y': L / 4, 'vec': [0, 4, 2]}],
+    # loop
+    main = Main(strings=[{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4, 2]}],
                 **params
                 )
 

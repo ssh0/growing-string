@@ -4,6 +4,11 @@
 # written by Shotaro Fujimoto
 # 2016-05-15
 
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from triangular import LatticeTriangular as LT
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri

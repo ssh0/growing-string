@@ -5,7 +5,7 @@
 # 2016-08-15
 
 from growing_string import Main
-from Optimize import Optimize_powerlaw
+from optimize import Optimize_powerlaw
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
@@ -16,7 +16,7 @@ class Count_in_r(Main):
         L = 60
         Main.__init__(self, Lx=L, Ly=L, size=[3,] * 1, plot=False,
                       frames=1000,
-                      strings=[{'id': 1, 'x': L/2, 'y': L/4, 'vec': [0, 4]}])
+                      strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
 
 def count_point_in_r(self, s, N_r):
     N = float(len(s.vec) + 1)

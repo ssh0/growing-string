@@ -6,7 +6,7 @@
 
 
 from growing_string import Main
-from Optimize import Optimize_powerlaw
+from optimize import Optimize_powerlaw
 from surface import get_surface_points, set_labels, get_labeled_position
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,7 +17,7 @@ class Roughness(Main):
         Main.__init__(self, Lx=L, Ly=L, size=[3,] * 1, plot=False,
                       frames=frames,
                       beta=beta,
-                      strings=[{'id': 1, 'x': L/2, 'y': L/4, 'vec': [0, 4]}]
+                      strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}]
                       )
 
 
@@ -133,7 +133,7 @@ if __name__ == '__main__':
     fig, ax = plt.subplots()
     for i in range(1):
         # main = Roughness(L=60, frames=1000)
-        main = Roughness(L=120, frames=2000, beta=5.)
+        main = Roughness(L=120, frames=2000, beta=0.)
 
         # 隣接格子点に同じラベルを振る
         # 元
@@ -151,15 +151,15 @@ if __name__ == '__main__':
         r = r[index_sorted]
         label_list = label_list[index_sorted]
 
-        # plot_to_veirfy(theta, r, R_t, label_list)
-        # plt.show()
+        plot_to_veirfy(theta, r, R_t, label_list)
+        plt.show()
 
-        res_width, res_std = eval_std_various_width(theta, r, R_t)
-        ax = plot_result(res_width, res_std, ax)
+        # res_width, res_std = eval_std_various_width(theta, r, R_t)
+        # ax = plot_result(res_width, res_std, ax)
 
-        # FIXME: フィッティング領域の選択の自動化
-        # fitting(ax, res_width, res_std, 7, 38)  # <- {L: 60, frames=1000}
-        fitting(ax, res_width, res_std, 7, 35)  # <- {L: 120, frames=3000}
+        # # FIXME: フィッティング領域の選択の自動化
+        # # fitting(ax, res_width, res_std, 7, 38)  # <- {L: 60, frames=1000}
+        # fitting(ax, res_width, res_std, 7, 35)  # <- {L: 120, frames=3000}
 
-    plt.show()
+    # plt.show()
 

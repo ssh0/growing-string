@@ -9,7 +9,7 @@
 from growing_string import Main
 import matplotlib.pyplot as plt
 import numpy as np
-from Optimize import Optimize_powerlaw
+from optimize import Optimize_powerlaw
 
 
 def is_equal(a, b):

@@ -4,6 +4,11 @@
 # written by Shotaro Fujimoto
 # 2016-05-30
 
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from triangular import LatticeTriangular as LT
 from base import Main as base
 import numpy as np

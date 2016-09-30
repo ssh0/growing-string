@@ -6,7 +6,7 @@
 
 
 from triangular import LatticeTriangular as LT
-from String import String
+from strings import String
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri
 import matplotlib.animation as animation

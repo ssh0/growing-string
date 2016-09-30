@@ -4,8 +4,14 @@
 # written by Shotaro Fujimoto
 # 2016-09-20
 
+
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from eden import Eden
-from Optimize import Optimize_powerlaw
+from optimize import Optimize_powerlaw
 import matplotlib.pyplot as plt
 import numpy as np
 

@@ -5,8 +5,13 @@
 # 2016-08-19
 
 
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from eden import Eden
-from Optimize import Optimize_powerlaw
+from optimize import Optimize_powerlaw
 from surface import get_surface_points, set_labels, get_labeled_position
 from roughness import *
 import matplotlib.pyplot as plt

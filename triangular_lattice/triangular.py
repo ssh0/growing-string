@@ -81,42 +81,34 @@ class LatticeTriangular(object):
         else:
             yl = j - 1
             yr = j + 1
-        # if j == int(i / 2):
-        #     yl = -1
-        #     yr = (j + 1) % self.Ly
-        # elif j == (self.Ly - 1 + int(i / 2)) % self.Ly:
-        #     yl = j - 1
-        #     yr = -1
-        # else:
-        #     yl = (j - 1) % self.Ly
-        #     yr = (j + 1) % self.Ly
         return yl, yr
 
     def neighbor_of(self, i, j):
-        xu, xd = getattr(self, 'get_for_i_' + self.boundary['v'])(i)
-        yl, yr = getattr(self, 'get_for_j_' + self.boundary['h'])(j)
-        neighbors_x = np.array([i, xu, xu, i, xd, xd], dtype=np.int)
-        neighbors_y = np.array([yr, yr, j, yl, yl, j], dtype=np.int)
+        xu, xd = getattr(self, 'get_for_i_' + self.boundary['h'])(i)
+        yl, yr = getattr(self, 'get_for_j_' + self.boundary['v'])(j)
+        neighbors_x = np.array([xd, i, xu, xu, i, xd], dtype=np.int)
+        neighbors_y = np.array([j, yr, yr, j, yl, yl], dtype=np.int)
         neighbors = (neighbors_x, neighbors_y)
         return neighbors
 
     def to_realspace(self):
-        dx = self.scale / self.Ly
-        dy = self.scale / self.Lx
+        dx = self.scale / self.Lx
+        dy = self.scale / self.Ly
         unit_lengh = min(dx, (2 / np.sqrt(3)) * dy)
         self.dx = unit_lengh
         self.dy = unit_lengh * (np.sqrt(3) / 2)
         # self.dx = 1, self.dy = sqrt(3) / 2
 
         if self.boundary['h'] == 'periodic':
-            X = [((0.5 * i + j) * self.dx) % (self.dx * self.Ly) + self.x0
-                for i in range(self.Lx) for j in range(self.Ly)]
+            X = [((0.5 * j + i) * self.dx) % (self.dx * self.Lx) + self.x0
+                 for i in range(self.Lx) for j in range(self.Ly)]
         elif self.boundary['h'] == 'reflective':
-            X = [((0.5 * i + j) * self.dx) + self.x0
-                for i in range(self.Lx) for j in range(self.Ly)]
+            X = [((0.5 * j + i) * self.dx) + self.x0
+                 for i in range(self.Lx) for j in range(self.Ly)]
 
-        Y = [(0.5 + i) * self.dy + self.y0
-            for i in range(self.Lx) for j in range(self.Ly)]
+        Y = [(0.5 + j) * self.dy + self.y0
+             for i in range(self.Lx) for j in range(self.Ly)]
+
         return np.array(X), np.array(Y)
 
 
@@ -124,7 +116,7 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import matplotlib.tri as tri
 
-    fig, ax = plt.subplots(figsize=(8, 8))
+    fig, ax = plt.subplots()
 
     Lx, Ly = 50, 30
     lattice = LatticeTriangular(

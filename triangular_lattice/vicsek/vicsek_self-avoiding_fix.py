@@ -4,6 +4,11 @@
 # written by Shotaro Fujimoto
 # 2016-05-30
 
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from triangular import LatticeTriangular as LT
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri
@@ -77,15 +82,16 @@ class Main:
             self.vel_y.append(- np.sin(angle))
 
         if self.plot:
-            self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(8, 10))
+            self.fig, (self.ax1, self.ax2) = plt.subplots(1, 2, figsize=(8, 10))
             self.ax1.set_xlim([X_min, X_max])
             self.ax1.set_ylim([Y_min, Y_max])
             self.ax1.set_xticklabels([])
             self.ax1.set_yticklabels([])
+            self.ax1.set_aspect('equal')
             self.ax1.set_title("Lattice-Gas model for collective motion")
             self.triang = tri.Triangulation(self.lattice_X.flatten(),
                                             self.lattice_Y.flatten())
-            self.ax1.triplot(self.triang, color='whitesmoke', marker='o',
+            self.ax1.triplot(self.triang, color='whitesmoke', marker='.',
                              markersize=1)
             self.l, = self.ax2.plot([], [], 'b-')
             self.ax2.set_title(r"Order parameter $m=\frac{1}{N} |\sum \vec{u}_{i}|$ ($T = %.2f$)"

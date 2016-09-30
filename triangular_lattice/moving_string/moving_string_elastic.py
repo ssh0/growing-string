@@ -4,8 +4,13 @@
 # written by Shotaro Fujimoto
 # 2016-06-06
 
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from triangular import LatticeTriangular as LT
-from String import String
+from string import String
 from base import Main as base
 import numpy as np
 import random

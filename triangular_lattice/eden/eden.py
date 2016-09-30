@@ -5,6 +5,10 @@
 # 2016-09-20
 """Eden model on triangular lattice"""
 
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from triangular import LatticeTriangular as LT
 import matplotlib.pyplot as plt
@@ -42,7 +46,7 @@ class Eden():
 
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
 
-        center_x, center_y = Lx / 2, Ly / 4
+        center_x, center_y = Lx / 4, Ly / 2
         self.points = [(center_x, center_y)]
         self.occupied[center_x, center_y] = True
         self.neighbors = list(map(

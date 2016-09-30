@@ -2,9 +2,16 @@
 # -*- coding:utf-8 -*-
 #
 # written by Shotaro Fujimoto
-# 2016-05-15
+# 2016-05-31
+
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from triangular import LatticeTriangular as LT
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri
 import matplotlib.animation as animation
@@ -14,18 +21,26 @@ import random
 import time
 
 
-rint = random.randint
-randm = random.random
-
-
 class Point:
 
     def __init__(self, id, ix, iy):
-        self.id, self.x, self.y = id, ix, iy
+        self.id = id
+        self.x = ix
+        self.y = iy
         # vel is unified and the value of it implies the direction of the
         # velocity
-        self.vel = rint(0, 5)
-        self.priority = randm()
+        self.vel = np.random.randint(0, 5)
+        self.priority = np.random.rand()
+
+
+class Points:
+
+    def __init__(self, N, Lx, Ly):
+        self.points = []
+        for n in range(N):
+            ix = random.randint(0, Lx - 1)
+            iy = random.randint(0, Ly - 1)
+            self.points.append(Point(n, ix, iy))
 
 
 class Main:
@@ -35,17 +50,13 @@ class Main:
         self.lattice = LT(- np.ones((Lx, Ly), dtype=np.int),
                           scale=lattice_scale)
         self.N = int(Lx * Ly * rho)
-        self.points = [Point(n, rint(0, Lx - 1), rint(0, Ly - 1)) for n
-                       in range(self.N)]
+        self.points = Points(self.N, Lx, Ly)
+        self.points = self.points.points
         self.T = T
         self.plot = plot
         self.beta = 1. / self.T
         self.order_param = []
         self.num = 0
-        angs = [i * np.pi / 3. for i in range(6)]
-        self.velx = [np.cos(ang) for ang in angs]
-        self.vely = [-np.sin(ang) for ang in angs]
-        self.u = [np.array([vx, -vy]) for vx, vy in zip(self.velx, self.vely)]
 
         self.lattice_X = self.lattice.coordinates_x
         self.lattice_Y = self.lattice.coordinates_y
@@ -54,7 +65,20 @@ class Main:
         X_min, X_max = np.min(self.lattice_X), np.max(self.lattice_X)
         Y_min, Y_max = np.min(self.lattice_Y), np.max(self.lattice_Y)
 
+        X, Y = [], []
+        vel_x, vel_y = [], []
+        for point in self.points:
+            X.append(self.lattice_X[point.x, point.y])
+            Y.append(self.lattice_Y[point.x, point.y])
+            angle = point.vel * np.pi / 3.
+            vel_x.append(np.cos(angle))
+            vel_y.append(- np.sin(angle))
+
         if self.plot:
+            metadata = dict(title="Collentive motion with Vicsek's model on triangular lattice",
+                            artist="Matplotlib")
+            writer = animation.FFMpegFileWriter(fps=15, metadata=metadata)
+
             self.fig, (self.ax1, self.ax2) = plt.subplots(
                 2, 1, figsize=(8, 10))
             self.ax1.set_xlim([X_min, X_max])
@@ -66,19 +90,18 @@ class Main:
                                             self.lattice_Y.flatten())
             self.ax1.triplot(self.triang, color='whitesmoke', marker='o',
                              markersize=1)
+            self.quiver = self.ax1.quiver(np.array([]), np.array([]),
+                                          np.array([]), np.array([]),
+                                          units='xy', angles='uv', color='k', scale=10)
 
             self.l, = self.ax2.plot([], [], 'b-')
             self.ax2.set_title(r"Order parameter $m=\frac{1}{N} |\sum \vec{u}_{i}|$ ($T = %.2f$)"
                                % self.T)
-            self.ax2.set_ylim([0, 1])
-
-            def init_func(*arg):
-                return self.l,
-
+            self.ax2.set_ylim([0, 1.])
             ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
-                                          init_func=init_func,
                                           interval=1, blit=True, repeat=False)
-            plt.show()
+            # plt.show()
+            ani.save('im_2.mp4', writer=writer, dpi=198)
         else:
             for i in range(100):
                 self.update(i)
@@ -103,12 +126,16 @@ class Main:
             nnx, nny = self.lattice.neighborhoods[point.x, point.y]
             for x, y in zip(nnx, nny):
                 if lowest.has_key((x, y)):
-                    ang = lowest[(x, y)].vel
-                    velocities += np.array([self.velx[ang], -self.vely[ang]])
+                    angle = lowest[(x, y)].vel * np.pi / 3.
+                    velocities += np.array([np.cos(angle), np.sin(angle)])
+
+            # 可能な6つの速度ベクトルとの内積を計算
+            u_alpha = [i * np.pi / 3. for i in range(6)]
+            u_alpha = [np.array([np.cos(ang), np.sin(ang)]) for ang in u_alpha]
 
             # ボルツマン分布に従って確率的に方向を決定
-            A = [np.exp(self.beta * np.dot(u, velocities)) for u in self.u]
-            rand = randm() * sum(A)
+            A = [np.exp(self.beta * np.dot(u, velocities)) for u in u_alpha]
+            rand = random.random() * sum(A)
             p = 0
             for i, P in enumerate(A):
                 p += P
@@ -119,7 +146,7 @@ class Main:
         # それ以外はランダムに向きを変えるように
         for point in upper:
             # change the velocity of the point
-            point.vel = rint(0, 5)
+            point.vel = random.randint(0, 5)
 
         # 各点の座標とベクトルを更新し，描画
         self.update_quivers()
@@ -132,6 +159,7 @@ class Main:
     def update_quivers(self):
         # Get information to plot
         X, Y = [], []
+        vel_x, vel_y = [], []
         for point in self.points:
             # Get possible direction
             newx, newy = self.lattice.neighborhoods[point.x, point.y]
@@ -140,27 +168,38 @@ class Main:
             X.append(self.lattice_X[point.x, point.y])
             Y.append(self.lattice_Y[point.x, point.y])
 
-        vel_x = [self.velx[p.vel] for p in self.points]
-        vel_y = [self.vely[p.vel] for p in self.points]
+            angle = point.vel * np.pi / 3.
+            vel_x.append(np.cos(angle))
+            vel_y.append(- np.sin(angle))
         if self.plot:
-            self.quiver = self.ax1.quiver(X, Y, vel_x, vel_y,
-                                          units='xy', angles='xy', color='k')
+            self.quiver.set_offsets(np.vstack([X, Y]).T)
+            self.quiver.set_UVC(np.array(vel_x), np.array(vel_y))
 
     def plot_order_param(self, num):
-        # nwidth = 20
-        self.order_param.append(self.cal_order_param())
+        nwidth = 20
+        m = self.cal_order_param()
+        self.order_param.append(m)
         self.num += 1
+        nl = max(self.num - nwidth, 0)
+        nr = 1.25 * nwidth + nl
+        xdata = np.arange(nl, self.num)
+        # print xdata
+        # print self.order_param
+        # print len(xdata)
+        # print len(self.order_param)
         if self.plot:
-            nl = max(self.num - 20, 0)
-            nr = 1.25 * 20 + nl
             self.ax2.set_xlim([nl, nr])
-            self.l.set_data(np.arange(nl, self.num), self.order_param[nl:])
+            self.l.set_data(xdata, self.order_param[nl:])
 
     def cal_order_param(self):
         # return order parameter
-        velx = sum([self.velx[p.vel] for p in self.points])
-        vely = sum([self.vely[p.vel] for p in self.points])
-        return la.norm([velx, vely]) / self.N
+        velocities = np.array([0., 0.])
+        for point in self.points:
+            angle = point.vel * np.pi / 3.
+            velocities += np.array([np.cos(angle), np.sin(angle)])
+
+        m = la.norm(velocities) / self.N
+        return m
 
 if __name__ == '__main__':
     main = Main(Lx=40, Ly=40, rho=0.9, T=0.41, frames=300, plot=True)

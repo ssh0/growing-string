@@ -4,6 +4,10 @@
 # written by Shotaro Fujimoto
 # 2016-05-22
 
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from triangular import LatticeTriangular as LT
 from base import Main as base
@@ -25,7 +29,7 @@ class Main(base):
         self.strings = self.create_random_strings(N, size)
 
         self.plot = plot
-        self.interval = 100
+        self.interval = 50
         self.frames = 1000
 
 

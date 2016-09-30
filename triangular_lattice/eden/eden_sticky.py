@@ -19,12 +19,12 @@ def print_debug(arg):
 
 
 if __name__ == '__main__':
-    Lx, Ly = 60, 200
-    eden = Eden(Lx, Ly, frames=5000, boundary={'h': 'periodic', 'v': 'reflective'})
+    Lx, Ly = 100, 60
+    eden = Eden(Lx, Ly, frames=5000, boundary={'h': 'reflective', 'v': 'reflective'})
     # eden = Eden(plot=False)
-    eden.points = [(0, i) for i in range(Ly)]
+    eden.points = [(i, 0) for i in range(Lx)]
     eden.occupied[list(np.array(eden.points).T)] = True
-    eden.neighbors = [(1, i) for i in range(Ly)]
+    eden.neighbors = [(i, 1) for i in range(Lx)]
 
     eden.execute()
 

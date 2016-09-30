@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.tri as tri
 import matplotlib.animation as animation
 from base import Main as base
-from String import String
+from strings import String
 import numpy as np
 import operator
 import pprint
@@ -60,7 +60,7 @@ class Main(base):
             self.lattice.Ly
         )
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
-        self.number_of_lines = sum(size) * Lx
+        self.number_of_lines = Lx
 
         if strings is None:
             # Put the strings to the lattice
@@ -73,7 +73,6 @@ class Main(base):
 
         self.plot = plot
         self.plot_surface = plot_surface
-        # self.interval = 100
         self.interval = interval
         self.frames = frames
 
@@ -165,7 +164,7 @@ class Main(base):
                                    markeredgecolor='black')[0]
                       for i in range(self.number_of_lines)]
         if self.plot_surface:
-            self.lines.append(self.ax.plot([], [], 'o', color='#ff0000')[0])
+            self.lines.append(self.ax.plot([], [], '.', color='#ff0000')[0])
 
         self.lattice_X = self.lattice_X.reshape(self.lattice.Lx,
                                                 self.lattice.Ly)

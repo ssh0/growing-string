@@ -5,7 +5,7 @@
 # 2016-08-15
 
 from growing_string import Main
-from Optimize import Optimize_powerlaw
+from optimize import Optimize_powerlaw
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
@@ -44,7 +44,7 @@ if __name__ == '__main__':
         'size': [3,] * 1,
         'plot': False,
         'beta': 0.,
-        'strings': [{'id': 1, 'x': L/2, 'y': L/4, 'vec': [0, 4]}],
+        'strings': [{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}],
         'pre_function': calc_radius_of_rotation
     }
 

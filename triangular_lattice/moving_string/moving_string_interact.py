@@ -2,9 +2,12 @@
 # -*- coding:utf-8 -*-
 #
 # written by Shotaro Fujimoto
-# 2016-07-11
-"""ひも状オブジェクトの中間点を動かすことができるようにしたもの
-"""
+# 2016-05-22
+
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from triangular import LatticeTriangular as LT
 from base import Main as base
@@ -24,7 +27,7 @@ class Main(base):
     def __init__(self, Lx=40, Ly=40, N=4, size=[5, 4, 10, 12], interval=1000):
         # Create triangular lattice with given parameters
         self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
-                          scale=10., boundary='periodic')
+                          scale=10., boundary={'h': 'periodic', 'v': 'periodic'})
 
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
         self.number_of_lines = sum(size) * Ly
@@ -43,7 +46,6 @@ class Main(base):
         # move head part of each strings (if possible)
         # TODO: Fix bug
         for s in self.strings:
-            print "=== Start ==="
             print s.vec
             X = self.get_neighbor_xy(s)
             if not X:
@@ -58,12 +60,12 @@ class Main(base):
                 s.vec = s.vec[:i] + [r_rev]
             else:
                 s.vec = s.vec[:i + 1] + [r_rev] + s.vec[i + 1:-1]
-            print s.vec
-            print "=== Updated ==="
+            print len(s.vec)
             s.update_pos()
             self.occupied[s.pos_x[i + 1], s.pos_y[i + 1]] = True
 
         ret = self.plot_string()
+        print self.occupied
 
         if self.plot:
             ret = self.plot_string()
@@ -104,12 +106,6 @@ class Main(base):
                 # stringの近傍として登録されていない場合
                 # -> 新たに登録
                 else:
-                    if i == 0:
-                        # r_rev: 現在の点から近接点へのベクトル
-                        r_rev = (r + 3) % 6
-                        bonding_pairs.append([- 1,
-                                              neighbors_set[(nx, ny)][-1][1],
-                                               r_rev])
                     neighbors_set[(nx, ny)] = [(i, r), ]
 
         # bonding_pairsの選ばれやすさを適切に重みを付けて評価

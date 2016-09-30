@@ -30,7 +30,7 @@ if __name__ == '__main__':
     L = 60
     for s in tqdm(range(num_strings)):
         main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=1000,
-                    strings=[{'id': 1, 'x': L/2, 'y': L/4, 'vec': [0, 4]}])
+                    strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
 
         num_of_pairs = 300
         len_vec = len(main.strings[0].vec)

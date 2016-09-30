@@ -6,7 +6,7 @@
 
 from growing_string import Main
 from surface import get_surface_points, set_labels, get_labeled_position
-from Optimize import Optimize_linear
+from optimize import Optimize_linear
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.axes3d import Axes3D
@@ -32,7 +32,7 @@ class DieCutting(object):
             frames=self.frames,
             beta=self.beta,
             weight_const=self.weight_const,
-            strings=[{'id': 1, 'x': self.L/2, 'y': self.L/4, 'vec': [0, 4]}]
+            strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4]}]
         )
 
         self.s = self.main.strings[0]
@@ -62,7 +62,6 @@ class DieCutting(object):
         self.res = self.get_results_each_subclusters(self.resultset)
         # print self.res
         self.visualize_results()
-
 
     def get_cutting_sizes(self):
         X = np.average(self.x)
@@ -253,11 +252,11 @@ class DieCutting(object):
 
 if __name__ == '__main__':
     main = DieCutting(
-        # L=60,
-        # frames=1000,
-        L=120,
-        frames=3000,
-        sample=300,
-        plot=False)
+        L=60,
+        frames=1000,
+        # L=120,
+        # frames=3000,
+        sample=3,
+        plot=True)
     main.start()
 
