@@ -43,7 +43,8 @@ def count_bend(self, i, s):
     return [pairs, bend1, bend2]
 
 if __name__ == '__main__':
-    main = Main(Lx=50, Ly=50, size=[3,] * 1, plot=False, frames=1000,
+    main = Main(Lx=60, Ly=60, size=[3,] * 1, plot=False, frames=1000,
+                beta=0.,
                 pre_function=count_bend)
     pairs, bend1, bend2 = np.array(main.pre_func_res).T
     steps = range(len(pairs))
