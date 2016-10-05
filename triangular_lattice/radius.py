@@ -25,10 +25,13 @@ def calc_radius_of_rotation(self, i, s):
                        + (self.lattice_Y[pos] - Y) ** 2) / N)
     return r
 
-
-if __name__ == '__main__':
-
-    fig, ax = plt.subplots()
+def main(beta=0., output=None, L=60, frames=1000, plot=False,
+         save_image=False, filename_image="",
+         plot_optimized=True):
+    if output != None:
+        save = True
+    else:
+        save = False
 
     # radius_of_rotation = []
     # num_strings = 10
@@ -36,36 +39,52 @@ if __name__ == '__main__':
     #     main = Radius()
     #     radius_of_rotation.append(main.pre_func_res)
 
-    L = 120
     params = {
         'Lx': L,
         'Ly': L,
-        'frames': 3000,
+        'frames': frames,
         'size': [3,] * 1,
-        'plot': False,
-        'beta': 0.,
+        'plot': plot,
+        'save_image': save_image,
+        'filename_image': filename_image,
+        'beta': beta,
         'strings': [{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}],
         'pre_function': calc_radius_of_rotation
     }
 
     main = Radius(params)
     radius_of_rotation = [main.pre_func_res]
-
     steps = range(len(radius_of_rotation[0]))
-    ax.loglog(steps, radius_of_rotation[0])
 
     # plot for all strings
     # for s in range(num_strings):
     #     ax.loglog(steps, radius_of_rotation[s], alpha=0.5)
     # ax.loglog(steps, np.average(np.array(radius_of_rotation), axis=0))
 
-    optimizer = Optimize_powerlaw(args=(steps[10:], radius_of_rotation[0][10:]),
+    index_start = 0
+    optimizer = Optimize_powerlaw(args=(steps[index_start:],
+                                        radius_of_rotation[0][index_start:]),
                                   parameters=[0., 0.5])
     result = optimizer.fitting()
-    ax.loglog(steps[10:], optimizer.fitted(steps[10:]), lw=2,
-              label='D = %f' % result['D'])
-    ax.set_xlabel('Steps N')
-    ax.set_ylabel('Radius of rotation')
-    ax.set_title('Raidus of rotation')
-    ax.legend(loc='best')
-    plt.show()
+
+    if plot_optimized or save:
+        fig, ax = plt.subplots()
+        ax.loglog(steps, radius_of_rotation[0])
+        ax.loglog(steps[index_start:], optimizer.fitted(steps[index_start:]), lw=2,
+                label='D = %f' % result['D'])
+        ax.set_xlabel('Steps N')
+        ax.set_ylabel('Radius of rotation')
+        ax.set_title('Raidus of rotation')
+        ax.legend(loc='best')
+        if save:
+            fig.savefig(output)
+            plt.close()
+        else:
+            plt.show()
+    else:
+        return result['D']
+
+
+if __name__ == '__main__':
+    main()
+
