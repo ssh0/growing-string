@@ -26,14 +26,14 @@ if __name__ == '__main__':
         """
         return self.bonding_pairs[i]
 
-    L = 60
-    frames = 1000
+    L = 1000
+    frames = 500
 
     params = {
         'Lx': L,
         'Ly': L,
         'frames': frames,
-        'beta': 1.,
+        'beta': 4.,
         'weight_const': 0.,
         'boundary': {'h': 'periodic', 'v': 'periodic'},
         # 'boundary': {'h': 'reflective', 'v': 'reflective'},
@@ -60,13 +60,13 @@ if __name__ == '__main__':
     # })
 
     # save img and video
-    params.update({
-        'plot': False,
-        'save_image': True,
-        'save_video': True,
-        'filename_image': "results/img/growing_string_" + time.strftime("%y%m%d_%H%M%S"),
-        'filename_video': "results/video/growing_string_" + time.strftime("%y%m%d_%H%M%S"),
-    })
+    # params.update({
+    #     'plot': False,
+    #     'save_image': True,
+    #     'save_video': True,
+    #     'filename_image': "results/img/growing_string_" + time.strftime("%y%m%d_%H%M%S"),
+    #     'filename_video': "results/video/growing_string_" + time.strftime("%y%m%d_%H%M%S"),
+    # })
 
 
     # # open

@@ -22,8 +22,8 @@ class FillBucket(object):
         self.string = main.strings[0]
 
 
-        self.create_doubled_lattice()
-        self.doubled_lattice = self.fill_inside(self.doubled_lattice)
+        doubled_lattice = self.create_doubled_lattice()
+        self.doubled_lattice = self.fill_inside(doubled_lattice)
         self.convert_to_realspace(self.doubled_lattice)
         self.plot_all()
 
@@ -39,7 +39,6 @@ class FillBucket(object):
             vec = self.string.vec[k]
             if vec in [0, 3]:
                 continue
-            # else
 
             if vec == 1:
                 x = 2 * i
@@ -76,23 +75,17 @@ class FillBucket(object):
         return ret_arr
 
     def convert_to_realspace(self, arr):
+        size_x, size_y = self.lattice.Lx, self.lattice.Ly
         index = np.array(np.where(arr)).T.tolist()
-        self.X_even = []
-        self.X_odd = []
-        self.Y_even = []
-        self.Y_odd = []
+        self.X_even, self.Y_even = [], []
+        self.X_odd, self.Y_odd = [], []
         for (i, j) in index:
             if i % 2 == 0:
-                # self.X_even.append(self.lattice_X[i / 2, j] + 0.5 * self.lattice.dx)
-                # self.Y_even.append(self.lattice_Y[i / 2, j] + 0.5 * self.lattice.dy)
                 self.X_even.append(self.lattice_X[i / 2, j])
                 self.Y_even.append(self.lattice_Y[i / 2, j])
             elif i % 2 == 1:
-                # self.X_odd.append(self.lattice_X[i / 2 + 1, j])
-                # self.Y_odd.append(self.lattice_Y[i / 2 + 1, j] + 0.5 * self.lattice.dy)
-                self.X_odd.append(self.lattice_X[i / 2 + 1, j])
-                self.Y_odd.append(self.lattice_Y[i / 2 + 1, j])
-
+                self.X_odd.append(self.lattice_X[(i / 2 + 1) % size_x, j])
+                self.Y_odd.append(self.lattice_Y[(i / 2 + 1) % size_x, j])
 
     def plot_all(self):
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
@@ -165,10 +158,8 @@ class FillBucket(object):
         plt.show()
 
 
-
-
 if __name__ == '__main__':
-    L = 60
+    L = 50
     frames = 1000
 
     params = {
