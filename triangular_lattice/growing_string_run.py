@@ -6,6 +6,7 @@
 
 from growing_string import Main
 import random
+import time
 
 if __name__ == '__main__':
     # import timeit
@@ -38,8 +39,35 @@ if __name__ == '__main__':
         # 'boundary': {'h': 'reflective', 'v': 'reflective'},
         'plot': True,
         'plot_surface': True,
-        'interval': 0,
+        'interval': 1,
     }
+
+    # save img
+    # params.update({
+    #     'plot': False,
+    #     'plot_surface': True,
+    #     'save_image': True,
+    #     'filename_image': "results/img/growing_string_" + time.strftime("%y%m%d_%H%M%S"),
+    # })
+
+    # save video
+    # params.update({
+    #     'plot': False,
+    #     'plot_surface': True,
+    #     'save_image': False,
+    #     'save_video': True,
+    #     'filename_video': "results/video/growing_string_" + time.strftime("%y%m%d_%H%M%S") + ".mp4",
+    # })
+
+    # save img and video
+    params.update({
+        'plot': False,
+        'save_image': True,
+        'save_video': True,
+        'filename_image': "results/img/growing_string_" + time.strftime("%y%m%d_%H%M%S"),
+        'filename_video': "results/video/growing_string_" + time.strftime("%y%m%d_%H%M%S"),
+    })
+
 
     # # open
     # main = Main(strings=[{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4]}],

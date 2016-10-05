@@ -31,6 +31,10 @@ class Main(base):
                  size=[5, 4, 10, 12],
                  plot=True,
                  plot_surface=True,
+                 save_image=False,
+                 save_video=False,
+                 filename_image="",
+                 filename_video="",
                  frames=1000,
                  beta = 2.,
                  interval=1,
@@ -73,6 +77,23 @@ class Main(base):
 
         self.plot = plot
         self.plot_surface = plot_surface
+        self.save_image = save_image
+        self.save_video = save_video
+        if self.save_image:
+            if filename_image == "":
+                raise AttributeError("`filename_image` is empty.")
+            else:
+                self.filename_image = filename_image
+
+        if self.save_video:
+            if self.plot:
+                raise AttributeError("`save` and `plot` method can't be set both True.")
+            if filename_video == "":
+                raise AttributeError("`filename_video` is empty.")
+            else:
+                self.filename_video = filename_video
+
+
         self.interval = interval
         self.frames = frames
 
@@ -113,6 +134,10 @@ class Main(base):
         # Plot triangular-lattice points, string on it, and so on
         if self.plot:
             self.plot_all()
+            self.start_animation()
+        elif self.save_video:
+            self.plot_all()
+            self.start_animation(filename=self.filename_video)
         else:
             t = 0
             while t < self.frames:
@@ -121,6 +146,13 @@ class Main(base):
                     t += 1
                 except StopIteration:
                     break
+
+        if self.save_image:
+            if not self.__dict__.has_key('fig'):
+                self.plot_all()
+            self.fig.savefig(self.filename_image)
+            plt.close()
+            # print("Image file is successfully saved at '%s'." % filename_image)
 
     def __update_dict(self, dict, key, value):
         if dict.has_key(key):
@@ -139,10 +171,6 @@ class Main(base):
 
         ここからFuncAnimationを使ってアニメーション表示を行うようにする
         """
-        if self.__dict__.has_key('frames'):
-            frames = self.frames
-        else:
-            frames = 1000
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
 
         self.lattice_X = self.lattice.coordinates_x
@@ -172,6 +200,12 @@ class Main(base):
                                                 self.lattice.Ly)
         self.plot_string()
 
+    def start_animation(self, filename=""):
+        if self.__dict__.has_key('frames'):
+            frames = self.frames
+        else:
+            frames = 1000
+
         def init_func(*arg):
             return self.lines
 
@@ -179,7 +213,15 @@ class Main(base):
                                       init_func=init_func,
                                       interval=self.interval,
                                       blit=True, repeat=False)
-        plt.show()
+        if filename != "":
+            try:
+                ani.save(filename, codec="libx264", bitrate=-1, fps=30)
+            except:
+                print("Can't saved.")
+            else:
+                print("Animation is successfully saved at '%s'." % filename)
+        else:
+            plt.show()
 
     def plot_string(self):
         """self.strings内に格納されているStringを参照し，グラフ上に図示する
@@ -249,7 +291,7 @@ class Main(base):
             if self.post_function is not None:
                 self.post_func_res.append(self.post_function(self, i, s))
 
-        if self.plot:
+        if self.plot or self.save_video:
             ret = self.plot_string()
             return ret
 
