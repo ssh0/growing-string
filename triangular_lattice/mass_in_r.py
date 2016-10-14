@@ -19,7 +19,7 @@ class Count_in_r(Main):
                       beta=0.,
                       strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
 
-def count_point_in_r(self, s, N_r):
+def count_point_in_r(self, s, N_r, r=None):
     N = float(len(s.vec) + 1)
     pos = list(s.pos.T)
     x = self.lattice_X[pos]
@@ -28,12 +28,12 @@ def count_point_in_r(self, s, N_r):
     Y = np.average(y)
     R = np.sqrt(np.sum((x - X) ** 2 + (y - Y) ** 2) / N)
     dist = np.sqrt((x - X) ** 2 + (y - Y) ** 2)
-    r = np.logspace(1, int(np.log2(max(dist))), num=N_r, base=2.)
+    if r is None:
+        r = np.logspace(1, int(np.log2(max(dist))), num=N_r, base=2.)
     res = []
     for _r in r:
         res.append(len(np.where(dist < _r)[0]))
     return r, np.array(res)
-
 
 def main():
     N_r = 100
