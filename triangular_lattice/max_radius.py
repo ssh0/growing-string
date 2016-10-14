@@ -14,8 +14,8 @@ import matplotlib.pyplot as plt
 
 
 max_dists = []
-sample_num = 1
-betas_num = 20
+sample_num = 10
+betas_num = 10
 betas = np.linspace(0., 10., num=betas_num)
 frames = 400
 L = 1000
@@ -45,7 +45,7 @@ def _calc_max_radius(beta):
     r = np.sqrt((x - X) ** 2 + (y - Y) ** 2)
     return np.max(r)
 
-pool = Pool(7)
+pool = Pool(6)
 ite = pool.imap(calc_max_radius, betas)
 for ret in tqdm(ite, total=betas_num):
     max_dists.append(ret)
