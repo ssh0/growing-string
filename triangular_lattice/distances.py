@@ -8,6 +8,7 @@ from growing_string import Main
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
+import time
 import random
 
 
@@ -21,61 +22,96 @@ def choose_indexes(_list, num, L):
                             )
     return sorted(random.sample(_list[L:N - L], num))
 
+def get_path_length_and_distances(beta, num_of_strings, L, frames, num_of_pairs=300):
+    main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=1000, beta=beta,
+                strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
+    len_vec = len(main.strings[0].vec)
+
+    # # 1. 同string内の2点を選ぶ
+    # # (1.A) ランダム
+    # random_i = np.random.randint(len_vec, size=num_of_pairs)
+    # random_j = np.random.randint(len_vec, size=num_of_pairs)
+
+    # (1.B) 等パス長となる2点を同数ずつ抽出
+    Lp = range(2, (len_vec - num_of_pairs) / 2)
+    random_i, random_j = [], []
+    for lp in Lp:
+        random_i.append(np.array(choose_indexes(range(len_vec + 1),
+                                                num_of_pairs, lp)))
+        random_j.append(random_i[-1] + lp)
+
+    random_i = np.array(random_i).flatten()
+    random_j = np.array(random_j).flatten()
+
+    # 2. 実座標上での距離を算出
+    x0, y0 = main.strings[0].pos_x[random_i], main.strings[0].pos_y[random_i]
+    x1, y1 = main.strings[0].pos_x[random_j], main.strings[0].pos_y[random_j]
+    dx = main.lattice_X[x1, y1] - main.lattice_X[x0, y0]
+    dy = main.lattice_Y[x1, y1] - main.lattice_Y[x0, y0]
+    distance = np.sqrt(dx**2. + dy**2.)
+    # 3. 2点間のベクトル数(=パス長)を計算
+    lattices = np.sort(np.array([random_i, random_j]).T)
+    lattice_distance = lattices[:, 1] - lattices[:, 0]
+    return list(distance), list(lattice_distance)
+
+def execute_simulation_for_one_beta(beta, num_of_strings, L, frames, plot=True,
+                                    save_image=False, save_data=False):
+    print "beta = %2.2f" % beta
+    distance_list = []
+    path_length = []
+    for s in tqdm(range(num_of_strings)):
+        d, pl = get_path_length_and_distances(beta, num_of_strings, L, frames)
+        distance_list.append(d)
+        path_length.append(pl)
+
+    distance_list = np.array(distance_list).flatten()
+    path_length = np.array(path_length).flatten()
+
+    if save_data:
+        result_data_path = "results/data/distances/beta=%2.2f" % beta
+        result_data_path += "_" + time.strftime("%y%m%d_%H%M%S")
+        result_data_path += ".npz"
+        np.savez(result_data_path,
+                 beta=beta,
+                 num_of_strings=num_of_strings,
+                 L=L,
+                 frames=frames,
+                 distance_list=distance_list,
+                 path_length=path_length)
+
+    if plot or save_image:
+        fig, ax = plt.subplots()
+
+        # heatmap
+        ax.hist2d(distance_list, path_length, bins=25)
+
+        ax.set_xlabel('Distance')
+        ax.set_ylabel('Path length')
+        ax.set_title('Path length and distances between two points in the cluster'
+                    + r'($\beta = %2.2f$)' % beta)
+
+        if save_image:
+            result_image_path = "results/img/distances/beta=%2.2f" % beta
+            result_image_path += "_" + time.strftime("%y%m%d_%H%M%S")
+            result_image_path += ".png"
+            plt.savefig(result_image_path)
+            plt.close()
+            print "[saved] " + result_image_path
+        else:
+            plt.show()
+
 
 if __name__ == '__main__':
 
-    distance_list = []
-    path_length = []
-    num_strings = 10
-    L = 60
-    for s in tqdm(range(num_strings)):
-        main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=1000,
-                    strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
+    beta = 20.
+    params = {
+        'num_of_strings': 30,
+        'L': 2000,
+        'frames': 1000,
+        'plot': False,
+        'save_image': False,
+        'save_data': True,
+    }
 
-        num_of_pairs = 300
-        len_vec = len(main.strings[0].vec)
+    execute_simulation_for_one_beta(beta, **params)
 
-        # # 1. 同string内の2点を選ぶ
-        # # (1.A) ランダム
-        # random_i = np.random.randint(len_vec, size=num_of_pairs)
-        # random_j = np.random.randint(len_vec, size=num_of_pairs)
-
-        # (1.B) 等パス長となる2点を同数ずつ抽出
-        Lp = range(2, 352)  # stop < 353(= (1000 + 3 - 300) / 2)
-        random_i, random_j = [], []
-        for lp in Lp:
-            random_i.append(np.array(choose_indexes(range(len_vec + 1),
-                                                    num_of_pairs, lp)))
-            random_j.append(random_i[-1] + lp)
-
-        random_i = np.array(random_i).flatten()
-        random_j = np.array(random_j).flatten()
-
-        # 2. 実座標上での距離を算出
-        x0, y0 = main.strings[0].pos_x[random_i], main.strings[0].pos_y[random_i]
-        x1, y1 = main.strings[0].pos_x[random_j], main.strings[0].pos_y[random_j]
-        dx = main.lattice_X[x1, y1] - main.lattice_X[x0, y0]
-        dy = main.lattice_Y[x1, y1] - main.lattice_Y[x0, y0]
-        distance = np.sqrt(dx**2. + dy**2.)
-        # 3. 2点間のベクトル数(=パス長)を計算
-        lattices = np.sort(np.array([random_i, random_j]).T)
-        lattice_distance = lattices[:, 1] - lattices[:, 0]
-
-        distance_list.append(list(distance))
-        path_length.append(list(lattice_distance))
-
-    fig, ax = plt.subplots()
-    # # scatter
-    # ax.scatter(np.array(distance_list).flatten(),
-    #            np.array(path_length).flatten(),
-    #            marker='.', s=20)
-
-    # heatmap
-    ax.hist2d(np.array(distance_list).flatten(),
-              np.array(path_length).flatten(),
-              bins=25)
-
-    ax.set_xlabel('Distance')
-    ax.set_ylabel('Path length')
-    ax.set_title('Path length and distances between two points in the 1D object')
-    plt.show()
