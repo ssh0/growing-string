@@ -5,7 +5,6 @@
 # 2016-09-27
 
 from growing_string import Main
-import random
 import time
 
 if __name__ == '__main__':
