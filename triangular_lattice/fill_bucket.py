@@ -13,7 +13,7 @@ from matplotlib.collections import PatchCollection
 
 
 class FillBucket(object):
-    def __init__(self, main):
+    def __init__(self, main, plot_type='fill'):
         self.lattice = main.lattice
         self.lattice_X = main.lattice_X
         self.lattice_Y = main.lattice_Y
@@ -21,6 +21,7 @@ class FillBucket(object):
                                         dtype=np.bool)
         self.string = main.strings[0]
 
+        self.plot_type = plot_type
 
         doubled_lattice = self.create_doubled_lattice()
         self.doubled_lattice = self.fill_inside(doubled_lattice)
@@ -87,7 +88,10 @@ class FillBucket(object):
                 self.X_odd.append(self.lattice_X[(i / 2 + 1) % size_x, j])
                 self.Y_odd.append(self.lattice_Y[(i / 2 + 1) % size_x, j])
 
-    def plot_all(self):
+    def plot_all(self, plot_type=None):
+        if plot_type is None:
+            plot_type = self.plot_type
+
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
 
         lattice_X = self.lattice.coordinates_x
@@ -133,28 +137,32 @@ class FillBucket(object):
             self.lines[i].set_data(X, Y)
             i += 1
 
-        # # plot with triangular marker
-        # self.ax.plot(self.X_even, self.Y_even, "g^ ", markersize=10)
-        # self.ax.plot(self.X_odd, self.Y_odd, "gv ", markersize=10)
 
-        # # plot by Polygon
-        patches = []
         dx = self.lattice.dx
         dy = self.lattice.dy
-        for x, y in zip(self.X_even, self.Y_even):
-            patches.append(Polygon([[x, y],
-                                    [x + dx, y],
-                                    [x + 0.5 * dx, y + dy],
-                                    [x, y]
-                                    ]))
-        for x, y in zip(self.X_odd, self.Y_odd):
-            patches.append(Polygon([[x, y],
-                                    [x - 0.5 * dx, y + dy],
-                                    [x + 0.5 * dx, y + dy],
-                                    [x, y]
-                                    ]))
-        p = PatchCollection(patches, alpha=0.5, color='green')
-        self.ax.add_collection(p)
+        if plot_type == 'fill':
+            # # plot by Polygon
+            patches = []
+            for x, y in zip(self.X_even, self.Y_even):
+                patches.append(Polygon([[x, y],
+                                        [x + dx, y],
+                                        [x + 0.5 * dx, y + dy],
+                                        [x, y]
+                                        ]))
+            for x, y in zip(self.X_odd, self.Y_odd):
+                patches.append(Polygon([[x, y],
+                                        [x - 0.5 * dx, y + dy],
+                                        [x + 0.5 * dx, y + dy],
+                                        [x, y]
+                                        ]))
+            p = PatchCollection(patches, alpha=0.5, color='green')
+            self.ax.add_collection(p)
+        elif plot_type == 'point':
+            # # plot by Point
+            index = np.where(self.doubled_lattice)
+            X = self.kagome_X[index]
+            Y = self.kagome_Y[index]
+            self.ax.plot(X, Y, 'r.', alpha=0.5)
         plt.show()
 
 
@@ -182,5 +190,7 @@ if __name__ == '__main__':
     main = Main(strings=[{'id': 1, 'x': L / 2, 'y': L / 2, 'vec': [0, 4, 2]}],
                 **params
                 )
+    # bucket = FillBucket(main, plot_type='fill')
     bucket = FillBucket(main)
+    bucket.plot_all(plot_type='point')
 
