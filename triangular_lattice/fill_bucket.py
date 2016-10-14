@@ -25,8 +25,6 @@ class FillBucket(object):
 
         doubled_lattice = self.create_doubled_lattice()
         self.doubled_lattice = self.fill_inside(doubled_lattice)
-        self.convert_to_realspace(self.doubled_lattice)
-        self.plot_all()
 
     def create_doubled_lattice(self):
         str_pos = self.string.pos.tolist()
@@ -75,18 +73,7 @@ class FillBucket(object):
                     flag = not flag
         return ret_arr
 
-    def convert_to_realspace(self, arr):
         size_x, size_y = self.lattice.Lx, self.lattice.Ly
-        index = np.array(np.where(arr)).T.tolist()
-        self.X_even, self.Y_even = [], []
-        self.X_odd, self.Y_odd = [], []
-        for (i, j) in index:
-            if i % 2 == 0:
-                self.X_even.append(self.lattice_X[i / 2, j])
-                self.Y_even.append(self.lattice_Y[i / 2, j])
-            elif i % 2 == 1:
-                self.X_odd.append(self.lattice_X[(i / 2 + 1) % size_x, j])
-                self.Y_odd.append(self.lattice_Y[(i / 2 + 1) % size_x, j])
 
     def plot_all(self, plot_type=None):
         if plot_type is None:
