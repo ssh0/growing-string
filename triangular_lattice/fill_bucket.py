@@ -19,8 +19,8 @@ class FillBucket(object):
         self.lattice_Y = main.lattice_Y
         self.doubled_lattice = np.zeros((self.lattice.Lx * 2, self.lattice.Ly),
                                         dtype=np.bool)
+        self.define_kagome_lattice()
         self.string = main.strings[0]
-
         self.plot_type = plot_type
 
         doubled_lattice = self.create_doubled_lattice()
@@ -73,7 +73,14 @@ class FillBucket(object):
                     flag = not flag
         return ret_arr
 
+    def define_kagome_lattice(self):
         size_x, size_y = self.lattice.Lx, self.lattice.Ly
+        x_even = self.lattice_X + 0.5 * self.lattice.dx
+        y_even = self.lattice_Y + self.lattice.dy / 3.
+        x_odd = np.roll(self.lattice_X, -1, axis=0)
+        y_odd = np.roll(self.lattice_Y, -1, axis=0) + (2 * self.lattice.dy) / 3.
+        self.kagome_X = np.hstack((x_even, x_odd)).reshape(2 * size_x, size_y)
+        self.kagome_Y = np.hstack((y_even, y_odd)).reshape(2 * size_x, size_y)
 
     def plot_all(self, plot_type=None):
         if plot_type is None:
@@ -154,7 +161,7 @@ class FillBucket(object):
 
 
 if __name__ == '__main__':
-    L = 50
+    L = 60
     frames = 1000
 
     params = {
