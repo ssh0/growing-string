@@ -95,4 +95,5 @@ if __name__ == '__main__':
     # Simple Simulation
     filled_kagome = FilledKagome(**setup)
     filled_kagome.plot_all()
+    print filled_kagome.R
 
