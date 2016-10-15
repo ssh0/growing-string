@@ -419,12 +419,14 @@ class Main(base):
         """ベクトルの内積を元に，Boltzmann分布に従って成長点選択の重みを決定
         """
 
-        if (i == 0) and (not s.loop):
-            w = self.dot(r_rev, s.vec[0]) + self.dot(r_rev, s.vec[i])
+        if (i == 1) and (not s.loop):
+            w = self.dot(r_rev, s.vec[i]) - self.dot(s.vec[0], s.vec[1])
         elif (i == len(s.pos) - 1) and (not s.loop):
-            w = self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[0])
+            w = self.dot(s.vec[i - 2], r_i) - self.dot(s.vec[i - 2], s.vec[i - 1])
         else:
-            w = self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[i % len(s.vec)])
+            # w = self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[i % len(s.vec)])
+            w = (self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[i % len(s.vec)])) \
+                - (self.dot(s.vec[i - 2], s.vec[i - 1]) + self.dot(s.vec[i - 1], s.vec[i % len(s.vec)]))
 
         W = np.exp(self.beta * w)
         return W
