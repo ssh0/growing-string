@@ -13,27 +13,6 @@ from radius import *
 import matplotlib.pyplot as plt
 
 
-# # Create result images
-# betas_num = 10
-# betas = np.linspace(0., 10., num=betas_num)
-# frames = 500
-# Ls = [500, 1000]
-# test_data = [(beta, L) for beta in betas for L in Ls]
-
-# for beta, L in tqdm(test_data):
-#     main(beta, L=L, frames=frames, plot=False, 
-#          output="./results/img/radius/beta=" + str(beta) +
-#          "_L=%03d" % L +
-#          "_frames=" + str(frames) +
-#          "_fitted.png",
-#          save_image=True,
-#          filename_image="./results/img/radius/beta=" + str(beta) +
-#          "_L=%03d" % L +
-#          "_frames=" + str(frames) +
-#          "_raw.png"
-#          )
-
-
 Rs = []
 err = []
 sample_num = 100

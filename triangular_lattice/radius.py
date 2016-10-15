@@ -33,11 +33,6 @@ def main(beta=0., output=None, L=60, frames=1000, plot=False,
     else:
         save = False
 
-    # radius_of_rotation = []
-    # num_strings = 10
-    # for s in tqdm(range(num_strings)):
-    #     main = Radius()
-    #     radius_of_rotation.append(main.pre_func_res)
 
     params = {
         'Lx': L,
