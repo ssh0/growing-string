@@ -15,7 +15,8 @@ if __name__ == '__main__':
     for beta in [float(i) for i in range(18)]:
 
         # result_data_path = "./results/data/correlation/beta=%2.2f_161013_141137.npz" % beta
-        result_data_path = "./results/data/correlation/beta=%2.2f_161013_154842.npz" % beta
+        # result_data_path = "./results/data/correlation/beta=%2.2f_161013_154842.npz" % beta
+        result_data_path = "./results/data/correlation/beta=%2.2f_161015_155449.npz" % beta
 
         data = np.load(result_data_path)
         beta = data['beta']
