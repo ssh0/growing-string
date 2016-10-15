@@ -17,6 +17,9 @@ if __name__ == '__main__':
     # result_data_path = "./results/data/distances/beta=15.00_161012_172209.npz"
     # result_data_path = "./results/data/distances/beta=20.00_161012_172338.npz"
 
+    # after modifying the method of calcurating the weights
+    result_data_path = "./results/data/distances/beta=0.00_161015_153311.npz"
+
     data = np.load(result_data_path)
     beta = data['beta']
     num_of_strings = data['num_of_strings']
