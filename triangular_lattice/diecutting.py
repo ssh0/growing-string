@@ -42,26 +42,14 @@ class DieCutting(object):
         self.x = self.lattice_X[np.array(self.s.pos.T).tolist()]
         self.y = self.lattice_Y[np.array(self.s.pos.T).tolist()]
 
-    def start(self):
+    def start(self, result_set, visualize=True):
         self.init()
         self.get_cutting_sizes()
-        self.resultset = {
-            'num_of_sub_clusters': {
-                '_func': len,
-                'func': np.average
-            },
-            'size_dist_of_sub_clusters': {
-                '_func': lambda arr: np.bincount(map(len, arr)),
-                'func': lambda arr: map(sum, itertools.izip_longest(*arr, fillvalue=0))
-            },
-            # 'max_size_of_sub_cluster': {
-            #     '_func': lambda arr: max(map(len, arr)),
-            #     'func': np.average
-            # }
-        }
+        self.resultset = result_set
         self.res = self.get_results_each_subclusters(self.resultset)
         # print self.res
-        self.visualize_results()
+        if visualize:
+            self.visualize_results()
 
     def get_cutting_sizes(self):
         """Create the cutting size list for simulation
@@ -193,78 +181,78 @@ class DieCutting(object):
 
     def visualize_results(self):
         for k in self.res.keys():
-            getattr(self, 'visualize_' + k)()
+            getattr(self, 'visualize_' + k)(self)
 
-    def visualize_num_of_sub_clusters(self):
-        fig, ax = plt.subplots()
 
-        num_of_sub_clusters = self.res['num_of_sub_clusters']
-        optimizer = Optimize_linear(
-            args=(
-                self.cutting_size_xs[:-1],
-                num_of_sub_clusters[:-1]
-            ),
-            parameters=[1.5, 0.]
-        )
-        result = optimizer.fitting()
+def visualize_num_of_sub_clusters(self):
+    fig, ax = plt.subplots()
 
-        ax.plot(self.cutting_size_xs, num_of_sub_clusters, 'o-')
-        ax.plot(
+    num_of_sub_clusters = self.res['num_of_sub_clusters']
+    optimizer = Optimize_linear(
+        args=(
             self.cutting_size_xs[:-1],
-            optimizer.fitted(self.cutting_size_xs[:-1]),
-            '-',
-            label='a = %f' % result['a']
-        )
-        ax.legend(loc='best')
-        ax.set_title('Strings in rectangular region')
-        ax.set_xlabel('Cutting size')
-        ax.set_ylabel('Average number of sub-clusters in a rectangular region')
-        plt.show()
+            num_of_sub_clusters[:-1]
+        ),
+        parameters=[1.5, 0.]
+    )
+    result = optimizer.fitting()
 
-    def visualize_max_size_of_sub_cluster(self):
-        max_size_of_sub_cluster = self.res['max_size_of_sub_cluster']
-        optimizer = Optimize_linear(
-            args=(
-                self.cutting_size_xs[:],
-                max_size_of_sub_cluster[:]
-            ),
-            parameters=[-1., 0.]
-        )
-        result = optimizer.fitting()
-        fig, ax = plt.subplots()
-        ax.plot(self.cutting_size_xs, max_size_of_sub_cluster, 'o-')
+    ax.plot(self.cutting_size_xs, num_of_sub_clusters, 'o-')
+    ax.plot(
+        self.cutting_size_xs[:-1],
+        optimizer.fitted(self.cutting_size_xs[:-1]),
+        '-',
+        label='a = %f' % result['a']
+    )
+    ax.legend(loc='best')
+    ax.set_title('Strings in rectangular region')
+    ax.set_xlabel('Cutting size')
+    ax.set_ylabel('Average number of sub-clusters in a rectangular region')
+    plt.show()
 
-        # ax.loglog(self.cutting_size_xs, max_size_of_sub_cluster, 'o-')
+def visualize_max_size_of_sub_cluster(self):
+    max_size_of_sub_cluster = self.res['max_size_of_sub_cluster']
+    optimizer = Optimize_linear(
+        args=(
+            self.cutting_size_xs[:],
+            max_size_of_sub_cluster[:]
+        ),
+        parameters=[-1., 0.]
+    )
+    result = optimizer.fitting()
+    fig, ax = plt.subplots()
+    ax.plot(self.cutting_size_xs, max_size_of_sub_cluster, 'o-')
 
-        ax.plot(self.cutting_size_xs, optimizer.fitted(self.cutting_size_xs), '-',
-                label='a = %f' % result['a'])
-        ax.legend(loc='best')
-        ax.set_title('Strings in rectangular region')
-        ax.set_xlabel('Cutting size')
-        ax.set_ylabel('Average of max sub-cluster size in a rectangular region')
-        plt.show()
+    # ax.loglog(self.cutting_size_xs, max_size_of_sub_cluster, 'o-')
 
-    def visualize_size_dist_of_sub_clusters(self):
-        lst = self.res['size_dist_of_sub_clusters']
+    ax.plot(self.cutting_size_xs, optimizer.fitted(self.cutting_size_xs), '-',
+            label='a = %f' % result['a'])
+    ax.legend(loc='best')
+    ax.set_title('Strings in rectangular region')
+    ax.set_xlabel('Cutting size')
+    ax.set_ylabel('Average of max sub-cluster size in a rectangular region')
+    plt.show()
 
-        n = max(map(len, lst))
-        res = np.zeros([len(lst), n])
-        for i, row in enumerate(lst):
-            for j, val in enumerate(row):
-                res[i][j] = val
+def visualize_size_dist_of_sub_clusters(self):
+    lst = self.res['size_dist_of_sub_clusters']
 
-        L = len(res)
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        X, Y = np.meshgrid(range(len(res[0])), range(L))
-        ax.plot_wireframe(X, Y, res, rstride=1)
-        ax.set_title("Histogram of the size of subclusters in the region with $L$")
-        ax.set_ylim(0, L)
-        ax.set_xlabel("Size of a subcluster")
-        ax.set_ylabel("$L$")
-        ax.set_zlabel("Freq")
-        plt.show()
+    n = max(map(len, lst))
+    res = np.zeros([len(lst), n])
+    for i, row in enumerate(lst):
+        for j, val in enumerate(row):
+            res[i][j] = val
 
+    L = len(res)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    X, Y = np.meshgrid(range(len(res[0])), range(L))
+    ax.plot_wireframe(X, Y, res, rstride=1)
+    ax.set_title("Histogram of the size of subclusters in the region with $L$")
+    ax.set_ylim(0, L)
+    ax.set_xlabel("Size of a subcluster")
+    ax.set_ylabel("$L$")
+    ax.set_zlabel("Freq")
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -276,5 +264,25 @@ if __name__ == '__main__':
         sample=3,
         beta=0.,
         plot=True)
-    main.start()
+
+    main.visualize_num_of_sub_clusters = visualize_num_of_sub_clusters
+    main.visualize_size_dist_of_sub_clusters = visualize_size_dist_of_sub_clusters
+    main.visualize_max_size_of_sub_cluster = visualize_max_size_of_sub_cluster
+
+    result_set = {
+        'num_of_sub_clusters': {
+            '_func': len,
+            'func': np.average
+        },
+        'size_dist_of_sub_clusters': {
+            '_func': lambda arr: np.bincount(map(len, arr)),
+            'func': lambda arr: map(sum, itertools.izip_longest(*arr, fillvalue=0))
+        },
+        # 'max_size_of_sub_cluster': {
+        #     '_func': lambda arr: max(map(len, arr)),
+        #     'func': np.average
+        # }
+    }
+
+    main.start(result_set, visualize=True)
 
