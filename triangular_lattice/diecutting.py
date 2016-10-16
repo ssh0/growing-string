@@ -64,6 +64,22 @@ class DieCutting(object):
         self.visualize_results()
 
     def get_cutting_sizes(self):
+        """Create the cutting size list for simulation
+
+        self.X0: x coordinates of the left buttom corner
+        self.Y0: y coordinates of the left buttom corner
+        self.cutting_size_max_width: max width of the cutting size
+        self.cutting_size_max_height: max height of the cutting size
+        self.cutting_size_xs: cutting size list
+        self.cutting_size_ys: cutting size list
+        self.cutting_sizes: ndarray [[cutting_size_x[0], cutting_size_y][0],
+                                     [cutting_size_x[1], cutting_size_y][1],
+                                         ...
+                                    ]
+
+        In this funciton, cutting size is determined by which the whole region
+        is in the cluster.
+        """
         X = np.average(self.x)
         Y = np.average(self.y)
         # surfaceモジュールで最外部の占有点の座標を取得(x_surface, y_surface)
@@ -86,7 +102,8 @@ class DieCutting(object):
 
         self.cutting_size_xs = np.arange(2, self.cutting_size_max_width - 1)
         self.cutting_size_ys = self.cutting_size_xs * (np.sqrt(3) / 2)
-        self.cutting_sizes = np.array([self.cutting_size_xs, self.cutting_size_ys]).T
+        self.cutting_sizes = np.array([self.cutting_size_xs,
+                                       self.cutting_size_ys]).T
 
         # to verify
         # self.eval_subclusters(
@@ -129,19 +146,19 @@ class DieCutting(object):
         if self.plot_for_veirification:
             fig, ax = plt.subplots()
             pos = list(np.array(self.s.pos).T)
-            x = main.lattice_X[pos]
-            y = main.lattice_Y[pos]
+            x = self.lattice_X[pos]
+            y = self.lattice_Y[pos]
             ax.plot(x, y, marker='.', color='k', alpha=0.5)
             rect = plt.Rectangle((x0, y0), width, height,
                                 facecolor='#f5f5f5', edgecolor='#ff0000', lw=2)
             plt.gca().add_patch(rect)
             for _sub_cluster in sub_cluster:
                 pos = list(np.array(self.s.pos[_sub_cluster]).T)
-                x = main.lattice_X[pos]
-                y = main.lattice_Y[pos]
+                x = self.lattice_X[pos]
+                y = self.lattice_Y[pos]
                 ax.plot(x, y, '.-')
-            ax.set_xlim((np.min(main.lattice_X), np.max(main.lattice_X)))
-            ax.set_ylim((np.min(main.lattice_Y), np.max(main.lattice_Y)))
+            ax.set_xlim((np.min(self.lattice_X), np.max(self.lattice_X)))
+            ax.set_ylim((np.min(self.lattice_Y), np.max(self.lattice_Y)))
             ax.set_title('Strings in rectangular region')
             ax.set_aspect('equal')
             plt.show()
@@ -257,6 +274,7 @@ if __name__ == '__main__':
         # L=120,
         # frames=3000,
         sample=3,
+        beta=0.,
         plot=True)
     main.start()
 
