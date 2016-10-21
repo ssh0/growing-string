@@ -1,0 +1,72 @@
+% vim: ft=texmath
+\documentclass[43pt]{jsarticle}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{ascmac}
+\pagestyle{empty}
+
+% '\vector{a}' でベクトル
+\def\vector#1{\mbox{\boldmath \(#1\)}}
+
+\begin{document}
+\begin{eqnarray*}
+  \varepsilon_{i, j} = \varepsilon_{i, j}\delta_{j, i+1} \equiv - \vector{v}_{i} \cdot \vector{v}_{i+1}
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  \Delta \varepsilon_{i} = -(\vector{v}_{i-1} \cdot \vector{v}'_{i} + \vector{v}'_{i+1} \cdot \vector{v}'_{i + 2})
+  + (\vector{v}_{i-1} \cdot \vector{v}_{i} + \vector{v}_{i} \cdot \vector{v}_{i+1})
+\end{eqnarray*}
+\newpage
+\begin{align*}
+  \Delta \varepsilon_{1} &= -(1 + 0.5) + (0.5 - 0.5) \\
+  &= -1.5
+\end{align*}
+\newpage
+\begin{eqnarray*}
+  w_{i}(\beta) = \exp \left( - \beta \Delta \varepsilon_{i} \right)
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  P_{i}(\beta) = \frac{w_{i}(\beta)}{\displaystyle \sum_{i} w_{i}(\beta)}
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  \Delta \varepsilon_{i}
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  \beta = 1 / k_{\mathrm{B}} T
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  \vector{v}_{0}
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  \vector{v}_{1}
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  \vector{v}_{2}
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  \vector{v}'_{0}
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  \vector{v}'_{1}
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  \vector{v}'_{2}
+\end{eqnarray*}
+\newpage
+\begin{eqnarray*}
+  \vector{v}'_{3}
+\end{eqnarray*}
+\newpage
+
+\end{document}
