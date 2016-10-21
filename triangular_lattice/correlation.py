@@ -54,12 +54,7 @@ def get_correlation_for_each_string(Lp, L, frames, num_of_pairs):
                 strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
     len_vec = len(main.strings[0].vec)
 
-    # # 1. 同string内の2点を選ぶ
-    # # (1.A) ランダム
-    # random_i = np.random.randint(len_vec, size=num_of_pairs)
-    # random_j = np.random.randint(len_vec, size=num_of_pairs)
-
-    # (1.B) 等パス長となる2点を同数ずつ抽出
+    # 等パス長となる2点を同数ずつ抽出
     random_i, random_j = [], []
     for lp in Lp:
         random_i.append(np.array(choose_indexes(range(len_vec),
@@ -84,8 +79,8 @@ if __name__ == '__main__':
 
     start_time = time.strftime("%y%m%d_%H%M%S")
     num_of_strings = 30
-    # betas = [0., 5., 10., 15., 20.]
-    betas = [float(i) for i in range(21)]
+    betas = [0., 5., 10., 15., 20.]
+    # betas = [float(i) for i in range(11)]
     # betas = [20.]
     frames = 1000
     L = 1000
