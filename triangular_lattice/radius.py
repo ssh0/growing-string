@@ -5,7 +5,7 @@
 # 2016-08-15
 
 from growing_string import Main
-from optimize import Optimize_powerlaw
+from optimize import Optimize_powerlaw, Optimize_linear
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
@@ -48,28 +48,28 @@ def main(beta=0., output=None, L=60, frames=1000, plot=False,
     }
 
     main = Radius(params)
-    radius_of_rotation = [main.pre_func_res]
-    steps = range(len(radius_of_rotation[0]))
+    radius_of_rotation = main.pre_func_res
+    steps = range(len(radius_of_rotation))
 
-    # plot for all strings
-    # for s in range(num_strings):
-    #     ax.loglog(steps, radius_of_rotation[s], alpha=0.5)
-    # ax.loglog(steps, np.average(np.array(radius_of_rotation), axis=0))
-
-    index_start = 0
-    optimizer = Optimize_powerlaw(args=(steps[index_start:],
-                                        radius_of_rotation[0][index_start:]),
-                                  parameters=[0., 0.5])
+    index_start = 2
+    R = radius_of_rotation
+    # optimizer = Optimize_powerlaw(args=(R[index_start:],
+    #                                     steps[index_start:]),
+    #                               parameters=[1., 1.5])
+    optimizer = Optimize_linear(args=(np.log(R[index_start:]),
+                                        np.log(steps[index_start:])),
+                                  parameters=[1., 1.5])
     result = optimizer.fitting()
+    result['D'] = result['a']
 
     if plot_optimized or save:
         fig, ax = plt.subplots()
-        ax.loglog(steps, radius_of_rotation[0])
-        ax.loglog(steps[index_start:], optimizer.fitted(steps[index_start:]), lw=2,
-                label='D = %f' % result['D'])
-        ax.set_xlabel('Steps N')
-        ax.set_ylabel('Radius of rotation')
-        ax.set_title('Raidus of rotation')
+        ax.loglog(R, steps)
+        ax.loglog(R[index_start:], optimizer.fitted(R[index_start:]), lw=2,
+                  label='D = %f' % result['D'])
+        ax.set_xlabel(r'Radius of rotation $R_{g}$')
+        ax.set_ylabel(r'Number of the points $N$')
+        ax.set_title('Fractal dimension by the relationship between steps and the radius of rotation')
         ax.legend(loc='best')
         if save:
             fig.savefig(output)
