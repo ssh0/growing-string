@@ -192,9 +192,9 @@ if __name__ == '__main__':
     # === Plot one result ===
     params = {
         'L': 100,
-        'frames': 1000,
-        'beta': 0.7,
-        'plot': False
+        'frames': 2000,
+        'beta': 0.,
+        'plot': True
     }
     main = DieCuttingHexagonal(params)
     main.visualize_num_of_sub_clusters = visualize_num_of_sub_clusters
