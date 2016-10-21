@@ -131,7 +131,6 @@ class FillBucket(object):
             self.lines[i].set_data(X, Y)
             i += 1
 
-
         dx = self.lattice.dx
         dy = self.lattice.dy
         if plot_type == 'fill':
@@ -161,8 +160,8 @@ class FillBucket(object):
 
 
 if __name__ == '__main__':
-    L = 60
-    frames = 1000
+    L = 10
+    frames = 20
 
     params = {
         'Lx': L,
