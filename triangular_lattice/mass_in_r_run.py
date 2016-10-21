@@ -90,16 +90,29 @@ def mass_in_r_for_one_beta(beta, num_of_strings, L, frames, plot=True,
 
 
 if __name__ == '__main__':
-    beta = 20.
-    params = {
-        'num_of_strings': 30,
-        'L': 2000,
-        'frames': 1000,
-        'plot': False,
-        'optimize': False,
-        'save_image': False,
-        'save_data': True,
-    }
+    # beta = 20.
+    # params = {
+    #     'num_of_strings': 30,
+    #     'L': 2000,
+    #     'frames': 1000,
+    #     'plot': False,
+    #     'optimize': False,
+    #     'save_image': False,
+    #     'save_data': True,
+    # }
 
-    mass_in_r_for_one_beta(beta, **params)
+    # mass_in_r_for_one_beta(beta, **params)
+
+    for beta in np.arange(11):
+        params = {
+            'num_of_strings': 30,
+            'L': 2000,
+            'frames': 1000,
+            'plot': False,
+            'optimize': False,
+            'save_image': False,
+            'save_data': True,
+        }
+
+        mass_in_r_for_one_beta(beta, **params)
 
