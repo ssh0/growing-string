@@ -99,7 +99,6 @@ class Eden():
             self.ax.plot([], [], '.', color='black')[0],
             self.ax.plot([], [], 'o', color='#ff0000')[0]
         ]
-        plt.scatter
 
         self.lattice_X = self.lattice_X.reshape(self.lattice.Lx,
                                                 self.lattice.Ly)
