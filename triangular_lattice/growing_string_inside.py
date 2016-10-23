@@ -28,33 +28,7 @@ class InsideString(object):
                  pre_function=None,
                  post_function=None):
         """Init function of the class"""
-        self.lattice = LT(
-            np.zeros((Lx, Ly), dtype=np.int),
-            scale=float(max(Lx, Ly)),
-            boundary=boundary
-        )
-        self.lattice_X = self.lattice.coordinates_x.reshape(
-            self.lattice.Lx,
-            self.lattice.Ly
-        )
-        self.lattice_Y = self.lattice.coordinates_y.reshape(
-            self.lattice.Lx,
-            self.lattice.Ly
-        )
 
-        self.kagome_Lx = 2 * self.lattice.Lx
-        self.kagome_Ly = self.lattice.Ly
-        x_even = self.lattice_X + 0.5 * self.lattice.dx
-        y_even = self.lattice_Y + self.lattice.dy / 3.
-        x_odd = np.roll(self.lattice_X, -1, axis=0)
-        y_odd = np.roll(self.lattice_Y, -1, axis=0) + (2 * self.lattice.dy) / 3.
-        self.kagome_X = np.hstack((x_even, x_odd)).reshape(self.kagome_Lx,
-                                                           self.kagome_Ly)
-        self.kagome_Y = np.hstack((y_even, y_odd)).reshape(self.kagome_Lx,
-                                                           self.kagome_Ly)
-
-        self.occupied = np.zeros((self.kagome_Lx, self.kagome_Ly),
-                                 dtype=np.bool)
         self.plot = plot
         self.plot_surface = plot_surface
         self.save_image = save_image
@@ -75,43 +49,42 @@ class InsideString(object):
 
         self.interval = interval
         self.frames = frames
+        self.beta = beta
         self.pre_function = pre_function
         self.post_function = post_function
         self.pre_func_res = []
         self.post_func_res = []
 
-        self.beta = beta
-
-        self.weight_rule = (
-            (0, 0, 0, 0, 0, 0, 0, 0, 0),
-            (0, 0, 0, 0, 0, 0, 0, 0, 1),
-            (0, 0, 0, 0, 0, 0, 0, 1, 1),
-            (0, 0, 0, 0, 0, 0, 1, 1, 1),
-            (1, 0, 0, 0, 0, 0, 0, 0, 0),
-            (1, 0, 0, 0, 0, 0, 0, 0, 1),
-            (1, 0, 0, 0, 0, 0, 0, 1, 1),
-            (1, 0, 0, 0, 0, 0, 1, 1, 1),
-            (1, 1, 0, 0, 0, 0, 0, 0, 0),
-            (1, 1, 0, 0, 0, 0, 0, 0, 1),
-            (1, 1, 0, 0, 0, 0, 0, 1, 1),
-            (1, 1, 0, 0, 0, 0, 1, 1, 1),
-            (1, 1, 1, 0, 0, 0, 0, 0, 0),
-            (1, 1, 1, 0, 0, 0, 0, 0, 1),
-            (1, 1, 1, 0, 0, 0, 0, 1, 1),
-            (1, 1, 1, 0, 0, 0, 1, 1, 1)
+        self.lattice = LT(
+            np.zeros((Lx, Ly), dtype=np.int),
+            scale=float(max(Lx, Ly)),
+            boundary=boundary
         )
-        self.weight_list = np.array([
-            -2., -1.5, -0.5, 0.,
-            -1.5, -1., 0., 0.5,
-            -0.5, 0., 1., 1.5,
-            0., 0.5, 1.5, 2.
-        ])
 
-        self.weight_list = np.exp(- self.beta * self.weight_list)
-        self.weight_table = {k: v for k, v in
-                             zip(self.weight_rule, self.weight_list)}
-        # for k, w in self.weight_table.items():
-        #     print str(k) + ' : ' + str(w)
+        self.lattice_X = self.lattice.coordinates_x.reshape(
+            self.lattice.Lx,
+            self.lattice.Ly
+        )
+        self.lattice_Y = self.lattice.coordinates_y.reshape(
+            self.lattice.Lx,
+            self.lattice.Ly
+        )
+
+        self.kagome_Lx = 2 * self.lattice.Lx
+        self.kagome_Ly = self.lattice.Ly
+        x_even = self.lattice_X + 0.5 * self.lattice.dx
+        y_even = self.lattice_Y + self.lattice.dy / 2.
+        x_odd = np.roll(self.lattice_X, -1, axis=0)
+        y_odd = np.roll(self.lattice_Y, -1, axis=0) + (2 * self.lattice.dy) / 3.
+        self.kagome_X = np.hstack((x_even, x_odd)).reshape(self.kagome_Lx,
+                                                           self.kagome_Ly)
+        self.kagome_Y = np.hstack((y_even, y_odd)).reshape(self.kagome_Lx,
+                                                           self.kagome_Ly)
+        self.occupied = np.zeros((self.kagome_Lx, self.kagome_Ly),
+                                 dtype=np.bool)
+
+        self._create_weight_table()
+
         self.growing_points = {}  # {(x, y): weight}
 
         # initial state
@@ -142,6 +115,86 @@ class InsideString(object):
             self.fig.savefig(self.filename_image)
             # print("Image file is successfully saved at '%s'." % filename_image)
             plt.close()
+
+    def _create_weight_table(self):
+        """Create the rule table."""
+
+        self.weight_rule = (
+            (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1),
+            (1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1),
+            (1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0),
+            (1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1),
+            (1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1),
+            (1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1),
+            (1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0),
+            (1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1),
+            (1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1),
+            (1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1),
+            (1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0),
+            (1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1),
+            (1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1),
+            (1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1),
+            (0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0),
+            (0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0),
+            (0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0),
+            (0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0),
+            (0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0),
+            (0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0),
+            (0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0),
+            (0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0),
+            (0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0),
+            (0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0),
+            (0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0),
+            (0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0),
+            (0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0),
+            (0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0),
+            (0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0),
+            (0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0),
+            (0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0),
+            (0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0),
+            (0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0),
+            (0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0),
+            (0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0),
+            (0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0),
+            (0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0),
+            (0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0),
+            (0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0),
+            (0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0),
+            (0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1),
+            (0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1),
+            (0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1),
+            (0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1),
+        )
+
+        weight_list = np.array([
+            -2., -1.5, -0.5, 0.,
+            -1.5, -1., 0., 0.5,
+            -0.5, 0., 1., 1.5,
+            0., 0.5, 1.5, 2.,
+            -2., -1.5, -0.5, 0.,
+            -1.5, -1., 0., 0.5,
+            -0.5, 0., 1., 1.5,
+            0., 0.5, 1.5, 2.,
+            -2., -1.5, -0.5, 0.,
+            -1.5, -1., 0., 0.5,
+            -0.5, 0., 1., 1.5,
+            0., 0.5, 1.5, 2.,
+        ])
+
+        self.weight_list = np.exp(- self.beta * weight_list)
+        self.weight_table = {k: v for k, v in
+                             zip(self.weight_rule, self.weight_list)}
+
+    def _create_truth_table(self, i, nn2):
+        truth_table = [False, False, False]
+        truth_table[int(i) - 1] = True
+        truth_table += [self.occupied[nn2[str(i)]] for i in range(4, 13)]
+        truth_table = tuple(truth_table)
+        return truth_table
 
     def append_new_growing_point(self, pos):
         """新たに追加された点の格子座標posを元に，その周辺の非占有点の座標と
@@ -183,11 +236,10 @@ class InsideString(object):
             nn2 = getattr(self, 'get_nn2_' + even_or_odd_)(x, y)
             # nn2 = {'4': (x4, y4), ...}
             # 真偽表を作成
-            truth_table = self.create_truth_table(nn1.keys()[0], nn2)
             # 真偽表から(x, y)に関する重みを取得，growing_pointsに追加
+            truth_table = self._create_truth_table(nn1.keys()[0], nn2)
             if truth_table in self.weight_rule:
                 self.growing_points[(x, y)] = self.weight_table[truth_table]
-        # print self.growing_points
 
     def cleanup_growing_point(self):
         for pos in self.growing_points.keys():
@@ -204,32 +256,9 @@ class InsideString(object):
                 continue
 
             nn2 = getattr(self, 'get_nn2_' + even_or_odd)(pos_x, pos_y)
-            i = nn1.keys()[0]
-            if i == '1':
-                index = ['7', '8', '9']
-            elif i == '2':
-                index = ['10', '11', '12']
-            elif i == '3':
-                index = ['4', '5', '6']
-
-            if not tuple(self.occupied[nn2[i]] for i in index) == (0, 0, 0):
+            truth_table = self._create_truth_table(nn1.keys()[0], nn2)
+            if not truth_table in self.weight_rule:
                 del self.growing_points[(pos_x, pos_y)]
-
-    def create_truth_table(self, i, nn2):
-        """nn1のkeyにしたがって，ルールへの対応に変換
-
-        --- Arguments ---
-        i (str): 追加候補点の第一近傍点の相対位置を表すインデックス
-        nn2 (dict) {i: (x, y)}: i:追加候補点の第2近傍点のインデックス
-        """
-        if i == '1':
-            index = ['4', '5', '6', '7', '8', '9', '10', '11', '12']
-        elif i == '2':
-            index = ['7', '8', '9', '10', '11', '12', '4', '5', '6']
-        elif i == '3':
-            index = ['10', '11', '12', '4', '5', '6', '7', '8', '9']
-
-        return tuple(self.occupied[nn2[i]] for i in index) 
 
     def get_nn1_even(self, x, y):
         """格子座標(x, y)の第一近傍の点の座標を返す(xが偶数の時)"""
