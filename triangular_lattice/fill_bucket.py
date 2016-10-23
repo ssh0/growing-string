@@ -134,21 +134,10 @@ class FillBucket(object):
         dx = self.lattice.dx
         dy = self.lattice.dy
         if plot_type == 'fill':
-            # # plot by Polygon
-            patches = []
-            for x, y in zip(self.X_even, self.Y_even):
-                patches.append(Polygon([[x, y],
-                                        [x + dx, y],
-                                        [x + 0.5 * dx, y + dy],
-                                        [x, y]
-                                        ]))
-            for x, y in zip(self.X_odd, self.Y_odd):
-                patches.append(Polygon([[x, y],
-                                        [x - 0.5 * dx, y + dy],
-                                        [x + 0.5 * dx, y + dy],
-                                        [x, y]
-                                        ]))
-            p = PatchCollection(patches, alpha=0.5, color='green')
+            X = [self.lattice_X[_x, _y] for _x, _y in zip(s.pos_x, s.pos_y)]
+            Y = [self.lattice_Y[_x, _y] for _x, _y in zip(s.pos_x, s.pos_y)]
+            patches = [Polygon(np.array([X, Y]).T.tolist())]
+            p = PatchCollection(patches, color='green')
             self.ax.add_collection(p)
         elif plot_type == 'point':
             # # plot by Point
@@ -160,8 +149,8 @@ class FillBucket(object):
 
 
 if __name__ == '__main__':
-    L = 10
-    frames = 20
+    L = 60
+    frames = 1000
 
     params = {
         'Lx': L,
@@ -185,5 +174,6 @@ if __name__ == '__main__':
                 )
     # bucket = FillBucket(main, plot_type='fill')
     bucket = FillBucket(main)
-    bucket.plot_all(plot_type='point')
+    # bucket.plot_all(plot_type='point')
+    bucket.plot_all(plot_type='fill')
 
