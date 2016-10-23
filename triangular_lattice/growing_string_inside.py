@@ -9,6 +9,8 @@ from triangular import LatticeTriangular as LT
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri
 import matplotlib.animation as animation
+import networkx as nx
+# import pygraphviz
 import numpy as np
 
 
@@ -60,6 +62,7 @@ class InsideString(object):
             scale=float(max(Lx, Ly)),
             boundary=boundary
         )
+        self.G = nx.Graph()
 
         self.lattice_X = self.lattice.coordinates_x.reshape(
             self.lattice.Lx,
@@ -91,6 +94,7 @@ class InsideString(object):
         for pos in initial_state:
             self.occupied[pos] = True
             self.append_new_growing_point(pos)
+        self.G.add_nodes_from(initial_state)
         self.initial_state = initial_state
 
         # Plot triangular-lattice points, string on it, and so on
@@ -397,6 +401,17 @@ class InsideString(object):
         index = np.random.choice(range(len(positions)), p=weights)
         x, y = positions[index]
         self.occupied[x, y] = True
+        self.G.add_node((x, y))
+
+        if x % 2 == 0:
+            even_or_odd = 'even'
+        elif x % 2 == 1:
+            even_or_odd = 'odd'
+        nn1 = getattr(self, 'get_nn1_' + even_or_odd)(x, y)
+        for pos in nn1.values():
+            if self.occupied[pos]:
+                self.G.add_edge(pos, (x, y))
+
         self.cleanup_growing_point()
         self.append_new_growing_point((x, y))
         del self.growing_points[(x, y)]

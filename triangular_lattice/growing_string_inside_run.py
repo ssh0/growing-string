@@ -7,6 +7,9 @@
 
 from growing_string_inside import InsideString
 import time
+import networkx as nx
+import pygraphviz
+import matplotlib.pyplot as plt
 
 current_time = time.strftime("%y%m%d_%H%M%S")
 L = 60
@@ -52,4 +55,17 @@ params.update({
 # })
 
 main = InsideString(initial_state=[(L / 2, L / 2 - 1)], **params)
+
+# g = nx.nx_agraph.to_agraph(main.G)
+# g.draw("results/img/inside/tree_" + "beta=%2.2f_" % beta + current_time + ".png",
+#        prog='neato')
+
+pos = nx.drawing.nx_agraph.graphviz_layout(main.G, prog='neato')
+nx.draw(main.G, pos, node_size=20, alpha=0.5, node_color='blue', with_labels=False)
+plt.axis('equal')
+plt.savefig("results/img/inside/tree_" + "beta=%2.2f_" % beta + current_time + ".png")
+plt.show()
+
+
+
 
