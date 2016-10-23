@@ -324,7 +324,8 @@ class InsideString(object):
         triang = tri.Triangulation(lattice_X, lattice_Y)
         self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
 
-        self.points = [self.ax.plot([], [], 'g.')[0]]
+        self.points = [self.ax.plot([], [], 'g^')[0],
+                       self.ax.plot([], [], 'gv')[0]]
         if self.plot_surface:
             self.points.append(self.ax.plot([], [], '.', color='#ff0000')[0])
 
@@ -359,16 +360,19 @@ class InsideString(object):
         self.plot_surfaceが指定されている時には，成長点もプロットする
         """
         pos = np.where(self.occupied)
-        # pos = np.array([pos_x, pos_y]).T.tolist()
-        X, Y = self.kagome_X[pos], self.kagome_Y[pos]
-
+        pos_even = (pos[0][pos[0] % 2 == 0], pos[1][pos[0] % 2 == 0])
+        pos_odd = (pos[0][pos[0] % 2 == 1], pos[1][pos[0] % 2 == 1])
+        # print pos_even
+        X, Y = self.kagome_X[pos_even], self.kagome_Y[pos_even]
         self.points[0].set_data(X, Y)
+        X, Y = self.kagome_X[pos_odd], self.kagome_Y[pos_odd]
+        self.points[1].set_data(X, Y)
 
         if self.plot_surface:
             pos_x, pos_y = np.array(self.growing_points.keys()).T
             # pos = list(np.array(pos_x, pos_y).T)
             X, Y = self.kagome_X[pos_x, pos_y], self.kagome_Y[pos_x, pos_y]
-            self.points[1].set_data(X, Y)
+            self.points[2].set_data(X, Y)
 
         return self.points
 
