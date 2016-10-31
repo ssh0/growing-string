@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; }
+code > span.dt { color: #902000; }
+code > span.dv { color: #40a070; }
+code > span.bn { color: #40a070; }
+code > span.fl { color: #40a070; }
+code > span.ch { color: #4070a0; }
+code > span.st { color: #4070a0; }
+code > span.co { color: #60a0b0; font-style: italic; }
+code > span.ot { color: #007020; }
+code > span.al { color: #ff0000; font-weight: bold; }
+code > span.fu { color: #06287e; }
+code > span.er { color: #ff0000; font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="/home/shotaro/.config/mkdpreview/styles/github-markdown-css/github-markdown.css">
+  <script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+</head>
+<body>
+<style>
+    .markdown-body {
+        box-sizing: border-box;
+        min-width: 200px;
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 45px;
+    }
+</style>
+<article class="markdown-body">
+<h1 id="how-to-detect-inside-of-the-string">How to detect inside of the string</h1>
+<p>(日本語)</p>
+<p>growing_string.pyの振る舞いを変更することにより， 初期条件を閉曲線のひもから始めると，閉曲線の構造を保ったまま成長することができるようになった。</p>
+<p>ここで，閉曲線の内側だけを塗りつぶしてみると，枝分かれ構造になっているように見える。</p>
+<p>そこで，ある任意のループ初期条件でのクラスターが与えられた時，そのクラスターの内側の部分をどのように認識することができるか，という問題を考える必要がある。</p>
+<p>この機能は，コンピューター・グラフィックスの世界では閉領域の塗りつぶしに対応し， よく知られている1つのアルゴリズムとして，画像をピクセル単位で見た時， ある行の中で，境界として扱われる点が複数存在しているだろう。 これら境界が1つの画像の中で閉であるなら，この走査線と境界の交点は必ず偶数個存在することになる。</p>
+<p>したがって，内側の領域を塗りつぶしたい際には，奇数番目の境界との交点と，偶数番目の境界との交点の間の領域をすべて対象の値に置き換えれば良いことになる。</p>
+<p>以上のアルゴリズムの概要を踏まえた上で，今回のひも状オブジェクトの内部を識別するという問題を考えた際に， まず，境界線が存在するかどうかの情報を保持するために，元の格子の大きさを<span class="math">\(L_{x} \times L_{y}\)</span>とすると，新たに<span class="math">\(2L_{x} \times L_{y}\)</span>の行列を作成する必要がある。 (ここで<span class="math">\(x\)</span>方向の要素数が2倍になっているのは，三角格子では下辺がx軸に平行な正三角形と ，上辺がx軸に平行な正三角形の二つによって作られた平行四辺形が，正方格子における単位升であり， その中に正三角形は二つ存在していることから分かるように，三角格子における単位升の個数は，正方格子の場合の2倍となる。)</p>
+<h2 id="境界線をどのように検出するか">境界線をどのように検出するか?</h2>
+<p>上の議論で述べたように，まず初めにやるべきことは，境界線の検出を行うことである。 格子上のひもオブジェクトに関して保持されている情報だけで，これは実現することができる。 即ち，以下のようにひもオブジェクト<span class="math">\(s\)</span>が存在していた時に，</p>
+<ol type="1">
+<li>各点が<span class="math">\(s\)</span>の位置座標として登録されているか?</li>
+<li>登録されていた場合，その点から伸びるベクトルの向きはどちらか?</li>
+</ol>
+<p>を知ることにより，どのボンドに線が存在しているかを調べることができる。</p>
+<p>例えば，図の(1, 0)点はひもオブジェクト<span class="math">\(s\)</span>に占有されている。 そこでその点におけるベクトルを参照すると，これは2であった。 したがって，境界線を左辺にもつ三角形の座標(1, 0)が記録される。</p>
+<p>同じ様に，点(3. 0)を見ると，そこでは1方向のベクトルを持っている。 したがって，左辺に境界線をもつ三角形の座標は(6, 0)となる。</p>
+<p>これらをまとめると，以下のような条件式で表すことができる。</p>
+<pre class="sourceCode python"><code class="sourceCode python">check_index = [(i, j)
+               <span class="kw">for</span> i in <span class="dt">range</span>(Lx)
+               <span class="kw">for</span> j in <span class="dt">range</span>(Ly)
+               <span class="kw">if</span> [i, j] in s.pos.tolist()]
+
+<span class="kw">for</span> i, j in check_index:
+    k = s.pos.index([i, j])
+    vec = s.vec[k]
+    <span class="kw">if</span> vec in [<span class="dv">0</span>, <span class="dv">3</span>]:
+        <span class="kw">continue</span>
+
+    <span class="kw">if</span> vec == <span class="dv">1</span>:
+        x = <span class="dv">2</span> * i
+        y = j
+    <span class="kw">elif</span> vec == <span class="dv">2</span>:
+        x = <span class="dv">2</span> * i - <span class="dv">1</span>
+        y = j
+    <span class="kw">elif</span> vec == <span class="dv">4</span>:
+        x = <span class="dv">2</span> * i
+        y = j - <span class="dv">1</span>
+    <span class="kw">elif</span> vec == <span class="dv">5</span>:
+        x = <span class="dv">2</span> * i + <span class="dv">1</span>
+        y =  j - <span class="dv">1</span>
+
+    doubled_lattice[x, y] = <span class="ot">True</span></code></pre>
+<p>このようにして，境界線の位置の情報を記録した行列<code>doubled_lattice</code>を生成する。</p>
+<p>次の節では，この行列の情報を用いて，内部の判定を行うアルゴリズムの説明をする。</p>
+<h2 id="境界線の情報から境界内部を識別するアルゴリズム">境界線の情報から境界内部を識別するアルゴリズム</h2>
+<p>先ほどの結果得られた<code>doubled_lattice</code>を考える。</p>
+<p>これを各行ごとに走査して，それぞれの三角形要素が境界の内部に存在しているかどうかを判定していくことにする。</p>
+<p>まずはじめに，一番下の行を列方向に見ていくと，最初に境界線が存在するのは(1, 0)である。 その後は境界の内部にあるとし，次に境界線に会うのは(6, 0)であるから，(5, 0)までは境界の中にあるということにある。 同じ様に走査を続けていくと，今度は(7, 0)で再び境界が現れるので，その次の境界(10, 0)までは境界の内部に存在することになる。</p>
+<p>これを単純なアルゴリズムとして表すと，<code>True</code>,<code>False</code>の内部状態をもつ変数を1つ用意すると実現できる。 具体的には以下のように評価を行う(<code>arr</code>には<code>doubled_lattice</code>が代入される):</p>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="kw">def</span> fill_inside(<span class="ot">self</span>, arr):
+    <span class="co">&quot;&quot;&quot;Fill inside</span>
+
+<span class="co">    arr: (m x n: boolean ndarray)</span>
+<span class="co">    &quot;&quot;&quot;</span>
+    size_x, size_y = arr.shape
+    ret_arr = np.zeros((size_x, size_y), dtype=np.<span class="dt">bool</span>)
+    <span class="kw">for</span> j in <span class="dt">range</span>(size_y):
+        flag = <span class="ot">False</span>
+        <span class="kw">for</span> i in <span class="dt">range</span>(size_x):
+            tf = arr[i, j]
+            <span class="kw">if</span> flag ^ tf:
+                ret_arr[i, j] = <span class="ot">True</span>
+
+            <span class="kw">if</span> tf:
+                flag = not flag
+    <span class="kw">return</span> ret_arr</code></pre>
+<p>内部状態は変数<code>flag</code>に保持され，<code>doubled_lattice</code>の情報とあわせて，その排他的論理和を条件とすることで，対象の三角形領域が 境界の内部に存在するかどうかを判定することができる。 上の関数では，その結果は<code>ret_arr</code>として返されている。</p>
+<h2 id="実際に描画してみる">実際に描画してみる</h2>
+<p>matplotlibのPolygonメソッドを用いて，得られた結果から実際に描画してみると，以下の図のようになる。</p>
+<figure>
+<img src="../results/img/fill_bucket/figure_fill_bucket_60_1000.png" alt="fill_bucket" /><figcaption>fill_bucket</figcaption>
+</figure>
+<h2 id="課題">課題</h2>
+<p><span class="math">\(i=0\)</span>をまたぐような場合に，<code>flag</code>の設定が不自然な場合がある。 暫定的な解決策としては，<span class="math">\(i=0\)</span>をまたぐことが無いように初期条件とステップ数を設定しておくことである。</p>
+<p>将来的にこの問題を解決する方法としては，種の三角形から隣接する三角形を占有していく方法が考えられる。</p>
+</article>
+</body>
+</html>
