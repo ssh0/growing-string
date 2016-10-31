@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.links line {
+  stroke: #999;
+  stroke-opacity: 0.6;
+}
+
+.nodes circle {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+</style>
+<!-- <svg width="960" height="600"></svg> -->
+<svg width="1161" height="1161"></svg>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script>
+
+var svg = d3.select("svg"),
+  width = +svg.attr("width"),
+  height = +svg.attr("height");
+
+var color = d3.scaleOrdinal(d3.schemeCategory20);
+
+var simulation = d3.forceSimulation()
+  .force("link", d3.forceLink().id(function(d) { return d.id; }))
+  .force("charge", d3.forceManyBody())
+  .force("collision", d3.forceCollide())
+  .force("center", d3.forceCenter(width / 2, height / 2));
+
+simulation.force("charge")
+  .distanceMax(50)
+  .strength(-100);
+
+
+function get_x(name) {
+  return parseInt(name.substring(1, name.length - 1).split(",")[0]) * width;
+}
+
+function get_y(name) {
+  return parseInt(name.substring(1, name.length - 1).split(",")[1]) * height;
+}
+
+// Specify the graph data with json format
+var data_path = "./tree_data/tree_beta=0.00_161024_200043.json"
+
+d3.json(data_path, function(error, graph) {
+  if (error) throw error;
+
+  var link = svg.append("g")
+    .attr("class", "links")
+    .selectAll("line")
+      .data(graph.links)
+      .enter().append("line")
+        .attr("stroke-width", 2);
+
+  var node = svg.append("g")
+    .attr("class", "nodes")
+      .selectAll("circle")
+      .data(graph.nodes)
+      .enter().append("circle")
+        .attr("r", 5)
+        .attr("cx", function(d) { return get_x(d.id); })
+        .attr("cy", function(d) { return get_y(d.id); })
+        .attr("fill", function() { return color(1); })
+        .call(d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended));
+
+  node.append("title")
+    .text(function(d) { return d.id; });
+
+  simulation
+    .nodes(graph.nodes)
+    .on("tick", ticked);
+
+  simulation.force("link")
+    .links(graph.links);
+
+  function ticked() {
+    link
+      .attr("x1", function(d) { return d.source.x; })
+      .attr("y1", function(d) { return d.source.y; })
+      .attr("x2", function(d) { return d.target.x; })
+      .attr("y2", function(d) { return d.target.y; });
+
+    node
+      .attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; });
+  }
+});
+
+function dragstarted(d) {
+  if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x;
+  d.fy = d.y;
+}
+
+function dragged(d) {
+  d.fx = d3.event.x;
+  d.fy = d3.event.y;
+}
+
+function dragended(d) {
+  if (!d3.event.active) simulation.alphaTarget(0);
+  d.fx = null;
+  d.fy = null;
+}
+
+</script>

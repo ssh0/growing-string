@@ -62,7 +62,7 @@ target/
 .ipynb_checkpoints
 
 # for README and pydoc
-*.html
+README.html
 
 # TeX
 *.bbl

@@ -1,0 +1,218 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>~/Dropbox/Workspace/6/lab/growing-string/triangular_lattice/viscek.py.html</title>
+<meta name="Generator" content="Vim/7.4">
+<meta name="plugin-version" content="vim7.4_v2">
+<meta name="syntax" content="python">
+<meta name="settings" content="ignore_folding,use_css,pre_wrap,no_foldcolumn,expand_tabs,ignore_conceal,prevent_copy=">
+<meta name="colorscheme" content="easy-reading">
+<style type="text/css">
+<!--
+pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
+body { font-family: monospace; color: #000000; background-color: #ffffff; }
+* { font-size: 1em; }
+.PreProc { color: #c000c0; }
+.Comment { color: #767676; }
+.Constant { color: #c00000; }
+.Identifier { color: #008080; }
+.Statement { color: #804000; }
+-->
+</style>
+
+<script type='text/javascript'>
+<!--
+
+-->
+</script>
+</head>
+<body>
+<pre id='vimCodeElement'>
+<span class="Comment">#!/usr/bin/env python</span>
+<span class="Comment"># -*- coding:utf-8 -*-</span>
+<span class="Comment">#</span>
+<span class="Comment"># written by Shotaro Fujimoto</span>
+<span class="Comment"># 2016-05-15</span>
+
+<span class="PreProc">from</span> triangular <span class="PreProc">import</span> LatticeTriangular <span class="Statement">as</span> LT
+<span class="PreProc">import</span> matplotlib.pyplot <span class="Statement">as</span> plt
+<span class="PreProc">import</span> matplotlib.tri <span class="Statement">as</span> tri
+<span class="PreProc">import</span> matplotlib.animation <span class="Statement">as</span> animation
+<span class="PreProc">import</span> numpy <span class="Statement">as</span> np
+<span class="PreProc">from</span> numpy <span class="PreProc">import</span> linalg <span class="Statement">as</span> la
+<span class="PreProc">import</span> random
+<span class="PreProc">import</span> time
+
+<span class="Statement">class</span> <span class="Identifier">Point</span>:
+    <span class="Statement">def</span> <span class="Identifier">__init__</span>(self, <span class="Identifier">id</span>, ix, iy):
+        self.<span class="Identifier">id</span> = <span class="Identifier">id</span>
+        self.x = ix
+        self.y = iy
+        <span class="Comment"># vel is unified and the value of it implies the direction of the velocity</span>
+        self.vel = np.random.randint(<span class="Constant">0</span>, <span class="Constant">5</span>)
+        self.priority = np.random.rand()
+
+<span class="Statement">class</span> <span class="Identifier">Points</span>:
+    <span class="Statement">def</span> <span class="Identifier">__init__</span>(self, N, Lx, Ly):
+        self.points = []
+        <span class="Statement">for</span> n <span class="Statement">in</span> <span class="Identifier">range</span>(N):
+            ix = random.randint(<span class="Constant">0</span>, Lx-<span class="Constant">1</span>)
+            iy = random.randint(<span class="Constant">0</span>, Ly-<span class="Constant">1</span>)
+            self.points.append(Point(n, ix, iy))
+
+<span class="Statement">class</span> <span class="Identifier">Main</span>:
+    <span class="Statement">def</span> <span class="Identifier">__init__</span>(self, Lx=<span class="Constant">20</span>, Ly=<span class="Constant">20</span>, rho=<span class="Constant">0.9</span>, lattice_scale=<span class="Constant">10</span>, T=<span class="Constant">0.4</span>, plot=<span class="Identifier">True</span>,
+                 frames=<span class="Constant">100</span>):
+        self.lattice = LT(- np.ones((Lx, Ly), dtype=np.<span class="Identifier">int</span>),
+                          scale=lattice_scale)
+        self.N = <span class="Identifier">int</span>(Lx * Ly * rho)
+        self.points = Points(self.N, Lx, Ly)
+        self.points = self.points.points
+        self.T = T
+        self.plot = plot
+        self.beta = <span class="Constant">1.</span> / self.T
+        self.order_param = []
+        self.num = <span class="Constant">0</span>
+
+        self.lattice_X = self.lattice.coordinates_x
+        self.lattice_Y = self.lattice.coordinates_y
+        self.lattice_X = np.array(self.lattice_X).reshape(Lx, Ly)
+        self.lattice_Y = np.array(self.lattice_Y).reshape(Lx, Ly)
+        X_min, X_max = np.<span class="Identifier">min</span>(self.lattice_X), np.<span class="Identifier">max</span>(self.lattice_X)
+        Y_min, Y_max = np.<span class="Identifier">min</span>(self.lattice_Y), np.<span class="Identifier">max</span>(self.lattice_Y)
+
+        X, Y = [], []
+        vel_x, vel_y = [], []
+        <span class="Statement">for</span> point <span class="Statement">in</span> self.points:
+            X.append(self.lattice_X[point.x, point.y])
+            Y.append(self.lattice_Y[point.x, point.y])
+            angle = point.vel * np.pi / <span class="Constant">3.</span>
+            vel_x.append(np.cos(angle))
+            vel_y.append(- np.sin(angle))
+
+        <span class="Statement">if</span> self.plot:
+            self.fig, (self.ax1, self.ax2) = plt.subplots(<span class="Constant">2</span>, <span class="Constant">1</span>, figsize=(<span class="Constant">8</span>, <span class="Constant">10</span>))
+            self.ax1.set_xlim([X_min, X_max])
+            self.ax1.set_ylim([Y_min, Y_max])
+            self.ax1.set_xticklabels([])
+            self.ax1.set_yticklabels([])
+            self.ax1.set_title(<span class="Constant">&quot;</span><span class="Constant">Lattice-Gas model for collective motion</span><span class="Constant">&quot;</span>)
+            self.triang = tri.Triangulation(self.lattice_X.flatten(),
+                                            self.lattice_Y.flatten())
+            self.ax1.triplot(self.triang, color=<span class="Constant">'</span><span class="Constant">whitesmoke</span><span class="Constant">'</span>, marker=<span class="Constant">'</span><span class="Constant">o</span><span class="Constant">'</span>,
+                             markersize=<span class="Constant">1</span>)
+
+            self.l, = self.ax2.plot([], [], <span class="Constant">'</span><span class="Constant">b-</span><span class="Constant">'</span>)
+            self.ax2.set_title(<span class="Constant">r&quot;</span><span class="Constant">Order parameter $m=\frac{1}{N} |\sum \vec{u}_{i}|$ ($T = %.2f$)</span><span class="Constant">&quot;</span>
+                               % self.T)
+            self.ax2.set_ylim([<span class="Constant">0</span>, <span class="Constant">1.</span>])
+            ani = animation.FuncAnimation(self.fig, self.update, frames=frames,
+                                          interval=<span class="Constant">100</span>, blit=<span class="Identifier">True</span>, repeat=<span class="Identifier">False</span>)
+            plt.show()
+        <span class="Statement">else</span>:
+            <span class="Statement">for</span> i <span class="Statement">in</span> <span class="Identifier">range</span>(<span class="Constant">100</span>):
+                self.update(i)
+            <span class="Identifier">print</span> self.order_param[-<span class="Constant">1</span>]
+
+    <span class="Statement">def</span> <span class="Identifier">update</span>(self, num):
+        lowest, upper = {}, []
+        <span class="Comment"># 同じサイトにいるものを検出</span>
+        <span class="Statement">for</span> point <span class="Statement">in</span> self.points:
+            <span class="Statement">if</span> <span class="Statement">not</span> lowest.has_key((point.x, point.y)):
+                lowest[(point.x, point.y)] = point
+            <span class="Statement">elif</span> lowest[(point.x, point.y)].priority &gt; point.priority:
+                lowest[(point.x, point.y)] = point
+            <span class="Statement">else</span>:
+                upper.append(point)
+
+        <span class="Comment"># priority値最小のものだけ最近接効果(decided by Boltzmann eq)をうける</span>
+        <span class="Statement">for</span> point <span class="Statement">in</span> lowest.values():
+            <span class="Comment"># 最近接の速度の合計を求める</span>
+            velocities = np.array([<span class="Constant">0.</span>, <span class="Constant">0.</span>])
+            nnx, nny = self.lattice.neighborhoods[point.x, point.y]
+            <span class="Statement">for</span> x, y <span class="Statement">in</span> <span class="Identifier">zip</span>(nnx, nny):
+                <span class="Statement">if</span> lowest.has_key((x, y)):
+                    angle = lowest[(x, y)].vel * np.pi / <span class="Constant">3.</span>
+                    velocities += np.array([np.cos(angle), np.sin(angle)])
+
+            <span class="Comment"># 可能な6つの速度ベクトルとの内積を計算</span>
+            u_alpha = [i * np.pi / <span class="Constant">3.</span> <span class="Statement">for</span> i <span class="Statement">in</span> <span class="Identifier">range</span>(<span class="Constant">6</span>)]
+            u_alpha = [np.array([np.cos(ang), np.sin(ang)]) <span class="Statement">for</span> ang <span class="Statement">in</span> u_alpha]
+
+            <span class="Comment"># ボルツマン分布に従って確率的に方向を決定</span>
+            A = [np.exp(self.beta * np.dot(u, velocities)) <span class="Statement">for</span> u <span class="Statement">in</span> u_alpha]
+            rand = random.random() * <span class="Identifier">sum</span>(A)
+            p = <span class="Constant">0</span>
+            <span class="Statement">for</span> i, P <span class="Statement">in</span> <span class="Identifier">enumerate</span>(A):
+                p += P
+                <span class="Statement">if</span> rand &lt; p:
+                    point.vel = i
+                    <span class="Statement">break</span>
+
+        <span class="Comment"># それ以外はランダムに向きを変えるように</span>
+        <span class="Statement">for</span> point <span class="Statement">in</span> upper:
+            <span class="Comment"># change the velocity of the point</span>
+            point.vel = random.randint(<span class="Constant">0</span>, <span class="Constant">5</span>)
+
+        <span class="Comment"># 各点の座標とベクトルを更新し，描画</span>
+        self.update_quivers()
+
+        <span class="Comment"># オーダーパラメーターをプロット</span>
+        self.plot_order_param(num)
+
+        <span class="Statement">return</span> self.quiver, self.l
+
+    <span class="Statement">def</span> <span class="Identifier">update_quivers</span>(self):
+        <span class="Comment"># Get information to plot</span>
+        X, Y = [], []
+        vel_x, vel_y = [], []
+        <span class="Statement">for</span> point <span class="Statement">in</span> self.points:
+            <span class="Comment"># Get possible direction</span>
+            newx, newy = self.lattice.neighborhoods[point.x, point.y]
+            <span class="Comment"># Choose one by its velocity</span>
+            point.x, point.y = newx[point.vel], newy[point.vel]
+            X.append(self.lattice_X[point.x, point.y])
+            Y.append(self.lattice_Y[point.x, point.y])
+
+            angle = point.vel * np.pi / <span class="Constant">3.</span>
+            vel_x.append(np.cos(angle))
+            vel_y.append(- np.sin(angle))
+        <span class="Statement">if</span> self.plot:
+            self.quiver = self.ax1.quiver(X, Y, vel_x, vel_y,
+                                        units=<span class="Constant">'</span><span class="Constant">xy</span><span class="Constant">'</span>, angles=<span class="Constant">'</span><span class="Constant">xy</span><span class="Constant">'</span>, color=<span class="Constant">'</span><span class="Constant">k</span><span class="Constant">'</span>)
+
+    <span class="Statement">def</span> <span class="Identifier">plot_order_param</span>(self, num):
+        nwidth = <span class="Constant">20</span>
+        m = self.cal_order_param()
+        self.order_param.append(m)
+        self.num += <span class="Constant">1</span>
+        nl = <span class="Identifier">max</span>(self.num - nwidth, <span class="Constant">0</span>)
+        nr = <span class="Constant">1.25</span> * nwidth + nl
+        xdata = np.arange(nl, self.num)
+        <span class="Comment"># print xdata</span>
+        <span class="Comment"># print self.order_param</span>
+        <span class="Comment"># print len(xdata)</span>
+        <span class="Comment"># print len(self.order_param)</span>
+        <span class="Statement">if</span> self.plot:
+            self.ax2.set_xlim([nl, nr])
+            self.l.set_data(xdata, self.order_param[nl:])
+
+    <span class="Statement">def</span> <span class="Identifier">cal_order_param</span>(self):
+        <span class="Comment"># return order parameter</span>
+        velocities = np.array([<span class="Constant">0.</span>, <span class="Constant">0.</span>])
+        <span class="Statement">for</span> point <span class="Statement">in</span> self.points:
+            angle = point.vel * np.pi / <span class="Constant">3.</span>
+            velocities += np.array([np.cos(angle), np.sin(angle)])
+
+        m = la.norm(velocities) / self.N
+        <span class="Statement">return</span> m
+
+<span class="Statement">if</span> __name__ == <span class="Constant">'</span><span class="Constant">__main__</span><span class="Constant">'</span>:
+    main = Main(Lx=<span class="Constant">40</span>, Ly=<span class="Constant">40</span>, rho=<span class="Constant">0.5</span>, T=<span class="Constant">0.1</span>, frames=<span class="Constant">100</span>, plot=<span class="Identifier">True</span>)
+    <span class="Comment"># main = Main(Lx=40, Ly=40, T=0.6, frames=1000, plot=True)</span>
+
+</pre>
+</body>
+</html>
+<!-- vim: set foldmethod=manual : -->

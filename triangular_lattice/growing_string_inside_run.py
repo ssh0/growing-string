@@ -7,16 +7,72 @@
 
 from growing_string_inside import InsideString
 import time
-import networkx as nx
-import pygraphviz
 import matplotlib.pyplot as plt
+
 
 current_time = time.strftime("%y%m%d_%H%M%S")
 L = 60
-frames = 400
-beta = 4.
+frames = 200
+beta = 0.
+basedir_img = "results/img/inside/"
+basedir_video = "results/video/inside/"
+basefn = "beta=%2.2f_" % beta + current_time
 
-params = {
+
+class Parameters(dict):
+    def save_image(self):
+        self.update({
+            'plot': False,
+            'save_image': True,
+            'filename_image': basedir_img + basefn + ".png",
+        })
+
+    def save_video(self):
+        self.update({
+            'plot': False,
+            'save_video': True,
+            'filename_video': basedir_video + basefn + ".mp4",
+        })
+
+def view_network(plot=True, save_image=False):
+    import networkx as nx
+    import pygraphviz
+
+    # g = nx.nx_agraph.to_agraph(main.G)
+    # g.draw(basedir_img + 'tree_' + basefn  + ".png", prog='neato')
+    # print '[saved] ' + basedir_img + 'tree_' + basefn  + ".png"
+
+    pos = nx.drawing.nx_agraph.graphviz_layout(main.G, prog='neato')
+    nx.draw(main.G, pos, node_size=20, alpha=0.5, node_color='blue',
+            with_labels=False)
+    plt.axis('equal')
+    if save_image:
+        plt.savefig(basedir_img + 'tree_' + basefn  + ".png")
+        print '[saved] ' + basedir_img + 'tree_' + basefn  + ".png"
+    if plot:
+        plt.show()
+    else:
+        plt.close()
+
+def save_to_json():
+    from networkx.readwrite import json_graph
+    import json
+    from pprint import pprint
+
+    # save to json file
+    g_json = json_graph.node_link_data(main.G)
+    g_json['links'] = [
+        {
+            'source': g_json['nodes'][link['source']]['id'],
+            'target': g_json['nodes'][link['target']]['id']
+        }
+        for link in g_json['links']
+    ]
+    with open(basedir_img + 'tree_data/' + 'tree_' + basefn  + ".json", 'w') as outfile:
+        json.dump(g_json, outfile)
+    print '[saved] ' + basedir_img + 'tree_data/' + 'tree_' + basefn  + ".json"
+
+params = Parameters({
     'Lx': L,
     'Ly': L,
     'frames': frames,
@@ -26,46 +82,13 @@ params = {
     'plot': True,
     'plot_surface': True,
     'interval': 1,
-}
-
-# save img
-# params.update({
-#     'plot': False,
-#     'plot_surface': False,
-#     'save_image': True,
-#     'filename_image': "results/img/inside/" + "beta=%2.2f_" % beta + current_time + ".png",
-# })
-
-# save video
-params.update({
-    'plot': False,
-    'plot_surface': True,
-    'save_image': False,
-    'save_video': True,
-    'filename_video': "results/video/inside/" + "beta=%2.2f_" % beta + current_time + ".mp4",
 })
 
-# save img and video
-# params.update({
-#     'plot': False,
-#     'save_image': True,
-#     'save_video': True,
-#     'filename_image': "results/img/inside/" + "beta=%2.2f_" % beta + current_time + ".png",
-#     'filename_video': "results/video/inside/" + "beta=%2.2f_" % beta + current_time + ".mp4",
-# })
+# params.save_image()
+# params.save_video()
 
 main = InsideString(initial_state=[(L / 2, L / 2 - 1)], **params)
 
-# g = nx.nx_agraph.to_agraph(main.G)
-# g.draw("results/img/inside/tree_" + "beta=%2.2f_" % beta + current_time + ".png",
-#        prog='neato')
-
-pos = nx.drawing.nx_agraph.graphviz_layout(main.G, prog='neato')
-nx.draw(main.G, pos, node_size=20, alpha=0.5, node_color='blue', with_labels=False)
-plt.axis('equal')
-plt.savefig("results/img/inside/tree_" + "beta=%2.2f_" % beta + current_time + ".png")
-plt.show()
-
-
-
+# view_network(plot=True, save_image=False)
+save_to_json()
 

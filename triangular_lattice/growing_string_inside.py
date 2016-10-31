@@ -94,7 +94,7 @@ class InsideString(object):
         for pos in initial_state:
             self.occupied[pos] = True
             self.append_new_growing_point(pos)
-        self.G.add_nodes_from(initial_state)
+        self.G.add_nodes_from(map(str, initial_state))
         self.initial_state = initial_state
 
         # Plot triangular-lattice points, string on it, and so on
@@ -366,7 +366,6 @@ class InsideString(object):
         pos = np.where(self.occupied)
         pos_even = (pos[0][pos[0] % 2 == 0], pos[1][pos[0] % 2 == 0])
         pos_odd = (pos[0][pos[0] % 2 == 1], pos[1][pos[0] % 2 == 1])
-        # print pos_even
         X, Y = self.kagome_X[pos_even], self.kagome_Y[pos_even]
         self.points[0].set_data(X, Y)
         X, Y = self.kagome_X[pos_odd], self.kagome_Y[pos_odd]
@@ -401,7 +400,7 @@ class InsideString(object):
         index = np.random.choice(range(len(positions)), p=weights)
         x, y = positions[index]
         self.occupied[x, y] = True
-        self.G.add_node((x, y))
+        self.G.add_node('({}, {})'.format(x, y))
 
         if x % 2 == 0:
             even_or_odd = 'even'
@@ -410,7 +409,7 @@ class InsideString(object):
         nn1 = getattr(self, 'get_nn1_' + even_or_odd)(x, y)
         for pos in nn1.values():
             if self.occupied[pos]:
-                self.G.add_edge(pos, (x, y))
+                self.G.add_edge(str(pos), '({}, {})'.format(x, y))
 
         self.cleanup_growing_point()
         self.append_new_growing_point((x, y))
