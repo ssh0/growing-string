@@ -6,7 +6,8 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-
+from scipy.optimize import curve_fit
+from scipy.stats import gamma
 
 
 if __name__ == '__main__':
@@ -37,7 +38,7 @@ if __name__ == '__main__':
         # "beta=4.00_161111_132858.npz",
         # "beta=5.00_161111_132907.npz",
         # "beta=6.00_161111_132916.npz",
-        "beta=0.00_161111_143949.npz",
+        # "beta=0.00_161111_143949.npz",
         "beta=1.00_161111_144002.npz",
         "beta=2.00_161111_144011.npz",
         "beta=3.00_161111_144019.npz",
@@ -54,29 +55,21 @@ if __name__ == '__main__':
         num_of_strings = data['num_of_strings']
         L = data['L']
         frames = data['frames']
-        Ls = data['Ls']
+        Ls = data['Ls'].astype(np.float)
         N_sub = data['N_sub']
-        size_sub = N_sub / float(3 * Ls * (Ls + 1) + 1)
+        # M = N_sub / 3 * Ls * (Ls + 1) + 1
+        M = N_sub
+        M_ave = M / np.sum(M)
+        popt = curve_fit(gamma.pdf, xdata=Ls, ydata=M_ave, p0=[2.5, -5., 30])[0]
+        print beta, popt
+        ax.plot(Ls, M_ave, '.-', label=r'$\beta = %2.2f$' % beta)
+        ax.plot(Ls, gamma.pdf(Ls, a=popt[0], loc=popt[1], scale=popt[2]),
+                '-', label=r'fitted $\beta = %2.2f$' % beta)
 
-        # optimizer = Optimize_linear(
-        #     args=(
-        #         Ls[:-1],
-        #         N_sub[:-1]
-        #     ),
-        #     parameters=[1.5, 0.]
-        # )
-        # result = optimizer.fitting()
-
-        # ax.plot(Ls, N_sub, '.-', label=r'$\beta = %2.2f$' % beta)
-        ax.plot(Ls, size_sub / np.sum(size_sub), '.-', label=r'$\beta = %2.2f$' % beta)
-        # ax.plot(
-        #     Ls[:-1],
-        #     optimizer.fitted(Ls[:-1]),
-        #     '-',
-        #     label='a = %f' % result['a']
-        # )
     ax.legend(loc='best')
-    ax.set_ylim((0., 25.))
+    ax.set_ylim((0., 0.1))
+    # ax.set_yscale('log')
+    # ax.set_xscale('log')
     ax.set_title('Strings in hexagonal region' +
                  ' (sample: {})'.format(num_of_strings))
     ax.set_xlabel(r'Cutting size $L$')
