@@ -49,7 +49,10 @@ def eval_simulation_for_one_beta(beta, num_of_strings=30):
             else:
                 d[l] = [_N_sub[i], ]
 
-    mean = [(k, np.average(v)) for k, v in d.items()]
+    # # 以下のやり方だと，Lが存在しないサンプルに対して無視した結果となる
+    # mean = [(k, np.average(v)) for k, v in d.items()]
+    # カットサイズLが存在しない場合には0で置き換えたような平均のとり方
+    mean = [(k, np.sum(v) / float(num_of_strings)) for k, v in d.items()]
     Ls, N_sub = np.array(sorted(mean)).T
 
     result_data_path = "results/data/diecutting/beta=%2.2f" % beta
@@ -68,7 +71,7 @@ def eval_simulation_for_one_beta(beta, num_of_strings=30):
 if __name__ == '__main__':
     # === Averaging (sample N: num_of_strings) ===
     beta = 6.
-    num_of_strings = 30
+    num_of_strings = 100
     print "beta = %2.2f" % beta
     eval_simulation_for_one_beta(beta, num_of_strings)
 
