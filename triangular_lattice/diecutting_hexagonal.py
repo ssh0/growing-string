@@ -110,12 +110,9 @@ class DieCuttingHexagonal(DieCutting):
         for L in self.cutting_sizes:  # L must be sorted
             self.diecutting_one_cluster(self.X0, self.Y0, L)
             subclusters = self.eval_subclusters()
-            _res = {k: [] for k in sets.keys()}
             for k in sets.keys():
-                _res[k].append(sets[k]['_func'](subclusters))
+                res[k].append(sets[k]['func'](subclusters))
 
-            for k in sets.keys():
-                res[k].append(sets[k]['func'](_res[k]))
         return res
 
 
@@ -204,16 +201,13 @@ if __name__ == '__main__':
     main.visualize_max_size_of_sub_cluster = visualize_max_size_of_sub_cluster
     result_set = {
         'num_of_sub_clusters': {
-            '_func': len,
-            'func': np.average
+            'func': len,
         },
         # 'size_dist_of_sub_clusters': {
-        #     '_func': lambda arr: np.bincount(map(len, arr)),
-        #     'func': lambda arr: map(sum, itertools.izip_longest(*arr, fillvalue=0))
+        #     'func': lambda arr: np.bincount(map(len, arr)),
         # },
         'max_size_of_sub_cluster': {
-            '_func': lambda arr: max(map(len, arr)),
-            'func': np.average
+            'func': lambda arr: max(map(len, arr)),
         }
     }
     main.start(result_set, visualize=True)
