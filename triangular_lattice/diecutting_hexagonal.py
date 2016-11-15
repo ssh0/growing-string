@@ -46,15 +46,17 @@ class DieCuttingHexagonal(DieCutting):
 
         # 領域内で独立したクラスターは何個?
         sub_cluster = []
-        if len(cluster_indexes) != 0:
-            _sub_cluster = [cluster_indexes[0], ]
-            for i in cluster_indexes[1:]:
-                if i == _sub_cluster[-1] + 1:
-                    _sub_cluster.append(i)
-                else:
-                    sub_cluster.append(_sub_cluster)
-                    _sub_cluster = [i]
-            sub_cluster.append(_sub_cluster)
+        if len(cluster_indexes) == 0:
+            return []
+
+        _sub_cluster = [cluster_indexes[0], ]
+        for i in cluster_indexes[1:]:
+            if i == _sub_cluster[-1] + 1:
+                _sub_cluster.append(i)
+            else:
+                sub_cluster.append(_sub_cluster)
+                _sub_cluster = [i]
+        sub_cluster.append(_sub_cluster)
         # print sub_cluster
         # print len(sub_cluster)
 
