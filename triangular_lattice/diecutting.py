@@ -60,8 +60,8 @@ class DieCutting(object):
         self.cutting_size_max_height: max height of the cutting size
         self.cutting_size_xs: cutting size list
         self.cutting_size_ys: cutting size list
-        self.cutting_sizes: ndarray [[cutting_size_x[0], cutting_size_y][0],
-                                     [cutting_size_x[1], cutting_size_y][1],
+        self.cutting_sizes: ndarray [[cutting_size_xs[0], cutting_size_ys[0]],
+                                     [cutting_size_xs[1], cutting_size_ys[1]],
                                          ...
                                     ]
 
