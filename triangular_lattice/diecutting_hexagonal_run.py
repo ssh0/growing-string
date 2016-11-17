@@ -10,6 +10,7 @@ import numpy as np
 import itertools
 from tqdm import tqdm
 import time
+import save_data
 
 
 # Remark: diecutting.pyのときは1つのLに対して複数の長方形領域を取得していたので，
@@ -78,19 +79,11 @@ def eval_simulation_for_one_beta(beta, num_of_strings=30):
     else:
         size_dist = []
 
-    result_data_path = "results/data/diecutting/beta=%2.2f" % beta
-    result_data_path += "_" + current_time
-    result_data_path += ".npz"
-    np.savez(result_data_path,
-            beta=beta,
-            num_of_strings=num_of_strings,
-            L=params['L'],
-            frames=params['frames'],
-            Ls=Ls,
-            N_sub=N_sub,
-            size_dist=size_dist
-            )
-    print "[saved] {}".format(result_data_path)
+    save_data.save("results/data/diecutting/beta=%2.2f_" % beta,
+                   beta=beta, num_of_strings=num_of_strings,
+                   L=params['L'], frames=params['frames'],
+                   Ls=Ls, N_sub=N_sub, size_dist=size_dist)
+
 
 if __name__ == '__main__':
     # === Averaging (sample N: num_of_strings) ===

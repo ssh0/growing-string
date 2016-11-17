@@ -13,6 +13,8 @@ from growing_string import Main
 from optimize import Optimize_powerlaw
 import numpy as np
 import matplotlib.pyplot as plt
+import save_data
+import save_meta
 
 
 class BoxCounting(object):
@@ -141,4 +143,9 @@ if __name__ == '__main__':
     ax.set_xlabel(r'$T$')
     ax.set_ylabel(r'$D(T)$')
     plt.show()
+    base = "results/data/box_counting/beta=%2.2f_" % beta
+    save_data.save(base, beta=beta, L=box_counting.L,
+                   frames=box_counting.frames, Ds=Ds)
+    save_meta.save(base, beta=beta, L=box_counting.L,
+                   frames=box_counting.frames)
 

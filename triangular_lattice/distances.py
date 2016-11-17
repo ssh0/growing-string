@@ -10,6 +10,7 @@ import numpy as np
 from tqdm import tqdm
 import time
 import random
+import save_data
 
 
 def choose_indexes(_list, num, L):
@@ -68,16 +69,10 @@ def execute_simulation_for_one_beta(beta, num_of_strings, L, frames, plot=True,
     path_length = np.array(path_length).flatten()
 
     if save_data:
-        result_data_path = "results/data/distances/beta=%2.2f" % beta
-        result_data_path += "_" + time.strftime("%y%m%d_%H%M%S")
-        result_data_path += ".npz"
-        np.savez(result_data_path,
-                 beta=beta,
-                 num_of_strings=num_of_strings,
-                 L=L,
-                 frames=frames,
-                 distance_list=distance_list,
-                 path_length=path_length)
+        save_data.save("results/data/distances/beta=%2.2f_" % beta,
+                       beta=beta, num_of_strings=num_of_strings,
+                       L=L, frames=frames, distance_list=distance_list,
+                       path_length=path_length)
 
     if plot or save_image:
         fig, ax = plt.subplots()

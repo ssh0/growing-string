@@ -11,6 +11,7 @@ from tqdm import tqdm
 from multiprocessing import Pool
 from radius import *
 import matplotlib.pyplot as plt
+import save_data
 
 
 beta = 8.
@@ -26,13 +27,7 @@ for i in tqdm(range(num_of_strings)):
                     plot_optimized=False))
 res = np.array(res)
 
-result_data_path = "results/data/radius/beta=%2.2f" % beta
-result_data_path += "_" + current_time
-result_data_path += ".npz"
-np.savez(result_data_path,
-         num_of_strings=num_of_strings,
-         beta=beta,
-         L=L,
-         frames=frames,
-         D=res)
+save_data.save("results/data/radius/beta=%2.2f_" % beta,
+               num_of_strings=num_of_strings,
+               beta=beta, L=L, frames=frames, D=res)
 

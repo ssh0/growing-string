@@ -12,6 +12,7 @@ import numpy as np
 import random
 from tqdm import tqdm
 import time
+import save_data
 
 
 def choose_indexes(_list, num, L):
@@ -94,16 +95,9 @@ if __name__ == '__main__':
         ax.plot(Lp, Cs, '.', label=r'$\beta = %2.2f$' % beta)
 
         # save the data
-        result_data_path = "results/data/correlation/beta=%2.2f" % beta
-        result_data_path += "_" + start_time
-        result_data_path += ".npz"
-        np.savez(result_data_path,
-                 num_of_strings=num_of_strings,
-                 beta=beta,
-                 L=L,
-                 frames=frames,
-                 Lp=Lp,
-                 Cs=Cs)
+        save_data.save("results/data/correlation/beta=%2.2f_" % beta,
+                       num_of_strings=num_of_strings,
+                       beta=beta, L=L, frames=frames, Lp=Lp, Cs=Cs)
 
     ax.set_xlabel('Path length')
     ax.set_ylabel('Correlation of the vectors')

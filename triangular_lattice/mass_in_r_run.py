@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 import time
+import save_data
 
 
 def get_mass_in_r_for_one_string(L, frames, beta, r=None):
@@ -49,16 +50,9 @@ def mass_in_r_for_one_beta(beta, num_of_strings, L, frames, plot=True,
     M = np.average(np.array(Ms), axis=0)
 
     if save_data:
-        result_data_path = "results/data/mass_in_r/beta=%2.2f" % beta
-        result_data_path += "_" + time.strftime("%y%m%d_%H%M%S")
-        result_data_path += ".npz"
-        np.savez(result_data_path,
-                 num_of_strings=num_of_strings,
-                 beta=beta,
-                 L=L,
-                 frames=frames,
-                 r=r,
-                 M=M)
+        save_data.save("results/data/mass_in_r/beta=%2.2f_" % beta,
+                       num_of_strings=num_of_strings,
+                       beta=beta, L=L, frames=frames, r=r, M=M)
 
     if plot or save_image:
         fig, ax = plt.subplots()

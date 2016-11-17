@@ -9,6 +9,7 @@ from filled_kagome import FilledKagome
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import save_data
 
 
 if __name__ == '__main__':
@@ -28,16 +29,9 @@ if __name__ == '__main__':
             R.append(filled_kagome.R)
         Rs.append(np.average(R))
 
-        result_data_path = "results/data/filled_kagome_radius/beta=%2.2f" % beta
-        result_data_path += "_" + current_time
-        result_data_path += ".npz"
-        np.savez(result_data_path,
-                 beta=beta,
-                 num_of_strings=num_of_strings,
-                 L=L,
-                 frames=frames,
-                 R=R
-                 )
+        save_data.save("results/data/filled_kagome_radius/beta=%2.2f_" % beta,
+                       beta=beta, num_of_strings=num_of_strings,
+                       L=L, frames=frames, R=R)
 
     fig, ax = plt.subplots()
 
