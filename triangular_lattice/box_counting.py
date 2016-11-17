@@ -19,7 +19,7 @@ import save_meta
 
 
 class BoxCounting(object):
-    def __init__(self, frames, beta, c=1.5, L_power=10):
+    def __init__(self, frames, beta, c=0.4, L_power=10):
         L = 2 ** L_power
         if frames > (L*L) * 0.9:
             raise ValueError("`frames` must be smaller than 0.9 times `L` * `L`.")

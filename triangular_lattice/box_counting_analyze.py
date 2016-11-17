@@ -8,15 +8,14 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 import matplotlib.cm as cm
 import numpy as np
-import itertools
-from scipy.optimize import curve_fit
-from scipy.stats import gamma
+# import itertools
+# from scipy.optimize import curve_fit
+# from scipy.stats import gamma
 
 result_data_path_base = "./results/data/box_counting/"
 fn = [
 # ls ./results/data/box_counting/
     "beta=0.00_161117_140700.npz",
-    "beta=1.00_161117_140528.npz",
     "beta=1.00_161117_140704.npz",
     "beta=2.00_161117_140709.npz",
     "beta=3.00_161117_140714.npz",
@@ -38,9 +37,11 @@ def plot_Ds():
         L = data['L']
         frames = data['frames']
         Ds = data['Ds']
-        T = np.arange(frames)
+        T = np.log(0.5 * (np.arange(frames) + 1) ** 2)
+        # filtered = np.where(Ds < 1.)
+        # Ds[filtered] = 1.
 
-        ax.semilogx(np.sqrt(T), Ds, '.', label=r'$\beta = %2.2f$' % beta,
+        ax.plot(T, Ds, '.', label=r'$\beta = %2.2f$' % beta,
                 color=cm.viridis(float(i) / len(fpath)))
 
     ax.legend(loc='best')
@@ -51,5 +52,33 @@ def plot_Ds():
     plt.show()
 
 
+def plot_Ds_3d():
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    fpath = [result_data_path_base + f for f in fn]
+    D = []
+    for i, result_data_path in enumerate(fpath):
+        data = np.load(result_data_path)
+        beta = data['beta']
+        L = data['L']
+        frames = data['frames']
+        Ds = data['Ds']
+
+        T = np.log(0.5 * (np.arange(frames) + 1) ** 2)
+        D.append(Ds)
+
+
+    D = np.array(D)
+    X, Y = np.meshgrid(T, np.arange(11))
+    ax.plot_wireframe(X, Y, D, rstride=1)
+    ax.set_title('Fractal dimension')
+    ax.set_xlabel(r'$T$')
+    ax.set_ylabel(r'$\beta$')
+    ax.set_zlabel(r'$D(T)$')
+
+    plt.show()
+
+
 if __name__ == '__main__':
-    plot_Ds()
+    # plot_Ds()
+    plot_Ds_3d()
