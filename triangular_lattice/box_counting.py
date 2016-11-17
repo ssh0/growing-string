@@ -13,23 +13,23 @@ from growing_string import Main
 from optimize import Optimize_powerlaw
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 import save_data
 import save_meta
 
 
 class BoxCounting(object):
-    def __init__(self, frames, beta, c=1.5, L_power=10, plot=False):
+    def __init__(self, frames, beta, c=1.5, L_power=10):
         L = 2 ** L_power
         if frames > (L*L) * 0.9:
             raise ValueError("`frames` must be smaller than 0.9 times `L` * `L`.")
         self.L = L
-        self.t = 0
+        self.pbar = tqdm(total=frames)
         self.frames = frames
         self.beta = beta
         self.weight_const = c
-        self.plot_for_veirification = plot
 
-    def init(self):
+    def start(self):
         self.main = Main(
             Lx=self.L,
             Ly=self.L,
@@ -41,7 +41,6 @@ class BoxCounting(object):
             strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4]}],
             pre_function=self.calc_fractal_dim
         )
-        # self.main.pre_func_res
 
     def calc_fractal_dim(self, main, i, s):
         self.s = main.strings[0]
@@ -59,8 +58,8 @@ class BoxCounting(object):
             args=(self.cutting_size_xs, N),
             parameters=[0., -1.5])
         result = optimizer.fitting()
-        self.t += 1
-        print self.t, result['D']
+
+        self.pbar.update(1)
 
         # ax.loglog(self.cutting_size_xs, N, 'o-')
         # ax.loglog(self.cutting_size_xs, optimizer.fitted(self.cutting_size_xs),
@@ -129,23 +128,33 @@ class BoxCounting(object):
         return 1 if cluster_indexes else 0
 
 
-if __name__ == '__main__':
+def main(beta, plot):
+    print "beta = %2.2f" % beta
+
     frames = 100 * 100
-    box_counting = BoxCounting(frames=frames, beta=1., L_power=7, plot=True)
-    box_counting.init()
-    Ds = np.array(box_counting.main.pre_func_res)
+    box_counting = BoxCounting(frames=frames, beta=beta, L_power=7)
+    box_counting.start()
+    Ds = -np.array(box_counting.main.pre_func_res)
+    T = np.arange(frames)
 
-    fig, ax = plt.subplots()
-
-    ax.plot(np.sqrt(np.arange(frames)), -Ds, 'o-')
-    # ax.legend(loc='best')
-    ax.set_title('Fractal dimension')
-    ax.set_xlabel(r'$T$')
-    ax.set_ylabel(r'$D(T)$')
-    plt.show()
     base = "results/data/box_counting/beta=%2.2f_" % beta
     save_data.save(base, beta=beta, L=box_counting.L,
                    frames=box_counting.frames, Ds=Ds)
     save_meta.save(base, beta=beta, L=box_counting.L,
                    frames=box_counting.frames)
+
+    if plot:
+        fig, ax = plt.subplots()
+
+        ax.plot(np.sqrt(T), Ds, '.')
+        # ax.legend(loc='best')
+        ax.set_title('Fractal dimension')
+        ax.set_xlabel(r'$T$')
+        ax.set_ylabel(r'$D(T)$')
+        plt.show()
+
+
+if __name__ == '__main__':
+    beta = 10.
+    main(beta, plot=False)
 
