@@ -4,7 +4,7 @@
 # written by Shotaro Fujimoto
 # 2016-11-16
 """ボックスカウンティング法によってクラスターのフラクタル次元の時間変化を求める。
-最終的にはフラクタル次元のj間変化がtanh(t)に従うことを示したい。
+最終的にはフラクタル次元の時間変化がtanh(t)に従うことを示したい。
 シミュレーション時に用意する格子サイズは，2の階乗にし，分割が行い易くなるようにする。
 """
 
@@ -33,12 +33,11 @@ class BoxCounting(object):
         self.main = Main(
             Lx=self.L,
             Ly=self.L,
-            size=[3,] * 1,
+            size=[3,],
             plot=False,
             frames=self.frames,
             beta=self.beta,
             weight_const=self.weight_const,
-            strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4]}],
             pre_function=self.calc_fractal_dim
         )
 
@@ -51,8 +50,6 @@ class BoxCounting(object):
         self.y = self.lattice_Y[np.array(self.s.pos.T).tolist()]
         self.get_cutting_sizes()
 
-        # fig, ax = plt.subplots()
-
         N = self.get_results_each_subclusters()
         optimizer = Optimize_powerlaw(
             args=(self.cutting_size_xs, N),
@@ -61,6 +58,7 @@ class BoxCounting(object):
 
         self.pbar.update(1)
 
+        # fig, ax = plt.subplots()
         # ax.loglog(self.cutting_size_xs, N, 'o-')
         # ax.loglog(self.cutting_size_xs, optimizer.fitted(self.cutting_size_xs),
         #     '-', label='D = %f' % result['D'])
@@ -92,12 +90,12 @@ class BoxCounting(object):
         self.X0 = 0.
         self.Y0 = 0.
 
-        self.cutting_size_max_width = self.L
-        self.cutting_size_max_height = self.L * (np.sqrt(3) / 2)
-
         self.cutting_size_xs = np.array([2 ** (i + 1) for i
-                                         in range(int(np.log(self.L)))])
+                                         in range(int(np.log2(self.L)))])
         self.cutting_size_ys = self.cutting_size_xs * (np.sqrt(3) / 2)
+        self.cutting_size_max_width = self.cutting_size_xs[-1]
+        self.cutting_size_max_height = self.cutting_size_ys[-1]
+
         self.cutting_sizes = np.array([self.cutting_size_xs,
                                        self.cutting_size_ys]).T
         return
@@ -111,16 +109,16 @@ class BoxCounting(object):
     def get_results_each_subclusters(self):
         res = []
         for width, height in self.cutting_sizes:
-            N = self.cutting_size_max_width / width
+            N = int(self.L / width)
             x0s = np.arange(N) * width - 0.25
             y0s = np.arange(N) * height - (np.sqrt(3) / 4)
-            _res = []
+            _res = 0
             for x0 in x0s:
                 for y0 in y0s:
                     subclusters = self.eval_subclusters(
                         width, height, x0=x0, y0=y0)
-                    _res.append(np.sum(np.array(subclusters)))
-            res.append(np.sum(_res))
+                    _res += subclusters
+            res.append(_res)
         return res
 
     def eval_subclusters(self, width, height, x0, y0):
@@ -137,7 +135,8 @@ def main(beta, plot):
     Ds = -np.array(box_counting.main.pre_func_res)
     T = np.arange(frames)
 
-    base = "results/data/box_counting/beta=%2.2f_" % beta
+    # base = "results/data/box_counting/beta=%2.2f_" % beta
+    base = "results/data/box_counting/modified/beta=%2.2f_" % beta
     save_data.save(base, beta=beta, L=box_counting.L,
                    frames=box_counting.frames, Ds=Ds)
     save_meta.save(base, beta=beta, L=box_counting.L,

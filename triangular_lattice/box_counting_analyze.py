@@ -30,23 +30,32 @@ import glob
 # ]
 # fpath = [result_data_path_base + f for f in fn]
 
-fpath = sorted(glob.glob('./results/data/box_counting/*.npz'))
+# fpath = sorted(glob.glob('./results/data/box_counting/*.npz'))
+fpath = sorted(glob.glob('./results/data/box_counting/modified/*.npz'))
 
 def plot_Ds():
     fig, ax = plt.subplots()
+    D = {}
     for i, result_data_path in enumerate(fpath):
         data = np.load(result_data_path)
-        beta = data['beta']
-        L = data['L']
+        beta = float(data['beta'])
         frames = data['frames']
         Ds = data['Ds']
-        T = np.log(0.5 * (np.arange(frames) + 1) ** 2)
+        alpha = 0.04
+        T = (1. / alpha) * np.log(np.arange(frames) / 2. + 1.)
         # filtered = np.where(Ds < 1.)
         # Ds[filtered] = 1.
 
-        ax.plot(T, Ds, '.', label=r'$\beta = %2.2f$' % beta,
-                color=cm.viridis(float(i) / len(fpath)))
+        if D.has_key(beta):
+            D[beta].append(Ds)
+        else:
+            D[beta] = [Ds]
 
+    betas = sorted(D.keys())
+    D = np.array([np.average(np.array(D[k]), axis=0) for k in betas])
+    for i, (beta, d) in enumerate(zip(betas, D)):
+        ax.plot(T, d, '.', label=r'$\beta = %2.2f$' % beta,
+                color=cm.viridis(float(i) / len(betas)))
     ax.legend(loc='best')
     ax.set_title('Fractal dimension')
     ax.set_xlabel(r'$T$')
@@ -61,10 +70,10 @@ def plot_Ds_3d():
     for i, result_data_path in enumerate(fpath):
         data = np.load(result_data_path)
         beta = float(data['beta'])
-        L = data['L']
         frames = data['frames']
         Ds = data['Ds']
-        T = np.log(0.5 * (np.arange(frames) + 1) ** 2)
+        alpha = 0.04
+        T = (1. / alpha) * np.log(np.arange(frames) / 2. + 1.)
 
         if D.has_key(beta):
             D[beta].append(Ds)
@@ -74,9 +83,8 @@ def plot_Ds_3d():
     # betas = np.array(betas)
     betas = sorted(D.keys())
     D = np.array([np.average(np.array(D[k]), axis=0) for k in betas])
-    print D.shape
     X, Y = np.meshgrid(T, betas)
-    ax.plot_wireframe(X, Y, D, rstride=1)
+    ax.plot_wireframe(X, Y, D, cstride=10, rstride=1)
     ax.set_title('Fractal dimension')
     ax.set_xlabel(r'$T$')
     ax.set_ylabel(r'$\beta$')
