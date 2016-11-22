@@ -24,7 +24,7 @@ def choose_indexes(_list, num, L):
     return sorted(random.sample(_list[L:N - L], num))
 
 def get_path_length_and_distances(beta, num_of_strings, L, frames, num_of_pairs=300):
-    main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=1000, beta=beta,
+    main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=frames, beta=beta,
                 strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
     len_vec = len(main.strings[0].vec)
 
