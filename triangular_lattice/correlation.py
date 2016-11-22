@@ -26,6 +26,8 @@ def choose_indexes(_list, num, L):
     return sorted(random.sample(_list[L:N - L], num))
 
 def _to_radian(i, j):
+    """ベクトルiとベクトルjのなす角を返す"""
+    ## i,jの順番を考慮(0 <= theta < 2 * pi)
     k = (i + 6 - j) % 6
     if k == 0: return 0.
     if k == 1: return np.pi / 3
@@ -34,7 +36,19 @@ def _to_radian(i, j):
     if k == 4: return 4 * np.pi / 3
     if k == 5: return 5 * np.pi / 3
 
+def _dot(i, j):
+    """ベクトルiとベクトルjの内積を返す"""
+    ## i,jの順番を考慮(0 <= theta < 2 * pi)
+    k = (i + 6 - j) % 6
+    if k == 0: return 1.
+    if k == 1: return 0.5
+    if k == 2: return -0.5
+    if k == 3: return -1.
+    if k == 4: return -0.5
+    if k == 5: return 0.5
+
 to_radian = np.vectorize(_to_radian)
+dot = np.vectorize(_dot)
 
 def calc_order_param(theta):
     itheta = np.array([1j*t for t in theta])
@@ -68,10 +82,14 @@ def get_correlation_for_each_string(Lp, L, frames, num_of_pairs):
     # 2. 各点でのベクトルの相関を計算
     vec0 = np.array(main.strings[0].vec)[random_i].reshape((len(Lp), num_of_pairs))
     vec1 = np.array(main.strings[0].vec)[random_j].reshape((len(Lp), num_of_pairs))
-    # ペア間の角度
-    rad = to_radian(vec0, vec1)
-    # 角度の揃い具合を計算
-    Cs = [calc_order_param(rad[i]) for i in range(len(Lp))]
+    # # ペア間の角度
+    # rad = to_radian(vec0, vec1)
+    # # 角度の揃い具合を計算
+    # Cs = [calc_order_param(rad[i]) for i in range(len(Lp))]
+
+    ## 内積によって計算
+    Cs = [np.average(dot(vec0, vec1)[i]) for i in range(len(Lp))]
+
 
     return Cs
 

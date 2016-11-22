@@ -17,8 +17,8 @@ if __name__ == '__main__':
         # result_data_path = "./results/data/correlation/beta=%2.2f_161013_141137.npz" % beta
         # result_data_path = "./results/data/correlation/beta=%2.2f_161013_154842.npz" % beta
         # result_data_path = "./results/data/correlation/beta=%2.2f_161015_155449.npz" % beta
-        result_data_path = "./results/data/correlation/beta=%2.2f_161018_220923.npz" % beta
-
+        # result_data_path = "./results/data/correlation/beta=%2.2f_161018_220923.npz" % beta
+        result_data_path = "./results/data/correlation/beta=%2.2f_161122_152015.npz" % beta
 
         data = np.load(result_data_path)
         beta = data['beta']
@@ -40,6 +40,6 @@ if __name__ == '__main__':
     ax.set_xlabel('Path length')
     ax.set_ylabel('Correlation of the vectors')
     ax.set_title('Correlation of the vectors')
-    ax.set_ylim(0., ax.get_ylim()[1])
+    # ax.set_ylim(0., ax.get_ylim()[1])
     ax.legend(loc='best')
     plt.show()
