@@ -31,7 +31,9 @@ import glob
 # fpath = [result_data_path_base + f for f in fn]
 
 # fpath = sorted(glob.glob('./results/data/box_counting/*.npz'))
-fpath = sorted(glob.glob('./results/data/box_counting/modified/*.npz'))
+# fpath = sorted(glob.glob('./results/data/box_counting/modified/*.npz'))
+fpath = sorted(glob.glob('./results/data/box_counting/2016-11-19/*.npz'))
+
 
 def plot_Ds():
     fig, ax = plt.subplots()
@@ -52,14 +54,69 @@ def plot_Ds():
             D[beta] = [Ds]
 
     betas = sorted(D.keys())
-    D = np.array([np.average(np.array(D[k]), axis=0) for k in betas])
-    for i, (beta, d) in enumerate(zip(betas, D)):
-        ax.plot(T, d, '.', label=r'$\beta = %2.2f$' % beta,
-                color=cm.viridis(float(i) / len(betas)))
+
+    ## 1) 全てプロット
+    # for i, beta in enumerate(betas):
+    #     for i, d in D[beta]:
+    #         ax.plot(T, d, '.', color=cm.viridis(float(i) / len(betas)))
+
+    ## 2) 指定したbetaのデータをすべてプロット
+    # beta = 8.
+    # for i, d in enumerate(D[beta]):
+
+    #     color = cm.viridis(float(i) / len(D[beta]))
+    #     ax.plot(T[5:], d[5:], '.-', label='data {}'.format(i), color=color)
+
+    ## 3) 指定したbetaの平均とエラー（標準偏差）をプロット
+    # beta = 8.
+    # D_ave = np.average(np.array(D[beta]), axis=0)
+    # D_err = np.std(np.array(D[beta]), axis=0)
+    # ax.errorbar(T, D_ave, yerr=D_err, marker='.', ecolor=[0, 0, 0, 0.2])
+
+    ## 4) すべてのbetaごとにプロット
+
+    ## 4.0)
+    D_ave = np.array([np.average(np.array(D[k]), axis=0) for k in betas])
+    D_err = np.array([np.std(np.array(D[k]), axis=0) for k in betas])
+
+    ## 4.a) フラクタル次元が1以下の部分のデータはすべて無視
+    # D_ave = np.ma.array([np.ma.average(
+    #     np.ma.array(np.array(D[k]), mask=np.array(D[k])<1.), axis=0)
+    #                   for k in betas])
+    # D_err = np.ma.array([np.ma.std(
+    #     np.ma.array(np.array(D[k]), mask=np.array(D[k])<1.), axis=0)
+    #                   for k in betas])
+
+    ## 4.b) フラクタル次元が1以下の部分のデータはすべて1としてプロット
+    # D_ave, D_err = [], []
+    # for k in betas:
+    #     d = np.array(D[k])
+    #     d[d < 1] = 1.
+    #     D_ave.append(np.average(d, axis=0))
+    #     D_err.append(np.std(d, axis=0))
+
+    for i, (beta, d, d_err) in enumerate(zip(betas, D_ave, D_err)):
+        color = list(cm.viridis(float(i) / len(betas)))
+        label = label=r'$\beta = %2.2f$' % beta
+
+        ## 4.c) 平均値のみプロット
+        # ax.plot(T, d, '.', label=label, color=color)
+
+        ## 4.d) エラーバーを付けてプロット
+        # ecolor = color[:-1] + [0.2]
+        # ax.errorbar(T[5:], d[5:], yerr=d_err[5:], marker='.',
+        #             label=label, color=color, ecolor=ecolor)
+
+        ## 4.e) 標準偏差の収束をプロットしてみる
+        ## 標準偏差は指数関数的に減少
+        ax.semilogy(T, d_err, '.', label=label, color=color)
+
     ax.legend(loc='best')
+
     ax.set_title('Fractal dimension')
     ax.set_xlabel(r'$T$')
-    ax.set_ylabel(r'$D(T)$')
+    # ax.set_ylabel(r'$D(T)$')
+    ax.set_ylabel(r'$\sigma(D(T))$')
 
     plt.show()
 
@@ -82,9 +139,12 @@ def plot_Ds_3d():
 
     # betas = np.array(betas)
     betas = sorted(D.keys())
-    D = np.array([np.average(np.array(D[k]), axis=0) for k in betas])
+    D_ave = np.array([np.average(np.array(D[k]), axis=0) for k in betas])
+    D_err = np.array([np.std(np.array(D[k]), axis=0) for k in betas])
     X, Y = np.meshgrid(T, betas)
-    ax.plot_wireframe(X, Y, D, cstride=10, rstride=1)
+    ax.plot_wireframe(X, Y, D_ave - D_err, cstride=10, rstride=1, color='g', alpha=0.4)
+    ax.plot_wireframe(X, Y, D_ave + D_err, cstride=10, rstride=1, color='r', alpha=0.4)
+    ax.plot_wireframe(X, Y, D_ave, cstride=10, rstride=1)
     ax.set_title('Fractal dimension')
     ax.set_xlabel(r'$T$')
     ax.set_ylabel(r'$\beta$')
@@ -94,5 +154,5 @@ def plot_Ds_3d():
 
 
 if __name__ == '__main__':
-    # plot_Ds()
-    plot_Ds_3d()
+    plot_Ds()
+    # plot_Ds_3d()

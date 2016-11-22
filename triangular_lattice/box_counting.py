@@ -5,7 +5,8 @@
 # 2016-11-16
 """ボックスカウンティング法によってクラスターのフラクタル次元の時間変化を求める。
 最終的にはフラクタル次元の時間変化がtanh(t)に従うことを示したい。
-シミュレーション時に用意する格子サイズは，2の階乗にし，分割が行い易くなるようにする。
+~~シミュレーション時に用意する格子サイズは，2の階乗にし，分割が行い易くなるようにする。~~
+格子サイズは，フィッティング時のサンプル数を確保するために，上のようなことを考える必要はない
 """
 
 from diecutting import DieCutting
@@ -90,8 +91,9 @@ class BoxCounting(object):
         self.X0 = 0.
         self.Y0 = 0.
 
-        self.cutting_size_xs = np.array([2 ** (i + 1) for i
-                                         in range(int(np.log2(self.L)))])
+        # self.cutting_size_xs = np.array([2 ** (i + 1) for i
+        #                                  in range(int(np.log2(self.L)))])
+        self.cutting_size_xs = np.arange(1, self.L / 2)
         self.cutting_size_ys = self.cutting_size_xs * (np.sqrt(3) / 2)
         self.cutting_size_max_width = self.cutting_size_xs[-1]
         self.cutting_size_max_height = self.cutting_size_ys[-1]
@@ -136,7 +138,8 @@ def main(beta, plot):
     T = np.arange(frames)
 
     # base = "results/data/box_counting/beta=%2.2f_" % beta
-    base = "results/data/box_counting/modified/beta=%2.2f_" % beta
+    # base = "results/data/box_counting/modified/beta=%2.2f_" % beta
+    base = "results/data/box_counting/2016-11-19/beta=%2.2f_" % beta  # εの刻みを多くしたバージョン
     save_data.save(base, beta=beta, L=box_counting.L,
                    frames=box_counting.frames, Ds=Ds)
     save_meta.save(base, beta=beta, L=box_counting.L,
@@ -155,5 +158,5 @@ def main(beta, plot):
 
 if __name__ == '__main__':
     beta = 10.
-    main(beta, plot=False)
+    main(beta, plot=True)
 
