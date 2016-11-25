@@ -99,6 +99,9 @@ def plot_Ds():
         color = list(cm.viridis(float(i) / len(betas)))
         label = label=r'$\beta = %2.2f$' % beta
 
+        ## 4.c,d)
+        # ax.plot([T[5], T[-1]], [2., 2.], 'k-', lw=1)
+
         ## 4.c) 平均値のみプロット
         # ax.plot(T, d, '.', label=label, color=color)
 

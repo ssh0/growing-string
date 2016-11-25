@@ -37,6 +37,7 @@ class BoxCounting(object):
             size=[3,],
             plot=False,
             frames=self.frames,
+            strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4]}],
             beta=self.beta,
             weight_const=self.weight_const,
             pre_function=self.calc_fractal_dim
@@ -51,10 +52,15 @@ class BoxCounting(object):
         self.y = self.lattice_Y[np.array(self.s.pos.T).tolist()]
         self.get_cutting_sizes()
 
-        N = self.get_results_each_subclusters()
+        N = np.array(self.get_results_each_subclusters())
+        index_end = len(np.where(N == N[-1])[0])
+        if index_end > len(N) - 2:
+            self.pbar.update(1)
+            return 0.
+
         optimizer = Optimize_powerlaw(
-            args=(self.cutting_size_xs, N),
-            parameters=[0., -1.5])
+            args=(self.cutting_size_xs[:-index_end], N[:-index_end]),
+            parameters=[100., -1.5])
         result = optimizer.fitting()
 
         self.pbar.update(1)
@@ -88,12 +94,17 @@ class BoxCounting(object):
         In this funciton, cutting size is determined by which the whole region
         is in the cluster.
         """
+
         self.X0 = 0.
         self.Y0 = 0.
 
         # self.cutting_size_xs = np.array([2 ** (i + 1) for i
         #                                  in range(int(np.log2(self.L)))])
-        self.cutting_size_xs = np.arange(1, self.L / 2)
+        # self.cutting_size_xs = np.arange(1, self.L / 2)
+        self.cutting_size_xs = np.array(
+            sorted(set(map(
+                int, np.logspace(0, np.log(self.L) / np.log(1.5), base=1.5)
+            ))))
         self.cutting_size_ys = self.cutting_size_xs * (np.sqrt(3) / 2)
         self.cutting_size_max_width = self.cutting_size_xs[-1]
         self.cutting_size_max_height = self.cutting_size_ys[-1]
@@ -131,15 +142,16 @@ class BoxCounting(object):
 def main(beta, plot):
     print "beta = %2.2f" % beta
 
-    frames = 100 * 100
-    box_counting = BoxCounting(frames=frames, beta=beta, L_power=7)
+    frames = 500
+    box_counting = BoxCounting(frames=frames, beta=beta, L_power=10)
     box_counting.start()
     Ds = -np.array(box_counting.main.pre_func_res)
     T = np.arange(frames)
 
     # base = "results/data/box_counting/beta=%2.2f_" % beta
     # base = "results/data/box_counting/modified/beta=%2.2f_" % beta
-    base = "results/data/box_counting/2016-11-19/beta=%2.2f_" % beta  # εの刻みを多くしたバージョン
+    # base = "results/data/box_counting/2016-11-19/beta=%2.2f_" % beta  # εの刻みを多くしたバージョン
+    base = "results/data/box_counting/2016-11-25/beta=%2.2f_" % beta  # クラスターがシミュレーションじのシステムサイズ内に入るようにしたもの
     save_data.save(base, beta=beta, L=box_counting.L,
                    frames=box_counting.frames, Ds=Ds)
     save_meta.save(base, beta=beta, L=box_counting.L,
