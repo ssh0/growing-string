@@ -54,32 +54,32 @@ fn = [
     # "beta=1.00_161114_213913.npz",
     # "beta=1.00_161116_152043.npz",
     # "beta=1.00_161116_202323.npz",
-    "beta=2.00_161114_213919.npz",
-    "beta=2.00_161116_152049.npz",
+    # "beta=2.00_161114_213919.npz",
+    # "beta=2.00_161116_152049.npz",
     "beta=2.00_161116_202332.npz",
-    "beta=3.00_161114_213927.npz",
+    # "beta=3.00_161114_213927.npz",
     "beta=3.00_161116_152054.npz",
-    "beta=3.00_161116_202346.npz",
-    "beta=4.00_161114_213934.npz",
+    # "beta=3.00_161116_202346.npz",
+    # "beta=4.00_161114_213934.npz",
     "beta=4.00_161116_152101.npz",
-    "beta=4.00_161116_202355.npz",
-    "beta=5.00_161114_213940.npz",
+    # "beta=4.00_161116_202355.npz",
+    # "beta=5.00_161114_213940.npz",
     "beta=5.00_161116_152110.npz",
-    "beta=5.00_161116_202403.npz",
-    "beta=6.00_161114_213946.npz",
-    "beta=6.00_161116_152119.npz",
+    # "beta=5.00_161116_202403.npz",
+    # "beta=6.00_161114_213946.npz",
+    # "beta=6.00_161116_152119.npz",
     "beta=6.00_161116_202429.npz",
-    "beta=7.00_161115_150237.npz",
-    "beta=7.00_161116_152127.npz",
+    # "beta=7.00_161115_150237.npz",
+    # "beta=7.00_161116_152127.npz",
     "beta=7.00_161116_202441.npz",
-    "beta=8.00_161115_150246.npz",
-    "beta=8.00_161116_152139.npz",
+    # "beta=8.00_161115_150246.npz",
+    # "beta=8.00_161116_152139.npz",
     "beta=8.00_161116_202450.npz",
-    "beta=9.00_161115_150252.npz",
-    "beta=9.00_161116_152147.npz",
+    # "beta=9.00_161115_150252.npz",
+    # "beta=9.00_161116_152147.npz",
     "beta=9.00_161116_202458.npz",
-    "beta=10.00_161115_150258.npz",
-    "beta=10.00_161116_152157.npz",
+    # "beta=10.00_161115_150258.npz",
+    # "beta=10.00_161116_152157.npz",
     "beta=10.00_161116_202508.npz",
 ]
 
@@ -208,6 +208,7 @@ def result_N_ave():
 
         M = np.array([np.sum(l) for l in size_dist])
         M_ave = M / np.sum(M)
+        # M_ave = M
 
         ax.plot(Ls, M_ave, '.', label=r'$\beta = %2.2f$' % beta,
                 color=cm.viridis(float(i) / len(fpath)))
@@ -229,7 +230,7 @@ def result_N_ave():
     ax.set_title('Strings in hexagonal region' +
                 ' (sample: {})'.format(num_of_strings))
     ax.set_xlabel(r'Cutting size $L$')
-    ax.set_ylabel('Average number of the sub-clusters in the hexagonal region of size L')
+    ax.set_ylabel('Average number of the sub-clusters (normalized)')
 
     plt.show()
 
@@ -239,13 +240,14 @@ def result_N_ave():
     scale = np.array(scale)
 
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
-    ax1.plot(betas, a, '.')
+    ax1.plot(betas, a, 'o')
     [ax.set_xlabel(r'$\beta$') for ax in [ax1, ax2, ax3]]
+    [ax.set_xlim((0, 11)) for ax in [ax1, ax2, ax3]]
     ax1.set_ylabel(r'Shape parameter: $a$')
-    ax2.plot(betas, loc, '.')
+    ax2.plot(betas, loc, 'o')
     ax2.set_ylabel(r'Translation parameter: $x_{0}$')
     # ax3.plot(-betas, -scale)  # お試し
-    ax3.plot(betas, scale, '.')
+    ax3.plot(betas, scale, 'o')
     ax3.set_ylabel(r'Scale parameter: $\theta$')
     plt.show()
 
@@ -255,6 +257,6 @@ def result_N_ave():
 ## for size_dist =======
 # result_size_dist_3d()
 # result_size_dist_pcolor()  # dataは1つにする
-# result_length_of_sub_dist()
+# # result_length_of_sub_dist()
 result_N_ave()
 
