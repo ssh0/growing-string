@@ -29,8 +29,10 @@ class BoxCounting(object):
         self.frames = frames
         self.beta = beta
         self.weight_const = c
+        self.t = 1
 
     def start(self):
+        self.get_cutting_sizes()
         self.main = Main(
             Lx=self.L,
             Ly=self.L,
@@ -44,36 +46,44 @@ class BoxCounting(object):
         )
 
     def calc_fractal_dim(self, main, i, s):
-        self.s = main.strings[0]
 
-        self.lattice_X = main.lattice_X
-        self.lattice_Y = main.lattice_Y
-        self.x = self.lattice_X[np.array(self.s.pos.T).tolist()]
-        self.y = self.lattice_Y[np.array(self.s.pos.T).tolist()]
-        self.get_cutting_sizes()
+        self.x = main.lattice_X[np.array(main.strings[0].pos.T).tolist()]
+        self.y = main.lattice_Y[np.array(main.strings[0].pos.T).tolist()]
 
         N = np.array(self.get_results_each_subclusters())
-        index_end = len(np.where(N == N[-1])[0])
+        index_end = len(np.where(N == 1)[0])
+
         if index_end > len(N) - 2:
             self.pbar.update(1)
+            self.t += 1
             return 0.
 
+        if index_end == 0 or index_end == 1:
+            index_end = len(N)
+        else:
+            index_end = -(index_end - 1)
+
         optimizer = Optimize_powerlaw(
-            args=(self.cutting_size_xs[:-index_end], N[:-index_end]),
-            parameters=[100., -1.5])
+            args=(self.cutting_size_xs[:index_end], N[:index_end]),
+            parameters=[0., -1.5])
         result = optimizer.fitting()
 
-        self.pbar.update(1)
+        if self.t in np.linspace(1, self.frames, num=10, dtype=np.int):
+            fig, ax = plt.subplots()
+            ax.loglog(self.cutting_size_xs, N, 'o')
+            ax.loglog(self.cutting_size_xs[:index_end],
+                      optimizer.fitted(self.cutting_size_xs[:index_end]),
+                      '-', label='D = %f' % result['D'])
+            ax.legend(loc='best')
+            ax.set_title('Coarse graining (frames = {})'.format(self.t))
+            ax.set_xlabel(r'$\varepsilon$')
+            ax.set_ylabel(r'$N(\varepsilon)$')
+            filename = "results/img/box_counting/2016-11-25/"
+            filename += "beta=%2.2f_fitting_frame=%d.png" % (self.beta, self.t)
+            fig.savefig(filename)
 
-        # fig, ax = plt.subplots()
-        # ax.loglog(self.cutting_size_xs, N, 'o-')
-        # ax.loglog(self.cutting_size_xs, optimizer.fitted(self.cutting_size_xs),
-        #     '-', label='D = %f' % result['D'])
-        # ax.legend(loc='best')
-        # ax.set_title('Coarse graining')
-        # ax.set_xlabel(r'$\varepsilon$')
-        # ax.set_ylabel(r'$N(\varepsilon)$')
-        # plt.show()
+        self.pbar.update(1)
+        self.t += 1
 
         return result['D']
 
@@ -114,10 +124,16 @@ class BoxCounting(object):
         return
 
     def diecutting_one_cluster(self, width, height, x0, y0):
-        return np.any(self.x > x0)         and \
-            np.any(self.y > y0)            and \
-            np.any(self.x < (x0 + width))  and \
-            np.any(self.y < (y0 + height))
+        # return np.any(self.x > x0)         and \
+        #     np.any(self.y > y0)            and \
+        #     np.any(self.x < (x0 + width))  and \
+        #     np.any(self.y < (y0 + height))
+        return np.any(
+            np.logical_and(
+                np.logical_and(self.x > x0, self.x < (x0 + width)),
+                np.logical_and(self.y > y0, self.y < (y0 + height)),
+            )
+        )
 
     def get_results_each_subclusters(self):
         res = []
@@ -128,15 +144,10 @@ class BoxCounting(object):
             _res = 0
             for x0 in x0s:
                 for y0 in y0s:
-                    subclusters = self.eval_subclusters(
-                        width, height, x0=x0, y0=y0)
-                    _res += subclusters
+                    if self.diecutting_one_cluster(width, height, x0=x0, y0=y0):
+                        _res += 1
             res.append(_res)
         return res
-
-    def eval_subclusters(self, width, height, x0, y0):
-        cluster_indexes = self.diecutting_one_cluster(width, height, x0, y0)
-        return 1 if cluster_indexes else 0
 
 
 def main(beta, plot):
@@ -170,5 +181,5 @@ def main(beta, plot):
 
 if __name__ == '__main__':
     beta = 10.
-    main(beta, plot=True)
+    main(beta, plot=False)
 

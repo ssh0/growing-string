@@ -14,6 +14,7 @@ import glob
 # from scipy.stats import gamma
 
 # result_data_path_base = "./results/data/box_counting/"
+# result_data_path_base = "./results/data/box_counting/2016-11-25/"
 # fn = [
 # # ls ./results/data/box_counting/
 #     "beta=0.00_161117_140700.npz",
@@ -32,7 +33,10 @@ import glob
 
 # fpath = sorted(glob.glob('./results/data/box_counting/*.npz'))
 # fpath = sorted(glob.glob('./results/data/box_counting/modified/*.npz'))
-fpath = sorted(glob.glob('./results/data/box_counting/2016-11-19/*.npz'))
+# fpath = sorted(glob.glob('./results/data/box_counting/2016-11-19/*.npz'))
+# fpath = sorted(glob.glob('./results/data/box_counting/2016-11-25/*.npz'))
+# fpath = sorted(glob.glob('./results/data/box_counting/2016-11-26/*.npz'))
+fpath = sorted(glob.glob('./results/data/box_counting/2016-11-28/*.npz'))
 
 
 def plot_Ds():
@@ -61,7 +65,7 @@ def plot_Ds():
     #         ax.plot(T, d, '.', color=cm.viridis(float(i) / len(betas)))
 
     ## 2) 指定したbetaのデータをすべてプロット
-    # beta = 8.
+    # beta = 2.
     # for i, d in enumerate(D[beta]):
 
     #     color = cm.viridis(float(i) / len(D[beta]))
@@ -106,18 +110,19 @@ def plot_Ds():
         # ax.plot(T, d, '.', label=label, color=color)
 
         ## 4.d) エラーバーを付けてプロット
-        # ecolor = color[:-1] + [0.2]
-        # ax.errorbar(T[5:], d[5:], yerr=d_err[5:], marker='.',
-        #             label=label, color=color, ecolor=ecolor)
+        ecolor = color[:-1] + [0.2]
+        ax.errorbar(T[5:], d[5:], yerr=d_err[5:], marker='.',
+                    label=label, color=color, ecolor=ecolor)
 
         ## 4.e) 標準偏差の収束をプロットしてみる
         ## 標準偏差は指数関数的に減少
-        ax.semilogy(T, d_err, '.', label=label, color=color)
+        # ax.semilogy(T, d_err, '.', label=label, color=color)
 
     ax.legend(loc='best')
 
     ax.set_title('Fractal dimension')
     ax.set_xlabel(r'$T$')
+    # ax.set_ylim((0., 2.5))
     # ax.set_ylabel(r'$D(T)$')
     ax.set_ylabel(r'$\sigma(D(T))$')
 
