@@ -2,14 +2,14 @@
 # -*- coding:utf-8 -*-
 #
 # written by Shotaro Fujimoto
-# 2016-10-15
+# 2016-12-01
 
 import numpy as np
 import matplotlib.pyplot as plt
 from optimize import Optimize_powerlaw
 
 
-def calc_tortuosity_for_each_beta(filename):
+def calc_tortuosity_for_each_beta(ax, i, filename):
     data = np.load(filename)
     beta = data['beta']
     num_of_strings = data['num_of_strings']
@@ -27,35 +27,18 @@ def calc_tortuosity_for_each_beta(filename):
     y = y.reshape((num_of_strings, int(y.shape[0] / num_of_strings / num_of_pairs), num_of_pairs))
     # tortuosity = length_of_the_curve / distance_between_the_ends_of_it
     y_ave = np.average(y, axis=2)
-    T = x[:, :, 0] / y_ave
-
-    L = x[0, :, 0]
-    T_ave = np.average(T, axis=0)
-    # return L, T_ave
-    # return L, np.average(y_ave, axis=0)
-
 
     X = np.average(y_ave, axis=0)
-    Y = L
+    Y = x[0, :, 0]
+    ax.loglog(X, Y, ls='', marker='.', label=r'$\beta = %2.2f$' % float(i),
+              alpha=0.5)
+
     optimizer = Optimize_powerlaw(args=(X[:], Y[:]), parameters=[0.1, 2.])
     result = optimizer.fitting()
     print "beta = {}, D = {}".format(beta, result['D'])
-    return X, Y
-
-def calc_tortuosity_for_each_beta_modified(filename):
-    data = np.load(filename)
-    beta = data['beta']
-    num_of_strings = data['num_of_strings']
-    L = data['L']
-    frames = data['frames']
-    distance_list = data['distance_list']
-    path_length = data['path_length']
-
-    x = np.array(path_length)
-    y = np.array(distance_list)
-
-    return y, x
-
+    ax.loglog(X, optimizer.fitted(X), ls='-', marker='', color='k',
+              label=r'$D = %2.2f$' % result['D'])
+    return beta, result['D']
 
 if __name__ == '__main__':
     result_data_path = {
@@ -86,7 +69,8 @@ if __name__ == '__main__':
         "15-4": "./results/data/distances/beta=15.00_161018_202846.npz",
         "20-4": "./results/data/distances/beta=20.00_161018_203002.npz",
     }
-    fig, ax = plt.subplots()
+    fig, (ax1, ax2) = plt.subplots(2, 1)
+    betas, Ds = [], []
 
     # for i in [0, 5, 10, 15, 20]:
     # for i in [0]:
@@ -95,62 +79,20 @@ if __name__ == '__main__':
         # fn = result_data_path['%d-2' % i]
         fn = result_data_path['%d-3' % i]
         # fn = result_data_path['%d-4' % i]
-        ax.loglog(*calc_tortuosity_for_each_beta(fn),
-                ls='', marker='.', label=r'$\beta = %2.2f$' % float(i))
+        beta, D = calc_tortuosity_for_each_beta(ax1, i, fn)
+        betas.append(beta)
+        Ds.append(D)
 
-    # ax.plot(ax.get_xlim(), [1., 1.], 'k-')
-    ax.set_ylim(0., ax.get_ylim()[1])
-    # ax.set_ylabel(r'Tortuosity $T$')
-    # ax.set_title('Tortuosity $T = L / \lambda_{\mathrm{avg}}$')
-    # ax.set_xlabel(r'Path length $L$')
-    # ax.set_ylabel(r'Averaged distance $\lambda_{\mathrm{avg}}$')
-    # ax.set_title('$L$ -- $\lambda_{\mathrm{avg}}$')
-    ax.set_xlabel(r'Averaged distance $\lambda_{\mathrm{avg}}$')
-    ax.set_ylabel(r'Path length $L$')
-    ax.set_title('$\lambda_{\mathrm{avg}}$ -- $L$')
-    ax.legend(loc='best')
-    ax.set_aspect('equal')
+    ax1.set_ylim(0., ax1.get_ylim()[1])
+    ax1.set_xlabel(r'Averaged distance $\lambda_{\mathrm{avg}}$')
+    ax1.set_ylabel(r'Path length $L$')
+    ax1.set_title(r'$\lambda_{\mathrm{avg}}$ -- $L$')
+    ax1.legend(loc='best')
+
+    ax2.set_xlabel(r'$\beta$')
+    ax2.set_ylabel(r'Fractal dimension $D$')
+    ax2.set_title(r'$\beta$ -- $D$')
+    ax2.plot(betas, Ds, 'o')
+
     plt.show()
-
-    # for i in [0]:
-    # for i in [0, 5, 10, 15, 20]:
-    # for i in [0, 2, 4, 8, 10]:
-    # for i in range(11):
-
-    #     # fn = result_data_path['%d-2' % i]
-    #     fn = result_data_path['%d-3' % i]
-    #     # fn = result_data_path['%d-4' % i]
-    #     distance_list, path_length = calc_tortuosity_for_each_beta_modified(fn)
-    #     hist, xedges, yedges = np.histogram2d(distance_list, path_length, bins=100)
-    #     x, xerr, y, yerr = [], [], [], []
-    #     for j in range(len(xedges) - 1):
-    #         condition = np.logical_and(distance_list > xedges[j], distance_list < xedges[j + 1])
-    #         if not np.any(condition):
-    #             continue
-    #         X = distance_list[condition]
-    #         Y = path_length[condition]
-    #         x.append(np.average(X))
-    #         xerr.append(np.std(X))
-    #         y.append(np.average(Y))
-    #         yerr.append(np.std(Y))
-
-    #     # # エラーバーで表示
-    #     # ax.errorbar(x, y, yerr=yerr, ls='None', marker='.',
-    #     #             ecolor=[0., 0., 0., 0.2],
-    #     #             label=r'$\beta = %2.2f$' % float(i))
-
-    #     d, L = np.array(x), np.array(y)
-    #     # xerr, yerr = np.array(xerr), np.array(yerr)
-    #     # T = L / d
-    #     # ax.loglog(d, T, '.', label=r'$\beta = %2.2f$' % float(i))
-    #     ax.loglog(d, L, '.', label=r'$\beta = %2.2f$' % float(i))
-    # ax.set_xlabel(r'Distances')
-    # # ax.set_xlabel(r'Path length $L$')
-    # # ax.set_ylabel(r'Tortuosity $T$')
-    # ax.set_ylabel(r'Path length $L$')
-    # ax.set_title('Tortuosity $T = L / \lambda$')
-    # ax.set_aspect('equal')
-    # ax.legend(loc='best')
-    # # plt.show()
-    # plt.show()
 

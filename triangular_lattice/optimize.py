@@ -5,6 +5,7 @@
 # 2016-08-19
 
 import scipy.optimize as optimize
+import numpy as np
 
 
 class Optimize_powerlaw:
@@ -15,7 +16,8 @@ class Optimize_powerlaw:
     def func(self, parameters, x, y):
         c = parameters[0]
         D = parameters[1]
-        residual = y - c * (x ** D)
+        # residual = y - c * (x ** D)
+        residual = np.log(y) - np.log(c) - D * np.log(x)
         return residual
 
     def fitting(self):
