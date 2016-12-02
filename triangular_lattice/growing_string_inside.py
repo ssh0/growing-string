@@ -24,6 +24,7 @@ class InsideString(object):
                  save_video=False,
                  filename_image="",
                  filename_video="",
+                 record_networks=False,
                  frames=1000,
                  beta = 2.,
                  interval=1,
@@ -35,6 +36,7 @@ class InsideString(object):
         self.plot_surface = plot_surface
         self.save_image = save_image
         self.save_video = save_video
+        self.record_networks = record_networks
         if self.save_image:
             if filename_image == "":
                 raise AttributeError("`filename_image` is empty.")
@@ -57,12 +59,17 @@ class InsideString(object):
         self.pre_func_res = []
         self.post_func_res = []
 
+        self.init(Lx, Ly, boundary, initial_state)
+        self.start()
+
+    def init(self, Lx, Ly, boundary, initial_state):
         self.lattice = LT(
             np.zeros((Lx, Ly), dtype=np.int),
             scale=float(max(Lx, Ly)),
             boundary=boundary
         )
-        self.G = nx.Graph()
+        if self.record_networks:
+            self.G = nx.Graph()
 
         self.lattice_X = self.lattice.coordinates_x.reshape(
             self.lattice.Lx,
@@ -94,9 +101,11 @@ class InsideString(object):
         for pos in initial_state:
             self.occupied[pos] = True
             self.append_new_growing_point(pos)
-        self.G.add_nodes_from(map(str, initial_state))
+        if self.record_networks:
+            self.G.add_nodes_from(map(str, initial_state))
         self.initial_state = initial_state
 
+    def start(self):
         # Plot triangular-lattice points, string on it, and so on
         if self.plot:
             self.plot_all()
@@ -123,58 +132,58 @@ class InsideString(object):
     def _create_weight_table(self):
         """Create the rule table."""
 
-        self.weight_rule = (
-            (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-            (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
-            (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1),
-            (1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1),
-            (1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0),
-            (1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1),
-            (1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1),
-            (1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1),
-            (1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0),
-            (1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1),
-            (1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1),
-            (1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1),
-            (1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0),
-            (1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1),
-            (1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1),
-            (1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1),
-            (0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-            (0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0),
-            (0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0),
-            (0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0),
-            (0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0),
-            (0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0),
-            (0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0),
-            (0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0),
-            (0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0),
-            (0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0),
-            (0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0),
-            (0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0),
-            (0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0),
-            (0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0),
-            (0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0),
-            (0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0),
-            (0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-            (0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0),
-            (0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0),
-            (0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0),
-            (0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0),
-            (0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0),
-            (0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0),
-            (0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0),
-            (0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0),
-            (0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0),
-            (0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0),
-            (0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0),
-            (0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1),
-            (0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1),
-            (0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1),
-            (0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1),
+        _weight_rule = (
+            (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),  # 2048
+            (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),  # 2049
+            (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1),  # 2051
+            (1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1),  # 2055
+            (1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0),  # 2304
+            (1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1),  # 2305
+            (1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1),  # 2307
+            (1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1),  # 2311
+            (1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0),  # 2432
+            (1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1),  # 2433
+            (1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1),  # 2435
+            (1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1),  # 2439
+            (1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0),  # 2496
+            (1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1),  # 2497
+            (1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1),  # 2499
+            (1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1),  # 2503
+            (0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),  # 1024
+            (0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0),  # 1088
+            (0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0),  # 1216
+            (0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0),  # 1472
+            (0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0),  # 1056
+            (0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0),  # 1120
+            (0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0),  # 1248
+            (0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0),  # 1504
+            (0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0),  # 1072
+            (0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0),  # 1136
+            (0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0),  # 1264
+            (0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0),  # 1520
+            (0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0),  # 1080
+            (0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0),  # 1144
+            (0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0),  # 1272
+            (0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0),  # 1528
+            (0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0),  # 512
+            (0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0),  # 520
+            (0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0),  # 536
+            (0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0),  # 568
+            (0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0),  # 516
+            (0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0),  # 524
+            (0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0),  # 540
+            (0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0),  # 572
+            (0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0),  # 518
+            (0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0),  # 526
+            (0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0),  # 542
+            (0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0),  # 574
+            (0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1),  # 519
+            (0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1),  # 527
+            (0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1),  # 543
+            (0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1),  # 575
         )
 
-        weight_list = np.array([
+        _weight_list = np.array([
             -2., -1.5, -0.5, 0.,
             -1.5, -1., 0., 0.5,
             -0.5, 0., 1., 1.5,
@@ -189,15 +198,17 @@ class InsideString(object):
             0., 0.5, 1.5, 2.,
         ])
 
-        self.weight_list = np.exp(- self.beta * weight_list)
+
+        self.weight_rule = [int(''.join(map(str, t)), 2) for t in _weight_rule]
+        self.weight_list = np.exp(- self.beta * _weight_list)
         self.weight_table = {k: v for k, v in
                              zip(self.weight_rule, self.weight_list)}
 
     def _create_truth_table(self, i, nn2):
-        truth_table = [False, False, False]
-        truth_table[int(i) - 1] = True
-        truth_table += [self.occupied[nn2[str(i)]] for i in range(4, 13)]
-        truth_table = tuple(truth_table)
+        truth_table = [0, 0, 0]
+        truth_table[int(i) - 1] = 1
+        truth_table += [1 if self.occupied[_nn2] else 0 for _nn2 in nn2]
+        truth_table = int(''.join(map(str, truth_table)), 2)
         return truth_table
 
     def append_new_growing_point(self, pos):
@@ -211,10 +222,7 @@ class InsideString(object):
         self.growing_points: dict {(x, y): weight}:
         """
         pos_x, pos_y = pos
-        if pos_x % 2 == 0:
-            even_or_odd = 'even'
-        elif pos_x % 2 == 1:
-            even_or_odd = 'odd'
+        even_or_odd = 'even' if pos_x % 2 == 0 else 'odd'
 
         # 新たに追加された点の第一近傍を取得
         nn = getattr(self, 'get_nn1_' + even_or_odd)(pos_x, pos_y)
@@ -223,10 +231,7 @@ class InsideString(object):
             if self.occupied[(x, y)]:
                 continue
             # その点の第一近傍を取得
-            if even_or_odd == 'even':
-                even_or_odd_ = 'odd'
-            elif even_or_odd == 'odd':
-                even_or_odd_ = 'even'
+            even_or_odd_ = 'odd' if even_or_odd == 'even' else 'even'
             nn1 = getattr(self, 'get_nn1_' + even_or_odd_)(x, y)
             nn1 = {i: pos for i, pos in nn1.items() if self.occupied[pos]}
             # 第一近傍がひとつだけ占有されている場合以外は飛ばす
@@ -248,11 +253,7 @@ class InsideString(object):
     def cleanup_growing_point(self):
         for pos in self.growing_points.keys():
             pos_x, pos_y = pos
-            if pos_x % 2 == 0:
-                even_or_odd = 'even'
-            elif pos_x % 2 == 1:
-                even_or_odd = 'odd'
-
+            even_or_odd = 'even' if pos_x % 2 == 0 else 'odd'
             nn1 = getattr(self, 'get_nn1_' + even_or_odd)(pos_x, pos_y)
             nn1 = {i: pos for i, pos in nn1.items() if self.occupied[pos]}
             if len(nn1) != 1:
@@ -267,46 +268,46 @@ class InsideString(object):
     def get_nn1_even(self, x, y):
         """格子座標(x, y)の第一近傍の点の座標を返す(xが偶数の時)"""
         return {
-            '1': (x - 1 % self.kagome_Lx, y),
+            '1': ((x - 1) % self.kagome_Lx, y),
             '2': (x + 1, y),
-            '3': (x + 1, y - 1 % self.kagome_Ly),
+            '3': (x + 1, (y - 1) % self.kagome_Ly),
         }
 
     def get_nn1_odd(self, x, y):
         """格子座標(x, y)の第一近傍の点の座標を返す(xが奇数の時)"""
         return {
             '1': (x - 1, y),
-            '2': (x - 1, y + 1 % self.kagome_Ly),
-            '3': (x + 1 % self.kagome_Lx, y),
+            '2': (x - 1, (y + 1) % self.kagome_Ly),
+            '3': ((x + 1) % self.kagome_Lx, y),
         }
 
     def get_nn2_even(self, x, y):
         """格子座標(x, y)の第二近傍の点の座標を返す(xが偶数の時)"""
-        return {
-            '4':  (x - 2 % self.kagome_Lx, y + 1 % self.kagome_Ly),
-            '5':  (x - 1 % self.kagome_Lx, y + 1 % self.kagome_Ly),
-            '6':  (x, y + 1 % self.kagome_Ly),
-            '7':  (x + 2 % self.kagome_Lx, y),
-            '8':  (x + 3 % self.kagome_Lx, y - 1 % self.kagome_Ly),
-            '9':  (x + 2 % self.kagome_Lx, y - 1 % self.kagome_Ly),
-            '10': (x, y - 1 % self.kagome_Ly),
-            '11': (x - 1 % self.kagome_Lx, y - 1 % self.kagome_Ly),
-            '12': (x - 2 % self.kagome_Lx, y)
-        }
+        return [
+            ((x - 2) % self.kagome_Lx, (y + 1) % self.kagome_Ly),
+            ((x - 1) % self.kagome_Lx, (y + 1) % self.kagome_Ly),
+            (x, (y + 1) % self.kagome_Ly),
+            ((x + 2) % self.kagome_Lx, y),
+            ((x + 3) % self.kagome_Lx, (y - 1) % self.kagome_Ly),
+            ((x + 2) % self.kagome_Lx, (y - 1) % self.kagome_Ly),
+            (x, (y - 1) % self.kagome_Ly),
+            ((x - 1) % self.kagome_Lx, (y - 1) % self.kagome_Ly),
+            ((x - 2) % self.kagome_Lx, y)
+        ]
 
     def get_nn2_odd(self, x, y):
         """格子座標(x, y)の第二近傍の点の座標を返す(xが奇数の時)"""
-        return {
-            '4':  (x - 2 % self.kagome_Lx, y),
-            '5':  (x - 3 % self.kagome_Lx, y + 1 % self.kagome_Ly),
-            '6':  (x - 2 % self.kagome_Lx, y + 1 % self.kagome_Ly),
-            '7':  (x, y + 1 % self.kagome_Ly),
-            '8':  (x + 1 % self.kagome_Lx, y + 1 % self.kagome_Ly),
-            '9':  (x + 2 % self.kagome_Lx, y),
-            '10': (x + 2 % self.kagome_Lx, y - 1 % self.kagome_Ly),
-            '11': (x + 1 % self.kagome_Lx, y - 1 % self.kagome_Ly),
-            '12': (x, y - 1 % self.kagome_Ly)
-        }
+        return [
+            ((x - 2) % self.kagome_Lx, y),
+            ((x - 3) % self.kagome_Lx, (y + 1) % self.kagome_Ly),
+            ((x - 2) % self.kagome_Lx, (y + 1) % self.kagome_Ly),
+            (x, (y + 1) % self.kagome_Ly),
+            ((x + 1) % self.kagome_Lx, (y + 1) % self.kagome_Ly),
+            ((x + 2) % self.kagome_Lx, y),
+            ((x + 2) % self.kagome_Lx, (y - 1) % self.kagome_Ly),
+            ((x + 1) % self.kagome_Lx, (y - 1) % self.kagome_Ly),
+            (x, (y - 1) % self.kagome_Ly)
+        ]
 
     def plot_all(self):
         """軸の設定，三角格子の描画，線分描画要素の用意などを行う
@@ -400,16 +401,13 @@ class InsideString(object):
         index = np.random.choice(range(len(positions)), p=weights)
         x, y = positions[index]
         self.occupied[x, y] = True
-        self.G.add_node('({}, {})'.format(x, y))
-
-        if x % 2 == 0:
-            even_or_odd = 'even'
-        elif x % 2 == 1:
-            even_or_odd = 'odd'
-        nn1 = getattr(self, 'get_nn1_' + even_or_odd)(x, y)
-        for pos in nn1.values():
-            if self.occupied[pos]:
-                self.G.add_edge(str(pos), '({}, {})'.format(x, y))
+        if self.record_networks:
+            self.G.add_node('({}, {})'.format(x, y))
+            even_or_odd = 'even' if x % 2 == 0 else 'odd'
+            nn1 = getattr(self, 'get_nn1_' + even_or_odd)(x, y)
+            for pos in nn1.values():
+                if self.occupied[pos]:
+                    self.G.add_edge(str(pos), '({}, {})'.format(x, y))
 
         self.cleanup_growing_point()
         self.append_new_growing_point((x, y))
@@ -435,7 +433,8 @@ if __name__ == '__main__':
         'boundary': {'h': 'periodic', 'v': 'periodic'},
         # 'boundary': {'h': 'reflective', 'v': 'reflective'},
         'plot': True,
-        'plot_surface': True,
+        'plot_surface': False,
+        'record_networks': False,
         'interval': 1,
     }
 
