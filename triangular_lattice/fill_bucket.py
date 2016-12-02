@@ -5,6 +5,8 @@
 
 
 from growing_string import Main
+from triangular import LatticeTriangular as LT
+from strings import String
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri
@@ -149,17 +151,17 @@ class FillBucket(object):
 
 
 if __name__ == '__main__':
-    L = 60
+    L = 6
     frames = 1000
 
     params = {
-        'Lx': L,
-        'Ly': L,
+        'Lx': 6,
+        'Ly': 5,
         'frames': frames,
         'beta': 0.,
         'weight_const': 0.,
-        # 'boundary': {'h': 'periodic', 'v': 'periodic'},
-        'boundary': {'h': 'reflective', 'v': 'reflective'},
+        'boundary': {'h': 'periodic', 'v': 'periodic'},
+        # 'boundary': {'h': 'reflective', 'v': 'reflective'},
         'plot': False,
         'plot_surface': False,
         'interval': 0,
@@ -169,10 +171,32 @@ if __name__ == '__main__':
     # main = Main(strings=[{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4, 2]}],
     #             **params
     #             )
-    main = Main(strings=[{'id': 1, 'x': L / 2, 'y': L / 2, 'vec': [0, 4, 2]}],
-                **params
-                )
+    # main = Main(strings=[{'id': 1, 'x': L / 2, 'y': L / 2, 'vec': [0, 4, 2]}],
+    #             **params
+    #             )
     # bucket = FillBucket(main, plot_type='fill')
+    # bucket = FillBucket(main)
+
+    class Main(object):
+        def __init__(self, Lx, Ly, boundary, **otherparams):
+            self.lattice = LT(
+                np.zeros((Lx, Ly), dtype=np.int),
+                scale=float(max(Lx, Ly)),
+                boundary=boundary
+            )
+            self.lattice_X = self.lattice.coordinates_x.reshape(
+                self.lattice.Lx,
+                self.lattice.Ly
+            )
+            self.lattice_Y = self.lattice.coordinates_y.reshape(
+                self.lattice.Lx,
+                self.lattice.Ly
+            )
+            self.strings = [String(self.lattice,
+                                   id=1, x=1, y=2, vec=[0, 4, 2])
+                            ]
+
+    main = Main(**params)
     bucket = FillBucket(main)
     # bucket.plot_all(plot_type='point')
     bucket.plot_all(plot_type='fill')
