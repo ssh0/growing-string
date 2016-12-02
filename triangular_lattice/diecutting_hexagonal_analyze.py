@@ -188,6 +188,17 @@ def result_length_of_sub_dist():
     plt.show()
 
 def result_N_ave():
+    def modified_gamma(x, a, scale):
+        # loc = c * a + d
+        loc = 0.
+        return gamma.pdf(x, a=a, loc=loc, scale=scale)
+
+    def modified_gamma_2(x, scale):
+        a = 3.
+        loc = 0.
+        return gamma.pdf(x, a=a, loc=loc, scale=scale)
+
+    import math
 
     betas = []
     a = []
@@ -213,20 +224,35 @@ def result_N_ave():
         ax.plot(Ls, M_ave, '.', label=r'$\beta = %2.2f$' % beta,
                 color=cm.viridis(float(i) / len(fpath)))
 
-        popt = curve_fit(gamma.pdf, xdata=Ls, ydata=M_ave, p0=[2.5, -5., 10.])[0]
+        # popt = curve_fit(gamma.pdf, xdata=Ls, ydata=M_ave, p0=[2.5, 10.])[0]
+        popt = curve_fit(modified_gamma, xdata=Ls, ydata=M_ave, p0=[2.5, 10.])[0]
+        # popt = curve_fit(modified_gamma_2, xdata=Ls, ydata=M_ave, p0=[10.])[0]
+
         print beta, popt
         betas.append(beta)
+
+        # a.append(popt[0])
+        # loc.append(popt[1])
+        # scale.append(popt[2])
+
         a.append(popt[0])
-        loc.append(popt[1])
-        scale.append(popt[2])
+        scale.append(popt[1])
+
+        # scale.append(popt[0])
 
         x = np.linspace(0, max(Ls), num=5*max(Ls))
-        ax.plot(x, gamma.pdf(x, a=popt[0], loc=popt[1], scale=popt[2]),
+        # ax.plot(x, gamma.pdf(x, a=popt[0], loc=popt[1], scale=popt[2]),
+        #             '-', label=r'fitted $\beta = %2.2f$' % beta,
+        #             color=cm.viridis(float(i) / len(fpath)))
+        ax.plot(x, modified_gamma(x, a=popt[0], scale=popt[1]),
                     '-', label=r'fitted $\beta = %2.2f$' % beta,
                     color=cm.viridis(float(i) / len(fpath)))
+        # ax.plot(x, modified_gamma_2(x, scale=popt[0]),
+        #             '-', label=r'fitted $\beta = %2.2f$' % beta,
+        #             color=cm.viridis(float(i) / len(fpath)))
 
     ax.legend(loc='best')
-    ax.set_ylim((0., 0.1))
+    ax.set_ylim((0., 0.05))
     ax.set_title('Strings in hexagonal region' +
                 ' (sample: {})'.format(num_of_strings))
     ax.set_xlabel(r'Cutting size $L$')
@@ -239,17 +265,35 @@ def result_N_ave():
     loc = np.array(loc)
     scale = np.array(scale)
 
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
+    # fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
+    # ax1.plot(betas, a, 'o')
+    # [ax.set_xlabel(r'$\beta$') for ax in [ax1, ax2, ax3]]
+    # [ax.set_xlim((0, 11)) for ax in [ax1, ax2, ax3]]
+    # ax1.set_ylabel(r'Shape parameter: $a$')
+    # ax2.plot(betas, loc, 'o')
+    # ax2.set_ylabel(r'Translation parameter: $x_{0}$')
+    # # ax3.plot(-betas, -scale)  # お試し
+    # ax3.plot(betas, scale, 'o')
+    # ax3.set_ylabel(r'Scale parameter: $\theta$')
+    # plt.show()
+
+    fig, (ax1, ax2) = plt.subplots(2, 1)
+    ax1.set_title(r'Fitting parameter (fixed: $x_{0} = 0$)')
     ax1.plot(betas, a, 'o')
-    [ax.set_xlabel(r'$\beta$') for ax in [ax1, ax2, ax3]]
-    [ax.set_xlim((0, 11)) for ax in [ax1, ax2, ax3]]
+    [ax.set_xlabel(r'$\beta$') for ax in [ax1, ax2]]
+    [ax.set_xlim((0, 11)) for ax in [ax1, ax2]]
     ax1.set_ylabel(r'Shape parameter: $a$')
-    ax2.plot(betas, loc, 'o')
-    ax2.set_ylabel(r'Translation parameter: $x_{0}$')
-    # ax3.plot(-betas, -scale)  # お試し
-    ax3.plot(betas, scale, 'o')
-    ax3.set_ylabel(r'Scale parameter: $\theta$')
+    ax2.plot(betas, scale, 'o')
+    ax2.set_ylabel(r'Scale parameter: $\theta$')
     plt.show()
+
+    # fig, ax = plt.subplots(1, 1)
+    # ax.set_title(r'Fitting parameter (fixed: $a = 3$, $x_{0} = 0$)')
+    # ax.plot(betas, scale, 'o')
+    # ax.set_xlim((0, 11))
+    # ax.set_xlabel(r'$\beta$')
+    # ax.set_ylabel(r'Scale parameter: $\theta$')
+    # plt.show()
 
 ## for N_sub ===========
 # result_N_sub()
