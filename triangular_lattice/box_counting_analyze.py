@@ -36,7 +36,8 @@ import glob
 # fpath = sorted(glob.glob('./results/data/box_counting/2016-11-19/*.npz'))
 # fpath = sorted(glob.glob('./results/data/box_counting/2016-11-25/*.npz'))
 # fpath = sorted(glob.glob('./results/data/box_counting/2016-11-26/*.npz'))
-fpath = sorted(glob.glob('./results/data/box_counting/2016-11-28/*.npz'))
+# fpath = sorted(glob.glob('./results/data/box_counting/2016-11-28/*.npz'))
+fpath = sorted(glob.glob('./results/data/box_counting/2016-12-01/*.npz'))
 
 
 def plot_Ds():
@@ -123,8 +124,8 @@ def plot_Ds():
     ax.set_title('Fractal dimension')
     ax.set_xlabel(r'$T$')
     # ax.set_ylim((0., 2.5))
-    # ax.set_ylabel(r'$D(T)$')
-    ax.set_ylabel(r'$\sigma(D(T))$')
+    ax.set_ylabel(r'$D(T)$')
+    # ax.set_ylabel(r'$\sigma(D(T))$')
 
     plt.show()
 

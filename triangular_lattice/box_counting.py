@@ -11,7 +11,8 @@
 
 from diecutting import DieCutting
 from growing_string import Main
-from optimize import Optimize_powerlaw
+# from optimize import Optimize_powerlaw
+from optimize import Optimize_linear
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -20,7 +21,8 @@ import save_meta
 
 
 class BoxCounting(object):
-    def __init__(self, frames, beta, c=0.4, L_power=10):
+    def __init__(self, frames, beta, c=0.4, L_power=10, save_fitting=False,
+                 save_fitting_dir=''):
         L = 2 ** L_power
         if frames > (L*L) * 0.9:
             raise ValueError("`frames` must be smaller than 0.9 times `L` * `L`.")
@@ -30,6 +32,8 @@ class BoxCounting(object):
         self.beta = beta
         self.weight_const = c
         self.t = 1
+        self.save_fitting = save_fitting
+        self.save_fitting_dir = save_fitting_dir
 
     def start(self):
         self.get_cutting_sizes()
@@ -63,29 +67,40 @@ class BoxCounting(object):
         else:
             index_end = -(index_end - 1)
 
-        optimizer = Optimize_powerlaw(
-            args=(self.cutting_size_xs[:index_end], N[:index_end]),
-            parameters=[0., -1.5])
+        # optimizer = Optimize_powerlaw(
+        #     args=(self.cutting_size_xs[:index_end], N[:index_end]),
+        #     parameters=[100., -1.5])
+        optimizer = Optimize_linear(
+            args=(np.log(self.cutting_size_xs[:index_end]), np.log(N[:index_end])),
+            parameters=[-1.5, np.log(100)])
         result = optimizer.fitting()
+        # print result
 
-        if self.t in np.linspace(1, self.frames, num=10, dtype=np.int):
-            fig, ax = plt.subplots()
-            ax.loglog(self.cutting_size_xs, N, 'o')
-            ax.loglog(self.cutting_size_xs[:index_end],
-                      optimizer.fitted(self.cutting_size_xs[:index_end]),
-                      '-', label='D = %f' % result['D'])
-            ax.legend(loc='best')
-            ax.set_title('Coarse graining (frames = {})'.format(self.t))
-            ax.set_xlabel(r'$\varepsilon$')
-            ax.set_ylabel(r'$N(\varepsilon)$')
-            filename = "results/img/box_counting/2016-11-25/"
-            filename += "beta=%2.2f_fitting_frame=%d.png" % (self.beta, self.t)
-            fig.savefig(filename)
+        if self.save_fitting:
+            if self.t in np.linspace(1, self.frames, num=10, dtype=np.int):
+                fig, ax = plt.subplots()
+                ax.loglog(self.cutting_size_xs, N, 'o')
+                # ax.loglog(self.cutting_size_xs[:index_end],
+                #         optimizer.fitted(self.cutting_size_xs[:index_end]),
+                #         '-', label='D = %f' % result['D'])
+                ax.loglog(self.cutting_size_xs[:index_end],
+                        np.exp(optimizer.fitted(np.log(self.cutting_size_xs[:index_end]))),
+                        '-', label='D = %f' % result['a'])
+                ax.legend(loc='best')
+                ax.set_title('Coarse graining (frames = {})'.format(self.t))
+                ax.set_xlabel(r'$\varepsilon$')
+                ax.set_ylabel(r'$N(\varepsilon)$')
+                # filename = "results/img/box_counting/2016-11-25/"
+                filename = self.save_fitting_dir
+                filename += "beta=%2.2f_fitting_frame=%d.png" % (self.beta, self.t)
+                fig.savefig(filename)
+                plt.close(fig)
 
         self.pbar.update(1)
         self.t += 1
 
-        return result['D']
+        # return result['D']
+        return result['a']
 
     def get_cutting_sizes(self):
         """Create the cutting size list for simulation
@@ -124,23 +139,23 @@ class BoxCounting(object):
         return
 
     def diecutting_one_cluster(self, width, height, x0, y0):
-        # return np.any(self.x > x0)         and \
-        #     np.any(self.y > y0)            and \
-        #     np.any(self.x < (x0 + width))  and \
-        #     np.any(self.y < (y0 + height))
-        return np.any(
-            np.logical_and(
-                np.logical_and(self.x > x0, self.x < (x0 + width)),
-                np.logical_and(self.y > y0, self.y < (y0 + height)),
-            )
-        )
+        return np.any(self.x > x0)         and \
+            np.any(self.y > y0)            and \
+            np.any(self.x < (x0 + width))  and \
+            np.any(self.y < (y0 + height))
+        # return np.any(
+        #     np.logical_and(
+        #         np.logical_and(self.x > x0, self.x < (x0 + width)),
+        #         np.logical_and(self.y > y0, self.y < (y0 + height)),
+        #     )
+        # )
 
     def get_results_each_subclusters(self):
         res = []
         for width, height in self.cutting_sizes:
             N = int(self.L / width)
-            x0s = np.arange(N) * width - 0.25
-            y0s = np.arange(N) * height - (np.sqrt(3) / 4)
+            x0s = np.arange(N + 1) * width - 0.25
+            y0s = np.arange(N + 1) * height - (np.sqrt(3) / 4)
             _res = 0
             for x0 in x0s:
                 for y0 in y0s:
@@ -154,7 +169,9 @@ def main(beta, plot):
     print "beta = %2.2f" % beta
 
     frames = 500
-    box_counting = BoxCounting(frames=frames, beta=beta, L_power=10)
+    box_counting = BoxCounting(frames=frames, beta=beta, L_power=10,
+                               save_fitting=True,
+                               save_fitting_dir="results/img/box_counting/2016-12-01/")
     box_counting.start()
     Ds = -np.array(box_counting.main.pre_func_res)
     T = np.arange(frames)
@@ -162,7 +179,8 @@ def main(beta, plot):
     # base = "results/data/box_counting/beta=%2.2f_" % beta
     # base = "results/data/box_counting/modified/beta=%2.2f_" % beta
     # base = "results/data/box_counting/2016-11-19/beta=%2.2f_" % beta  # εの刻みを多くしたバージョン
-    base = "results/data/box_counting/2016-11-25/beta=%2.2f_" % beta  # クラスターがシミュレーションじのシステムサイズ内に入るようにしたもの
+    # base = "results/data/box_counting/2016-11-25/beta=%2.2f_" % beta  # クラスターがシミュレーションじのシステムサイズ内に入るようにしたもの
+    base = "results/data/box_counting/2016-12-01/beta=%2.2f_" % beta  # + optimizeのアルゴリズムを変更
     save_data.save(base, beta=beta, L=box_counting.L,
                    frames=box_counting.frames, Ds=Ds)
     save_meta.save(base, beta=beta, L=box_counting.L,
