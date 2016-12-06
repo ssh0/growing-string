@@ -1,0 +1,511 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+BoxCounting	box_counting.py	/^class BoxCounting(object):$/;"	c
+Count_in_r	eden/mass_in_r_eden.py	/^class Count_in_r(Eden):$/;"	c
+Count_in_r	mass_in_r.py	/^class Count_in_r(Main):$/;"	c
+Cs	correlation_analyze.py	/^        Cs = data['Cs']$/;"	v
+D	radius_analyze.py	/^    D = data['D']$/;"	v
+DieCutting	diecutting.py	/^class DieCutting(object):$/;"	c
+DieCuttingHexagonal	diecutting/diecutting_hexagonal.py	/^class DieCuttingHexagonal(object):$/;"	c
+Ds	mass_in_r_analyze.py	/^    Ds = []$/;"	v
+Ds	radius_analyze.py	/^Ds = []$/;"	v
+Eden	eden/eden.py	/^class Eden():$/;"	c
+FillBucket	fill_bucket.py	/^class FillBucket(object):$/;"	c
+FilledKagome	filled_kagome.py	/^class FilledKagome:$/;"	c
+InsideString	growing_string_inside.py	/^class InsideString(object):$/;"	c
+Interactive	interactive.py	/^class Interactive(Gtk.Window):$/;"	c
+L	correlation.py	/^    L = 1000$/;"	v
+L	correlation_analyze.py	/^        L = data['L']$/;"	v
+L	diecutting.py	/^        L=60,$/;"	v
+L	distances_analyze.py	/^    L = data['L']$/;"	v
+L	fill_bucket.py	/^    L = 6$/;"	v	class:FillBucket
+L	filled_kagome_radius.py	/^    L = 2000$/;"	v
+L	growing_string_inside.py	/^    L = 60$/;"	v	class:InsideString
+L	growing_string_inside_run.py	/^L = 60$/;"	v
+L	growing_string_run.py	/^    L = 2 ** 7$/;"	v
+L	mass_in_r_analyze.py	/^        L = data['L']$/;"	v
+L	max_radius.py	/^L = 1000$/;"	v
+L	radius_analyze.py	/^    L = data['L']$/;"	v
+L	radius_run.py	/^L = 1000$/;"	v
+L	straight_lines.py	/^L = 60$/;"	v
+LatticeTriangular	triangular.py	/^class LatticeTriangular(object):$/;"	c
+Lp	correlation_analyze.py	/^        Lp = data['Lp']$/;"	v
+M	mass_in_r_analyze.py	/^        M = data['M']$/;"	v
+Main	base.py	/^class Main:$/;"	c
+Main	fill_bucket.py	/^    class Main(object):$/;"	c	class:FillBucket
+Main	growing_string.py	/^class Main(base):$/;"	c
+Main	moving_string/moving_string.py	/^class Main(base):$/;"	c
+Main	moving_string/moving_string_deadlock.py	/^class Main(base):$/;"	c
+Main	moving_string/moving_string_elastic.py	/^class Main(base):$/;"	c
+Main	moving_string/moving_string_interact.py	/^class Main(base):$/;"	c
+Main	moving_string/moving_string_middle.py	/^class Main(base):$/;"	c
+Main	vicsek/vicsek.py	/^class Main:$/;"	c
+Main	vicsek/vicsek_moviewriter.py	/^class Main:$/;"	c
+Main	vicsek/vicsek_self-avoiding.py	/^class Main:$/;"	c
+Main	vicsek/vicsek_self-avoiding_fix.py	/^class Main:$/;"	c
+N	moving_string/moving_string.py	/^    N = 5$/;"	v
+N	moving_string/moving_string_elastic.py	/^    N = 10$/;"	v	class:Main
+N	moving_string/moving_string_interact.py	/^    N = 1$/;"	v	class:Main
+N	moving_string/moving_string_middle.py	/^    N = 1$/;"	v	class:Main
+N_r	eden/mass_in_r_eden.py	/^    N_r = 100$/;"	v
+Optimize_linear	optimize.py	/^class Optimize_linear:$/;"	c
+Optimize_powerlaw	optimize.py	/^class Optimize_powerlaw:$/;"	c
+Parameters	growing_string_inside_run.py	/^class Parameters(dict):$/;"	c
+Point	vicsek/vicsek.py	/^class Point:$/;"	c
+Point	vicsek/vicsek_moviewriter.py	/^class Point:$/;"	c
+Point	vicsek/vicsek_self-avoiding.py	/^class Point:$/;"	c
+Point	vicsek/vicsek_self-avoiding_fix.py	/^class Point:$/;"	c
+Points	vicsek/vicsek_moviewriter.py	/^class Points:$/;"	c
+Points	vicsek/vicsek_self-avoiding.py	/^class Points:$/;"	c
+Points	vicsek/vicsek_self-avoiding_fix.py	/^class Points:$/;"	c
+R	filled_kagome_radius.py	/^        R = []$/;"	v
+Radius	eden/radius_eden.py	/^class Radius(Eden):$/;"	c
+Radius	radius.py	/^class Radius(Main):$/;"	c
+Roughness	roughness.py	/^class Roughness(Main):$/;"	c
+Roughness_Eden	eden/roughness_eden.py	/^class Roughness_Eden(Eden):$/;"	c
+Rs	filled_kagome_radius.py	/^    Rs = []$/;"	v
+String	strings.py	/^class String:$/;"	c
+T	moving_string/moving_string_analyze.py	/^T = data['T']$/;"	v
+T	moving_string/moving_string_deadlock.py	/^    T = []$/;"	v
+T	moving_string/moving_string_deadlock.py	/^    T = np.array(T)$/;"	v
+VisualizeRules	inside_rule_visualize.py	/^class VisualizeRules(InsideString):$/;"	c
+X	straight_lines.py	/^        X = range(max(_straight_lines) + 1 if len(_straight_lines) > 0 else 2)$/;"	v
+__init__	base.py	/^    def __init__(self, Lx=40, Ly=40, N=4, size=[5, 4, 10, 12], interval=50,$/;"	m	class:Main
+__init__	box_counting.py	/^    def __init__(self, frames, beta, c=0.4, L_power=10, save_fitting=False,$/;"	m	class:BoxCounting
+__init__	diecutting.py	/^    def __init__(self, L=60, frames=1000, sample=3, beta=2., c=1.5,$/;"	m	class:DieCutting
+__init__	diecutting/diecutting_hexagonal.py	/^    def __init__(self, params):$/;"	m	class:DieCuttingHexagonal
+__init__	eden/eden.py	/^    def __init__(self, Lx=60, Ly=60, plot=True, frames=1000,$/;"	m	class:Eden
+__init__	eden/mass_in_r_eden.py	/^    def __init__(self):$/;"	m	class:Count_in_r
+__init__	eden/radius_eden.py	/^    def __init__(self):$/;"	m	class:Radius
+__init__	eden/roughness_eden.py	/^    def __init__(self, L=60, frames=1000):$/;"	m	class:Roughness_Eden
+__init__	fill_bucket.py	/^        def __init__(self, Lx, Ly, boundary, **otherparams):$/;"	m	class:FillBucket.Main
+__init__	fill_bucket.py	/^    def __init__(self, main, plot_type='fill'):$/;"	m	class:FillBucket
+__init__	filled_kagome.py	/^    def __init__(self, L=60, frames=1000, beta=0.):$/;"	m	class:FilledKagome
+__init__	growing_string.py	/^    def __init__(self, Lx=40, Ly=40,$/;"	m	class:Main
+__init__	growing_string_inside.py	/^    def __init__(self, Lx=40, Ly=40,$/;"	m	class:InsideString
+__init__	inside_rule_visualize.py	/^    def __init__(self, rule):$/;"	m	class:VisualizeRules
+__init__	interactive.py	/^    def __init__(self, func, title='title', **kwargs):$/;"	m	class:Interactive
+__init__	mass_in_r.py	/^    def __init__(self):$/;"	m	class:Count_in_r
+__init__	moving_string/moving_string.py	/^    def __init__(self, Lx=40, Ly=40, N=4, size=[5, 4, 10, 12], plot=True):$/;"	m	class:Main
+__init__	moving_string/moving_string_deadlock.py	/^    def __init__(self, Lx=40, Ly=40, N=1, size=[10], plot=False):$/;"	m	class:Main
+__init__	moving_string/moving_string_elastic.py	/^    def __init__(self, Lx=40, Ly=40, N=4, size=[5, 4, 10, 12], plot=True):$/;"	m	class:Main
+__init__	moving_string/moving_string_interact.py	/^    def __init__(self, Lx=40, Ly=40, N=4, size=[5, 4, 10, 12], interval=1000):$/;"	m	class:Main
+__init__	moving_string/moving_string_middle.py	/^    def __init__(self, Lx=40, Ly=40, N=4, size=[5, 4, 10, 12], interval=1000):$/;"	m	class:Main
+__init__	optimize.py	/^    def __init__(self, args, parameters):$/;"	m	class:Optimize_linear
+__init__	optimize.py	/^    def __init__(self, args, parameters):$/;"	m	class:Optimize_powerlaw
+__init__	radius.py	/^    def __init__(self, params):$/;"	m	class:Radius
+__init__	roughness.py	/^    def __init__(self, L=60, frames=1000, beta=0.):$/;"	m	class:Roughness
+__init__	strings.py	/^    def __init__(self, lattice, id, x, y, vec):$/;"	m	class:String
+__init__	triangular.py	/^    def __init__(self, lattice=None, boundary={'h': 'periodic', 'v': 'periodic'},$/;"	m	class:LatticeTriangular
+__init__	vicsek/vicsek.py	/^    def __init__(self, Lx=20, Ly=20, rho=0.9, lattice_scale=10, T=0.4, plot=True,$/;"	m	class:Main
+__init__	vicsek/vicsek.py	/^    def __init__(self, id, ix, iy):$/;"	m	class:Point
+__init__	vicsek/vicsek_moviewriter.py	/^    def __init__(self, Lx=20, Ly=20, rho=0.9, lattice_scale=10, T=0.4, plot=True,$/;"	m	class:Main
+__init__	vicsek/vicsek_moviewriter.py	/^    def __init__(self, N, Lx, Ly):$/;"	m	class:Points
+__init__	vicsek/vicsek_moviewriter.py	/^    def __init__(self, id, ix, iy):$/;"	m	class:Point
+__init__	vicsek/vicsek_self-avoiding.py	/^    def __init__(self, Lx=6, Ly=6, rho=0.9, lattice_scale=10, T=0.4, plot=True,$/;"	m	class:Main
+__init__	vicsek/vicsek_self-avoiding.py	/^    def __init__(self, N, Lx, Ly):$/;"	m	class:Points
+__init__	vicsek/vicsek_self-avoiding.py	/^    def __init__(self, id, ix, iy):$/;"	m	class:Point
+__init__	vicsek/vicsek_self-avoiding_fix.py	/^    def __init__(self, Lx=6, Ly=6, rho=0.9, lattice_scale=10, T=0.4, plot=True,$/;"	m	class:Main
+__init__	vicsek/vicsek_self-avoiding_fix.py	/^    def __init__(self, N, Lx, Ly):$/;"	m	class:Points
+__init__	vicsek/vicsek_self-avoiding_fix.py	/^    def __init__(self, id, ix, iy):$/;"	m	class:Point
+__update_dict	growing_string.py	/^    def __update_dict(self, dict, key, value):$/;"	m	class:Main	file:
+_calc_max_radius	max_radius.py	/^def _calc_max_radius(beta):$/;"	f
+_create_truth_table	growing_string_inside.py	/^    def _create_truth_table(self, i, nn2):$/;"	m	class:InsideString
+_create_weight_table	growing_string_inside.py	/^    def _create_weight_table(self):$/;"	m	class:InsideString
+_dot	correlation.py	/^def _dot(i, j):$/;"	f
+_straight_lines	straight_lines.py	/^        _straight_lines = []$/;"	v
+_to_radian	correlation.py	/^def _to_radian(i, j):$/;"	f
+add_label	interactive.py	/^    def add_label(self, kw, parent):$/;"	m	class:Interactive
+append	strings.py	/^    def append(self, x):$/;"	m	class:String
+append_new_growing_point	growing_string_inside.py	/^    def append_new_growing_point(self, pos):$/;"	m	class:InsideString
+args	box_counting_run.py	/^    args = parser.parse_args()$/;"	v
+ax	distances_analyze.py	/^    ax = fig.add_subplot(111, projection='3d')$/;"	v
+ax	max_radius.py	/^ax = fig.add_subplot(111)$/;"	v
+ax	radius_analyze.py	/^ax = fig.add_subplot(111)$/;"	v
+ax	straight_lines.py	/^    ax = fig.add_subplot(111, projection='3d')$/;"	v
+b1	interactive.py	/^    def b1(button):$/;"	m	class:Interactive
+basedir_img	growing_string_inside_run.py	/^basedir_img = "results\/img\/inside\/"$/;"	v
+basedir_video	growing_string_inside_run.py	/^basedir_video = "results\/video\/inside\/"$/;"	v
+beta	box_counting.py	/^    beta = 10.$/;"	v
+beta	correlation_analyze.py	/^        beta = data['beta']$/;"	v
+beta	count_bending.py	/^                beta=0.,$/;"	v
+beta	diecutting.py	/^        beta=0.,$/;"	v
+beta	diecutting/diecutting_hexagonal_run.py	/^    beta = 10.$/;"	v
+beta	distances.py	/^    beta = 20.$/;"	v
+beta	distances_analyze.py	/^    beta = data['beta']$/;"	v
+beta	growing_string_inside.py	/^    beta = 0.$/;"	v	class:InsideString
+beta	growing_string_inside_run.py	/^beta = 0.$/;"	v
+beta	growing_string_sticky.py	/^                beta=10.$/;"	v
+beta	mass_in_r_analyze.py	/^        beta = data['beta']$/;"	v
+beta	radius_analyze.py	/^    beta = data['beta']$/;"	v
+beta	radius_run.py	/^beta = 8.$/;"	v
+betas	correlation.py	/^    betas = [0., 5., 10., 15., 20.]$/;"	v
+betas	filled_kagome_radius.py	/^    betas = [0., 5., 10., 15., 20.]$/;"	v
+betas	max_radius.py	/^betas = np.linspace(0., 10., num=betas_num)$/;"	v
+betas	radius_analyze.py	/^betas = [0., 2., 4., 6., 8.]$/;"	v
+betas_num	max_radius.py	/^betas_num = 10$/;"	v
+boundary	growing_string_sticky.py	/^                boundary={'h': 'periodic', 'v': 'reflective'},$/;"	v
+bucket	fill_bucket.py	/^    bucket = FillBucket(main)$/;"	v	class:FillBucket
+buttons	interactive.py	/^    buttons = [('b1', b1), ('exit', Gtk.main_quit)]$/;"	v	class:Interactive
+c_start	eden/radius_eden.py	/^    c_start = 100$/;"	v
+cal_order_param	vicsek/vicsek.py	/^    def cal_order_param(self):$/;"	m	class:Main
+cal_order_param	vicsek/vicsek_moviewriter.py	/^    def cal_order_param(self):$/;"	m	class:Main
+cal_order_param	vicsek/vicsek_self-avoiding.py	/^    def cal_order_param(self):$/;"	m	class:Main
+cal_order_param	vicsek/vicsek_self-avoiding_fix.py	/^    def cal_order_param(self):$/;"	m	class:Main
+calc_for_each_size	moving_string/moving_string_deadlock.py	/^def calc_for_each_size(size):$/;"	f
+calc_fractal_dim	box_counting.py	/^    def calc_fractal_dim(self, main, i, s):$/;"	m	class:BoxCounting
+calc_max_radius	max_radius.py	/^def calc_max_radius(beta):$/;"	f
+calc_order_param	correlation.py	/^def calc_order_param(theta):$/;"	f
+calc_radius_of_rotation	eden/radius_eden.py	/^def calc_radius_of_rotation(self):$/;"	f
+calc_radius_of_rotation	filled_kagome.py	/^    def calc_radius_of_rotation(self, lattice):$/;"	m	class:FilledKagome
+calc_radius_of_rotation	radius.py	/^def calc_radius_of_rotation(self, i, s):$/;"	f
+calc_tortuosity_for_each_beta	fractal_dim.py	/^def calc_tortuosity_for_each_beta(ax, i, filename):$/;"	f
+calc_tortuosity_for_each_beta	tortuosity.py	/^def calc_tortuosity_for_each_beta(filename):$/;"	f
+calc_tortuosity_for_each_beta_modified	tortuosity.py	/^def calc_tortuosity_for_each_beta_modified(filename):$/;"	f
+calc_weight	growing_string.py	/^    def calc_weight(self, s, i, r_i=None, r_rev=None):$/;"	m	class:Main
+choose_indexes	correlation.py	/^def choose_indexes(_list, num, L):$/;"	f
+choose_indexes	distances.py	/^def choose_indexes(_list, num, L):$/;"	f
+cleanup_bonding_pairs	growing_string.py	/^    def cleanup_bonding_pairs(self, key, indexes):$/;"	m	class:Main
+cleanup_growing_point	growing_string_inside.py	/^    def cleanup_growing_point(self):$/;"	m	class:InsideString
+combobox_dict	interactive.py	/^    def combobox_dict(self, kw, arg):$/;"	m	class:Interactive
+combobox_str	interactive.py	/^    def combobox_str(self, kw, arg):$/;"	m	class:Interactive
+count_bend	count_bending.py	/^def count_bend(self, i, s):$/;"	f
+count_point_in_r	eden/mass_in_r_eden.py	/^def count_point_in_r(self, N_r):$/;"	f
+count_point_in_r	mass_in_r.py	/^def count_point_in_r(self, s, N_r, r=None):$/;"	f
+count_straight_lines	straight_lines.py	/^def count_straight_lines(s):$/;"	f
+create_doubled_lattice	fill_bucket.py	/^    def create_doubled_lattice(self):$/;"	m	class:FillBucket
+create_random_strings	base.py	/^    def create_random_strings(self, N=3, size=[10, 5, 3]):$/;"	m	class:Main
+create_random_strings	moving_string/moving_string_elastic.py	/^    def create_random_strings(self, N=3, size=[10, 5, 3]):$/;"	m	class:Main
+current_time	filled_kagome_radius.py	/^    current_time = time.strftime("%y%m%d_%H%M%S")$/;"	v
+current_time	growing_string_inside_run.py	/^current_time = time.strftime("%y%m%d_%H%M%S")$/;"	v
+current_time	mass_in_r_analyze.py	/^    current_time = time.strftime("%y%m%d_%H%M%S")$/;"	v
+current_time	radius_run.py	/^current_time = time.strftime("%y%m%d_%H%M%S")$/;"	v
+data	correlation_analyze.py	/^        data = np.load(result_data_path)$/;"	v
+data	distances_analyze.py	/^    data = np.load(result_data_path)$/;"	v
+data	mass_in_r_analyze.py	/^        data = np.load(result_data_path)$/;"	v
+data	moving_string/moving_string_analyze.py	/^data = np.load("2016-07-12_40.npz")$/;"	v
+data	radius_analyze.py	/^    data = np.load(result_data_path)$/;"	v
+data_path	diecutting/result_N_sub.py	/^    data_path = [result_data_path_base + f for f in fn]$/;"	v
+data_path	diecutting/set_data_path.py	/^data_path = [result_data_path_base + f for f in fn]$/;"	v
+define_kagome_lattice	fill_bucket.py	/^    def define_kagome_lattice(self):$/;"	m	class:FillBucket
+df	moving_string/moving_string_analyze.py	/^df = df.T$/;"	v
+df	moving_string/moving_string_analyze.py	/^df = pd.DataFrame(T, index=sizeset)$/;"	v
+diecutting_one_cluster	box_counting.py	/^    def diecutting_one_cluster(self, width, height, x0, y0):$/;"	m	class:BoxCounting
+diecutting_one_cluster	diecutting.py	/^    def diecutting_one_cluster(self, width, height, x0, y0):$/;"	m	class:DieCutting
+diecutting_one_cluster	diecutting/diecutting_hexagonal.py	/^    def diecutting_one_cluster(self, x0, y0, L):$/;"	m	class:DieCuttingHexagonal
+display	interactive.py	/^    def display(self):$/;"	m	class:Interactive
+distance_list	distances_analyze.py	/^    distance_list = data['distance_list']$/;"	v
+dot	correlation.py	/^dot = np.vectorize(_dot)$/;"	v
+dot	growing_string.py	/^    def dot(self, v, w):$/;"	m	class:Main
+dot	moving_string/moving_string_interact.py	/^dot = lambda v, w: results[(w + 6 - v) % 6]$/;"	v
+dot	moving_string/moving_string_middle.py	/^dot = lambda v, w: results[(w + 6 - v) % 6]$/;"	v
+dragended	results/img/inside/d3_viz.html	/^function dragended(d) {$/;"	f
+dragged	results/img/inside/d3_viz.html	/^function dragged(d) {$/;"	f
+dragstarted	results/img/inside/d3_viz.html	/^function dragstarted(d) {$/;"	f
+eden	eden/eden.py	/^    eden = Eden()$/;"	v	class:Eden
+err	radius_analyze.py	/^err = []$/;"	v
+eval_fluctuation_on_surface	roughness.py	/^def eval_fluctuation_on_surface(self, pos, test=False):$/;"	f
+eval_simulation_for_each_string	diecutting/diecutting_hexagonal_run.py	/^def eval_simulation_for_each_string(params):$/;"	f
+eval_simulation_for_one_beta	diecutting/diecutting_hexagonal_run.py	/^def eval_simulation_for_one_beta(beta, num_of_strings=30):$/;"	f
+eval_std_various_width	roughness.py	/^def eval_std_various_width(theta, r, R_t):$/;"	f
+eval_subclusters	diecutting.py	/^    def eval_subclusters(self, width, height, x0, y0):$/;"	m	class:DieCutting
+eval_subclusters	diecutting/diecutting_hexagonal.py	/^    def eval_subclusters(self):$/;"	m	class:DieCuttingHexagonal
+execute	eden/eden.py	/^    def execute(self):$/;"	m	class:Eden
+execute_simulation_for_one_beta	distances.py	/^def execute_simulation_for_one_beta(beta, num_of_strings, L, frames, plot=True,$/;"	f
+f	interactive.py	/^    def f(x=12, y=20, z='III', o=False, i=20):$/;"	m	class:Interactive
+fig	distances_analyze.py	/^    fig = plt.figure()$/;"	v
+fig	max_radius.py	/^fig = plt.figure()$/;"	v
+fig	radius_analyze.py	/^fig = plt.figure()$/;"	v
+fig	straight_lines.py	/^    fig = plt.figure()$/;"	v
+fill_inside	fill_bucket.py	/^    def fill_inside(self, arr):$/;"	m	class:FillBucket
+filled_kagome	filled_kagome.py	/^    filled_kagome = FilledKagome(**setup)$/;"	v	class:FilledKagome
+filled_kagome	filled_kagome_radius.py	/^            filled_kagome = FilledKagome(beta=beta, L=L, frames=frames)$/;"	v
+fitted	optimize.py	/^    def fitted(self, x):$/;"	m	class:Optimize_linear
+fitted	optimize.py	/^    def fitted(self, x):$/;"	m	class:Optimize_powerlaw
+fitting	optimize.py	/^    def fitting(self):$/;"	m	class:Optimize_linear
+fitting	optimize.py	/^    def fitting(self):$/;"	m	class:Optimize_powerlaw
+fitting	roughness.py	/^def fitting(ax, x, y, index_start, index_end):$/;"	f
+fn	diecutting/result_N_sub.py	/^    fn = [$/;"	v
+fn	diecutting/set_data_path.py	/^fn = [$/;"	v
+fn	fractal_dim.py	/^        fn = result_data_path['%d-3' % i]$/;"	v
+fn	max_radius.py	/^fn = ".\/results\/img\/max_radius\/"$/;"	v
+fn	tortuosity.py	/^        fn = result_data_path['%d-3' % i]$/;"	v
+follow	strings.py	/^    def follow(self, X):$/;"	m	class:String
+fpath	box_counting_analyze.py	/^fpath = sorted(glob.glob('.\/results\/data\/box_counting\/2016-12-01\/*.npz'))$/;"	v
+frames	correlation.py	/^    frames = 1000$/;"	v
+frames	correlation_analyze.py	/^        frames = data['frames']$/;"	v
+frames	diecutting.py	/^        frames=1000,$/;"	v
+frames	distances_analyze.py	/^    frames = data['frames']$/;"	v
+frames	fill_bucket.py	/^    frames = 1000$/;"	v	class:FillBucket
+frames	filled_kagome_radius.py	/^    frames = 1000$/;"	v
+frames	growing_string_inside.py	/^    frames = 1000$/;"	v	class:InsideString
+frames	growing_string_inside_run.py	/^frames = 200$/;"	v
+frames	growing_string_run.py	/^    frames = 1000$/;"	v
+frames	mass_in_r_analyze.py	/^        frames = data['frames']$/;"	v
+frames	max_radius.py	/^frames = 400$/;"	v
+frames	radius_analyze.py	/^    frames = data['frames']$/;"	v
+frames	radius_run.py	/^frames = 500$/;"	v
+func	optimize.py	/^    def func(self, parameters, x, y):$/;"	m	class:Optimize_linear
+func	optimize.py	/^    def func(self, parameters, x, y):$/;"	m	class:Optimize_powerlaw
+get_bonding_pairs	growing_string.py	/^    def get_bonding_pairs(self, s, indexes):$/;"	m	class:Main
+get_circumfences_of_hexagonal	diecutting/diecutting_hexagonal.py	/^    def get_circumfences_of_hexagonal(self, x0, y0, L):$/;"	m	class:DieCuttingHexagonal
+get_correlation	correlation.py	/^def get_correlation(beta, num_of_strings, L, frames, num_of_pairs=300):$/;"	f
+get_correlation_for_each_string	correlation.py	/^def get_correlation_for_each_string(Lp, L, frames, num_of_pairs):$/;"	f
+get_cutting_sizes	box_counting.py	/^    def get_cutting_sizes(self):$/;"	m	class:BoxCounting
+get_cutting_sizes	diecutting.py	/^    def get_cutting_sizes(self):$/;"	m	class:DieCutting
+get_cutting_sizes	diecutting/diecutting_hexagonal.py	/^    def get_cutting_sizes(self):$/;"	m	class:DieCuttingHexagonal
+get_for_i_periodic	triangular.py	/^    def get_for_i_periodic(self, i):$/;"	m	class:LatticeTriangular
+get_for_i_reflective	triangular.py	/^    def get_for_i_reflective(self, i):$/;"	m	class:LatticeTriangular
+get_for_j_periodic	triangular.py	/^    def get_for_j_periodic(self, j):$/;"	m	class:LatticeTriangular
+get_for_j_reflective	triangular.py	/^    def get_for_j_reflective(self, j):$/;"	m	class:LatticeTriangular
+get_labeled_position	surface.py	/^def get_labeled_position(self, pos, test=False):$/;"	f
+get_mass_in_r_for_one_string	mass_in_r_run.py	/^def get_mass_in_r_for_one_string(L, frames, beta, r=None):$/;"	f
+get_neighbor_xy	growing_string.py	/^    def get_neighbor_xy(self, key):$/;"	m	class:Main
+get_neighbor_xy	moving_string/moving_string_interact.py	/^    def get_neighbor_xy(self, s):$/;"	m	class:Main
+get_neighbor_xy	moving_string/moving_string_middle.py	/^    def get_neighbor_xy(self, s):$/;"	m	class:Main
+get_next_xy	base.py	/^    def get_next_xy(self, x, y, *vec):$/;"	m	class:Main
+get_next_xy	moving_string/moving_string_deadlock.py	/^    def get_next_xy(self, x, y):$/;"	m	class:Main
+get_next_xy	moving_string/moving_string_elastic.py	/^    def get_next_xy(self, x, y, vec):$/;"	m	class:Main
+get_nn1_even	growing_string_inside.py	/^    def get_nn1_even(self, x, y):$/;"	m	class:InsideString
+get_nn1_odd	growing_string_inside.py	/^    def get_nn1_odd(self, x, y):$/;"	m	class:InsideString
+get_nn2_even	growing_string_inside.py	/^    def get_nn2_even(self, x, y):$/;"	m	class:InsideString
+get_nn2_odd	growing_string_inside.py	/^    def get_nn2_odd(self, x, y):$/;"	m	class:InsideString
+get_path_length_and_distances	distances.py	/^def get_path_length_and_distances(beta, num_of_strings, L, frames, num_of_pairs=300):$/;"	f
+get_results_each_subclusters	box_counting.py	/^    def get_results_each_subclusters(self):$/;"	m	class:BoxCounting
+get_results_each_subclusters	diecutting.py	/^    def get_results_each_subclusters(self, sets):$/;"	m	class:DieCutting
+get_results_each_subclusters	diecutting/diecutting_hexagonal.py	/^    def get_results_each_subclusters(self, sets):$/;"	m	class:DieCuttingHexagonal
+get_straight_lines	straight_lines.py	/^def get_straight_lines(l):$/;"	f
+get_surface_points	surface.py	/^def get_surface_points(self, pos):$/;"	f
+get_x	results/img/inside/d3_viz.html	/^function get_x(name) {$/;"	f
+get_y	results/img/inside/d3_viz.html	/^function get_y(name) {$/;"	f
+hbox	interactive.py	/^    hbox = Gtk.HBox(spacing=10)$/;"	v	class:Interactive
+help	box_counting_run.py	/^                        help='parameter beta (inverse temparature)')$/;"	v
+hist	straight_lines.py	/^        hist = np.histogram(_straight_lines, bins=[x + 0.5 for x in X])[0]$/;"	v
+hist_list	straight_lines.py	/^    hist_list = []$/;"	v
+histogram	straight_lines.py	/^    histogram = pad_list(hist_list) \/ float(num_strings)$/;"	v
+index_sorted	roughness.py	/^        index_sorted = np.argsort(theta)$/;"	v
+index_stop	mass_in_r_analyze.py	/^        index_stop = len(r) - 20$/;"	v
+indexes_one_edge	diecutting.py	/^    def indexes_one_edge(self, condition):$/;"	m	class:DieCutting
+init	diecutting.py	/^    def init(self):$/;"	m	class:DieCutting
+init	diecutting/diecutting_hexagonal.py	/^    def init(self):$/;"	m	class:DieCuttingHexagonal
+init	filled_kagome.py	/^    def init(self, L, frames, beta):$/;"	m	class:FilledKagome
+init	growing_string_inside.py	/^    def init(self, Lx, Ly, boundary, initial_state):$/;"	m	class:InsideString
+init_func	base.py	/^        def init_func(*arg):$/;"	f	function:Main.plot_all
+init_func	eden/eden.py	/^        def init_func(*arg):$/;"	f	function:Eden.plot_all
+init_func	growing_string.py	/^        def init_func(*arg):$/;"	f	function:Main.start_animation
+init_func	growing_string_inside.py	/^        def init_func(*arg):$/;"	f	function:InsideString.start_animation
+init_func	vicsek/vicsek.py	/^            def init_func(*arg):$/;"	f	function:Main.__init__
+insert	strings.py	/^    def insert(self, i, x):$/;"	m	class:String
+is_bend1	count_bending.py	/^def is_bend1(a, b):$/;"	f
+is_bend1	count_bending.py	/^is_bend1 = np.vectorize(is_bend1)$/;"	v
+is_bend2	count_bending.py	/^def is_bend2(a, b):$/;"	f
+is_bend2	count_bending.py	/^is_bend2 = np.vectorize(is_bend2)$/;"	v
+is_equal	count_bending.py	/^def is_equal(a, b):$/;"	f
+is_equal	count_bending.py	/^is_equal = np.vectorize(is_equal)$/;"	v
+is_equal	straight_lines.py	/^def is_equal(a, b):$/;"	f
+is_equal	straight_lines.py	/^is_equal = np.vectorize(is_equal)$/;"	v
+is_straight	straight_lines.py	/^def is_straight(_self, i, s):$/;"	f
+it	moving_string/moving_string_deadlock.py	/^    it = pool.imap(calc_for_each_size, sizeset)$/;"	v
+ite	max_radius.py	/^ite = pool.imap(calc_max_radius, betas)$/;"	v
+ite	straight_lines.py	/^    ite = pool.imap(count_straight_lines, range(num_strings))$/;"	v
+label_list	roughness.py	/^        label_list = label_list[index_sorted]$/;"	v
+lattice	triangular.py	/^    lattice = LatticeTriangular($/;"	v	class:LatticeTriangular
+lattice_X	triangular.py	/^    lattice_X = lattice.coordinates_x$/;"	v	class:LatticeTriangular
+lattice_Y	triangular.py	/^    lattice_Y = lattice.coordinates_y$/;"	v	class:LatticeTriangular
+main	base.py	/^    main = Main()$/;"	v	class:Main
+main	box_counting.py	/^def main(beta, plot):$/;"	f
+main	count_bending.py	/^    main = Main(Lx=60, Ly=60, size=[3,] * 1, plot=False, frames=1000,$/;"	v
+main	diecutting.py	/^    main = DieCutting($/;"	v
+main	diecutting/diecutting_hexagonal.py	/^    main = DieCuttingHexagonal(params)$/;"	v
+main	eden/mass_in_r_eden.py	/^    main = Count_in_r()$/;"	v
+main	eden/radius_eden.py	/^    main = Radius()$/;"	v
+main	fill_bucket.py	/^    main = Main(**params)$/;"	v	class:FillBucket
+main	growing_string_inside.py	/^    main = InsideString(initial_state=[(L \/ 2, L \/ 2 - 1)], **params)$/;"	v	class:InsideString
+main	growing_string_inside_run.py	/^main = InsideString(initial_state=[(L \/ 2, L \/ 2 - 1)], **params)$/;"	v
+main	growing_string_run.py	/^    main = Main(strings=[{'id': 1, 'x': L \/ 4, 'y': L \/ 2, 'vec': [0, 4]}],$/;"	v
+main	growing_string_sticky.py	/^    main = Main(Lx=60, Ly=300,$/;"	v
+main	inside_rule_visualize.py	/^def main():$/;"	f
+main	mass_in_r.py	/^def main():$/;"	f
+main	moving_string/moving_string.py	/^    main = Main(Lx=40, Ly=40, N=N, size=[random.randint(4, 12)] * N)$/;"	v
+main	moving_string/moving_string_elastic.py	/^    main = Main(Lx=40, Ly=40, N=N, size=[random.randint(4, 8) for i in range(N)])$/;"	v	class:Main
+main	moving_string/moving_string_interact.py	/^    main = Main(Lx=10, Ly=10, N=N, size=[random.randint(4, 12)] * N)$/;"	v	class:Main
+main	moving_string/moving_string_middle.py	/^    main = Main(Lx=10, Ly=10, N=N, size=[random.randint(4, 12)] * N)$/;"	v	class:Main
+main	radius.py	/^def main(beta=0., output=None, L=60, frames=1000, plot=False,$/;"	f
+main	roughness.py	/^        main = Roughness(L=120, frames=2000, beta=0.)$/;"	v
+main	vicsek/vicsek.py	/^    main = Main(Lx=40, Ly=40, rho=0.9, T=0.41, frames=300, plot=True)$/;"	v	class:Main
+main	vicsek/vicsek_moviewriter.py	/^    main = Main(Lx=40, Ly=40, rho=0.9, T=0.41, frames=300, plot=True)$/;"	v	class:Main
+main	vicsek/vicsek_self-avoiding.py	/^    main = Main(Lx=6, Ly=6, rho=0.9, T=0.1, frames=10000, plot=True)$/;"	v	class:Main
+main	vicsek/vicsek_self-avoiding_fix.py	/^    main = Main(Lx=10, Ly=10, rho=0.6, T=1.5, frames=1000, plot=True)$/;"	v	class:Main
+mass_in_r_for_one_beta	mass_in_r_run.py	/^def mass_in_r_for_one_beta(beta, num_of_strings, L, frames, plot=True,$/;"	f
+max_dists	max_radius.py	/^max_dists = []$/;"	v
+modified_gamma	diecutting/diecutting_hexagonal_analyze.py	/^    def modified_gamma(x, a, scale):$/;"	f	function:result_N_ave
+modified_gamma_2	diecutting/diecutting_hexagonal_analyze.py	/^    def modified_gamma_2(x, scale):$/;"	f	function:result_N_ave
+n	moving_string/moving_string_analyze.py	/^n = 256$/;"	v
+neighbor_of	triangular.py	/^    def neighbor_of(self, i, j):$/;"	m	class:LatticeTriangular
+num_of_pairs	correlation.py	/^    num_of_pairs = 300$/;"	v
+num_of_strings	correlation.py	/^                       num_of_strings=num_of_strings,$/;"	v
+num_of_strings	correlation.py	/^    num_of_strings = 30$/;"	v
+num_of_strings	correlation_analyze.py	/^        num_of_strings = data['num_of_strings']$/;"	v
+num_of_strings	diecutting/diecutting_hexagonal_run.py	/^    num_of_strings = 30$/;"	v
+num_of_strings	distances_analyze.py	/^    num_of_strings = data['num_of_strings']$/;"	v
+num_of_strings	filled_kagome_radius.py	/^    num_of_strings = 30$/;"	v
+num_of_strings	mass_in_r_analyze.py	/^        num_of_strings = data['num_of_strings']$/;"	v
+num_of_strings	radius_analyze.py	/^    num_of_strings = data['num_of_strings']$/;"	v
+num_of_strings	radius_run.py	/^               num_of_strings=num_of_strings,$/;"	v
+num_of_strings	radius_run.py	/^num_of_strings = 100$/;"	v
+num_strings	straight_lines.py	/^num_strings = 10$/;"	v
+on_combo_changed	interactive.py	/^        def on_combo_changed(combo):$/;"	f	function:Interactive.combobox_dict
+on_combo_changed	interactive.py	/^        def on_combo_changed(combo):$/;"	f	function:Interactive.combobox_str
+on_switch_activated	interactive.py	/^        def on_switch_activated(switch, gparam):$/;"	f	function:Interactive.switch
+optimizer	count_bending.py	/^    optimizer = Optimize_powerlaw(args=(steps, pairs), parameters=[0., 1.])$/;"	v
+optimizer	eden/mass_in_r_eden.py	/^    optimizer = Optimize_powerlaw(args=(r[:-20], res[:-20]), parameters=[0., 2.])$/;"	v
+optimizer	eden/radius_eden.py	/^    optimizer = Optimize_powerlaw(args=(steps[c_start:],$/;"	v
+optimizer	mass_in_r_analyze.py	/^        optimizer = Optimize_powerlaw(args=(r[:index_stop],$/;"	v
+pad_list	straight_lines.py	/^def pad_list(lst):$/;"	f
+parameters	eden/radius_eden.py	/^                                  parameters=[0., 0.5])$/;"	v
+parameters	mass_in_r_analyze.py	/^                                    parameters=[0.1, 2.])$/;"	v
+params	diecutting/diecutting_hexagonal.py	/^    params = {$/;"	v
+params	distances.py	/^    params = {$/;"	v
+params	fill_bucket.py	/^    params = {$/;"	v	class:FillBucket
+params	growing_string_inside.py	/^    params = {$/;"	v	class:InsideString
+params	growing_string_inside_run.py	/^params = Parameters({$/;"	v
+params	growing_string_run.py	/^    params = {$/;"	v
+params	mass_in_r_run.py	/^        params = {$/;"	v
+params	max_radius.py	/^params = {$/;"	v
+params	moving_string/moving_string_deadlock.py	/^params = dict(Lx=40, Ly=40, plot=False)$/;"	v
+params	save_data.py	/^    params = {$/;"	v
+params	save_meta.py	/^    params = {$/;"	v
+parser	box_counting_run.py	/^    parser = argparse.ArgumentParser()$/;"	v
+path_length	distances_analyze.py	/^    path_length = data['path_length']$/;"	v
+plot	diecutting.py	/^        plot=True)$/;"	v
+plot_Ds	box_counting_analyze.py	/^def plot_Ds():$/;"	f
+plot_Ds_3d	box_counting_analyze.py	/^def plot_Ds_3d():$/;"	f
+plot_all	base.py	/^    def plot_all(self):$/;"	m	class:Main
+plot_all	eden/eden.py	/^    def plot_all(self):$/;"	m	class:Eden
+plot_all	fill_bucket.py	/^    def plot_all(self, plot_type=None):$/;"	m	class:FillBucket
+plot_all	filled_kagome.py	/^    def plot_all(self):$/;"	m	class:FilledKagome
+plot_all	growing_string.py	/^    def plot_all(self):$/;"	m	class:Main
+plot_all	growing_string_inside.py	/^    def plot_all(self):$/;"	m	class:InsideString
+plot_optimized	radius_run.py	/^                    plot_optimized=False))$/;"	v
+plot_order_param	vicsek/vicsek.py	/^    def plot_order_param(self, num):$/;"	m	class:Main
+plot_order_param	vicsek/vicsek_moviewriter.py	/^    def plot_order_param(self, num):$/;"	m	class:Main
+plot_order_param	vicsek/vicsek_self-avoiding.py	/^    def plot_order_param(self, num):$/;"	m	class:Main
+plot_order_param	vicsek/vicsek_self-avoiding_fix.py	/^    def plot_order_param(self, num):$/;"	m	class:Main
+plot_points	eden/eden.py	/^    def plot_points(self):$/;"	m	class:Eden
+plot_points	growing_string_inside.py	/^    def plot_points(self):$/;"	m	class:InsideString
+plot_result	roughness.py	/^def plot_result(x, y, ax=None):$/;"	f
+plot_string	base.py	/^    def plot_string(self):$/;"	m	class:Main
+plot_string	growing_string.py	/^    def plot_string(self):$/;"	m	class:Main
+plot_to_veirfy	roughness.py	/^def plot_to_veirfy(theta, r, R_t, label_list):$/;"	f
+pool	max_radius.py	/^pool = Pool(6)$/;"	v
+pool	moving_string/moving_string_deadlock.py	/^    pool = Pool(6)$/;"	v
+pool	straight_lines.py	/^    pool = Pool(7)$/;"	v
+pp	growing_string.py	/^pp = pprint.PrettyPrinter(indent=4)$/;"	v
+pre_function	count_bending.py	/^                pre_function=count_bend)$/;"	v
+print_debug	base.py	/^def print_debug(arg):$/;"	f
+print_debug	eden/eden.py	/^def print_debug(arg):$/;"	f
+print_debug	eden/eden_sticky.py	/^def print_debug(arg):$/;"	f
+print_debug	moving_string/moving_string_deadlock.py	/^def print_debug(arg):$/;"	f
+print_debug	moving_string/moving_string_elastic.py	/^def print_debug(arg):$/;"	f
+putright	strings.py	/^    def putright(self, x):$/;"	m	class:String
+r	mass_in_r_analyze.py	/^        r = data['r']$/;"	v
+r	roughness.py	/^        r = r[index_sorted]$/;"	v
+radius_of_rotation	eden/radius_eden.py	/^    radius_of_rotation = main.post_func_res$/;"	v
+randm	vicsek/vicsek.py	/^randm = random.random$/;"	v
+randm	vicsek/vicsek_self-avoiding_fix.py	/^randm = random.random$/;"	v
+res	radius_run.py	/^res = []$/;"	v
+res	radius_run.py	/^res = np.array(res)$/;"	v
+result	count_bending.py	/^    result = optimizer.fitting()$/;"	v
+result	eden/mass_in_r_eden.py	/^    result = optimizer.fitting()$/;"	v
+result	eden/radius_eden.py	/^    result = optimizer.fitting()$/;"	v
+result	mass_in_r_analyze.py	/^        result = optimizer.fitting()$/;"	v
+result_N_ave	diecutting/diecutting_hexagonal_analyze.py	/^def result_N_ave():$/;"	f
+result_N_sub	diecutting/result_N_sub.py	/^def result_N_sub(path):$/;"	f
+result_data_path	fractal_dim.py	/^    result_data_path = {$/;"	v
+result_data_path	tortuosity.py	/^    result_data_path = {$/;"	v
+result_data_path_base	diecutting/result_N_sub.py	/^    result_data_path_base = "..\/results\/data\/diecutting\/"$/;"	v
+result_data_path_base	diecutting/set_data_path.py	/^result_data_path_base = "..\/results\/data\/diecutting\/"$/;"	v
+result_data_paths	mass_in_r_analyze.py	/^    result_data_paths = [$/;"	v
+result_data_paths	radius_analyze.py	/^result_data_paths = [$/;"	v
+result_image_path	mass_in_r_analyze.py	/^    result_image_path = "results\/img\/mass_in_r\/raw"$/;"	v
+result_length_of_sub_dist	diecutting/diecutting_hexagonal_analyze.py	/^def result_length_of_sub_dist():$/;"	f
+result_set	diecutting.py	/^    result_set = {$/;"	v
+result_set	diecutting/diecutting_hexagonal.py	/^    result_set = {$/;"	v
+result_set	diecutting/diecutting_hexagonal_run.py	/^result_set = {$/;"	v
+result_size_dist_3d	diecutting/result_size_dist_3d.py	/^def result_size_dist_3d(path):$/;"	f
+result_size_dist_pcolor	diecutting/diecutting_hexagonal_analyze.py	/^def result_size_dist_pcolor():$/;"	f
+results	moving_string/moving_string_interact.py	/^results = (1., 0.5, -0.5, -1., -0.5, 0.5)$/;"	v
+results	moving_string/moving_string_middle.py	/^results = (1., 0.5, -0.5, -1., -0.5, 0.5)$/;"	v
+rint	vicsek/vicsek.py	/^rint = random.randint$/;"	v
+rint	vicsek/vicsek_self-avoiding_fix.py	/^rint = random.randint$/;"	v
+row	interactive.py	/^    row = Gtk.ListBoxRow()$/;"	v	class:Interactive
+sample	box_counting_run.py	/^    sample = 4$/;"	v
+sample	diecutting.py	/^        sample=3,$/;"	v
+sample_num	max_radius.py	/^sample_num = 10$/;"	v
+save	save_data.py	/^def save(base, after='', timestamp=True, **kwargs):$/;"	f
+save	save_meta.py	/^def save(base, after='', timestamp=True, **kwargs):$/;"	f
+save_image	growing_string_inside_run.py	/^    def save_image(self):$/;"	m	class:Parameters
+save_to_json	growing_string_inside_run.py	/^def save_to_json():$/;"	f
+save_video	growing_string_inside_run.py	/^    def save_video(self):$/;"	m	class:Parameters
+scale_bar	interactive.py	/^    def scale_bar(self, kw, arg, argtype):$/;"	m	class:Interactive
+scale_interact	interactive.py	/^        def scale_interact(scale, _type):$/;"	f	function:Interactive.scale_bar
+set_labels	surface.py	/^def set_labels(self, position):$/;"	f
+set_value	interactive.py	/^    def set_value(self, kw, new_value):$/;"	m	class:Interactive
+setup	filled_kagome.py	/^    setup = {$/;"	v	class:FilledKagome
+sizeset	moving_string/moving_string_analyze.py	/^sizeset = data['sizeset']$/;"	v
+sizeset	moving_string/moving_string_deadlock.py	/^    sizeset = np.unique(np.logspace(3., 8., num=50, base=2, dtype=np.int))$/;"	v
+start	box_counting.py	/^    def start(self):$/;"	m	class:BoxCounting
+start	diecutting.py	/^    def start(self, result_set, visualize=True):$/;"	m	class:DieCutting
+start	diecutting/diecutting_hexagonal.py	/^    def start(self, result_set, visualize=True):$/;"	m	class:DieCuttingHexagonal
+start	growing_string_inside.py	/^    def start(self):$/;"	m	class:InsideString
+start_animation	growing_string.py	/^    def start_animation(self, filename=""):$/;"	m	class:Main
+start_animation	growing_string_inside.py	/^    def start_animation(self, filename=""):$/;"	m	class:InsideString
+start_time	correlation.py	/^    start_time = time.strftime("%y%m%d_%H%M%S")$/;"	v
+status_change	interactive.py	/^    def status_change(self):$/;"	m	class:Interactive
+steps	count_bending.py	/^    steps = range(len(pairs))$/;"	v
+steps	eden/radius_eden.py	/^    steps = np.arange((len(radius_of_rotation)))$/;"	v
+steps	straight_lines.py	/^steps = 1000$/;"	v
+store_bonding_pairs	growing_string_run.py	/^    def store_bonding_pairs(self, i, s):$/;"	f
+straight_lines	straight_lines.py	/^    straight_lines = []$/;"	v
+strings	growing_string_sticky.py	/^                strings=[{'id': 1, 'x': 10, 'y': 0, 'vec': [0] * 60}],$/;"	v
+switch	interactive.py	/^    def switch(self, kw, arg):$/;"	m	class:Interactive
+theta	roughness.py	/^        theta = theta[index_sorted]$/;"	v
+ticked	results/img/inside/d3_viz.html	/^  function ticked() {$/;"	f
+to_radian	correlation.py	/^to_radian = np.vectorize(_to_radian)$/;"	v
+to_realspace	triangular.py	/^    def to_realspace(self):$/;"	m	class:LatticeTriangular
+trial	moving_string/moving_string_deadlock.py	/^trial = 10000$/;"	v
+triang	triangular.py	/^    triang = tri.Triangulation(lattice_X, lattice_Y)$/;"	v	class:LatticeTriangular
+type_check	interactive.py	/^    def type_check(self, arg):$/;"	m	class:Interactive
+update	base.py	/^    def update(self, num=0):$/;"	m	class:Main
+update	eden/eden.py	/^    def update(self, num=0):$/;"	m	class:Eden
+update	growing_string.py	/^    def update(self, num=0):$/;"	m	class:Main
+update	growing_string_inside.py	/^    def update(self, num=0):$/;"	m	class:InsideString
+update	moving_string/moving_string_deadlock.py	/^    def update(self, num=0):$/;"	m	class:Main
+update	moving_string/moving_string_elastic.py	/^    def update(self, num=0):$/;"	m	class:Main
+update	moving_string/moving_string_interact.py	/^    def update(self, num=0):$/;"	m	class:Main
+update	moving_string/moving_string_middle.py	/^    def update(self, num=0):$/;"	m	class:Main
+update	vicsek/vicsek.py	/^    def update(self, num):$/;"	m	class:Main
+update	vicsek/vicsek_moviewriter.py	/^    def update(self, num):$/;"	m	class:Main
+update	vicsek/vicsek_self-avoiding.py	/^    def update(self, num):$/;"	m	class:Main
+update	vicsek/vicsek_self-avoiding_fix.py	/^    def update(self, num):$/;"	m	class:Main
+update_each_string	growing_string.py	/^    def update_each_string(self, key):$/;"	m	class:Main
+update_pos	strings.py	/^    def update_pos(self):$/;"	m	class:String
+update_quivers	vicsek/vicsek.py	/^    def update_quivers(self):$/;"	m	class:Main
+update_quivers	vicsek/vicsek_moviewriter.py	/^    def update_quivers(self):$/;"	m	class:Main
+update_starting_point	strings.py	/^    def update_starting_point(self, x, y):$/;"	m	class:String
+update_vec	strings.py	/^    def update_vec(self, vec):$/;"	m	class:String
+view_network	growing_string_inside_run.py	/^def view_network(plot=True, save_image=False):$/;"	f
+visualize_max_size_of_sub_cluster	diecutting.py	/^def visualize_max_size_of_sub_cluster(self):$/;"	f
+visualize_max_size_of_sub_cluster	diecutting/diecutting_hexagonal.py	/^def visualize_max_size_of_sub_cluster(self):$/;"	f
+visualize_num_of_sub_clusters	diecutting.py	/^def visualize_num_of_sub_clusters(self):$/;"	f
+visualize_num_of_sub_clusters	diecutting/diecutting_hexagonal.py	/^def visualize_num_of_sub_clusters(self):$/;"	f
+visualize_results	diecutting.py	/^    def visualize_results(self):$/;"	m	class:DieCutting
+visualize_results	diecutting/diecutting_hexagonal.py	/^    def visualize_results(self):$/;"	m	class:DieCuttingHexagonal
+visualize_size_dist_of_sub_clusters	diecutting.py	/^def visualize_size_dist_of_sub_clusters(self):$/;"	f
+visualize_size_dist_of_sub_clusters	diecutting/diecutting_hexagonal.py	/^def visualize_size_dist_of_sub_clusters(self):$/;"	f
+w	interactive.py	/^    w = Interactive(f, x=10, y=(1., 100.),$/;"	v	class:Interactive
+zpos	distances_analyze.py	/^    zpos = hist.T$/;"	v
