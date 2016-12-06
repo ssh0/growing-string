@@ -1,0 +1,40 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+DieCuttingHexagonal	diecutting_hexagonal.py	/^class DieCuttingHexagonal(object):$/;"	c
+__init__	diecutting_hexagonal.py	/^    def __init__(self, params):$/;"	m	class:DieCuttingHexagonal
+beta	diecutting_hexagonal_run.py	/^    beta = 10.$/;"	v
+data_path	result_N_sub.py	/^    data_path = [result_data_path_base + f for f in fn]$/;"	v
+data_path	set_data_path.py	/^data_path = [result_data_path_base + f for f in fn]$/;"	v
+diecutting_one_cluster	diecutting_hexagonal.py	/^    def diecutting_one_cluster(self, x0, y0, L):$/;"	m	class:DieCuttingHexagonal
+eval_simulation_for_each_string	diecutting_hexagonal_run.py	/^def eval_simulation_for_each_string(params):$/;"	f
+eval_simulation_for_one_beta	diecutting_hexagonal_run.py	/^def eval_simulation_for_one_beta(beta, num_of_strings=30):$/;"	f
+eval_subclusters	diecutting_hexagonal.py	/^    def eval_subclusters(self):$/;"	m	class:DieCuttingHexagonal
+fn	result_N_sub.py	/^    fn = [$/;"	v
+fn	set_data_path.py	/^fn = [$/;"	v
+get_circumfences_of_hexagonal	diecutting_hexagonal.py	/^    def get_circumfences_of_hexagonal(self, x0, y0, L):$/;"	m	class:DieCuttingHexagonal
+get_cutting_sizes	diecutting_hexagonal.py	/^    def get_cutting_sizes(self):$/;"	m	class:DieCuttingHexagonal
+get_results_each_subclusters	diecutting_hexagonal.py	/^    def get_results_each_subclusters(self, sets):$/;"	m	class:DieCuttingHexagonal
+init	diecutting_hexagonal.py	/^    def init(self):$/;"	m	class:DieCuttingHexagonal
+main	diecutting_hexagonal.py	/^    main = DieCuttingHexagonal(params)$/;"	v
+modified_gamma	diecutting_hexagonal_analyze.py	/^    def modified_gamma(x, a, scale):$/;"	f	function:result_N_ave
+modified_gamma_2	diecutting_hexagonal_analyze.py	/^    def modified_gamma_2(x, scale):$/;"	f	function:result_N_ave
+num_of_strings	diecutting_hexagonal_run.py	/^    num_of_strings = 30$/;"	v
+params	diecutting_hexagonal.py	/^    params = {$/;"	v
+result_N_ave	diecutting_hexagonal_analyze.py	/^def result_N_ave():$/;"	f
+result_N_sub	result_N_sub.py	/^def result_N_sub(path):$/;"	f
+result_data_path_base	result_N_sub.py	/^    result_data_path_base = "..\/results\/data\/diecutting\/"$/;"	v
+result_data_path_base	set_data_path.py	/^result_data_path_base = "..\/results\/data\/diecutting\/"$/;"	v
+result_length_of_sub_dist	diecutting_hexagonal_analyze.py	/^def result_length_of_sub_dist():$/;"	f
+result_set	diecutting_hexagonal.py	/^    result_set = {$/;"	v
+result_set	diecutting_hexagonal_run.py	/^result_set = {$/;"	v
+result_size_dist_3d	result_size_dist_3d.py	/^def result_size_dist_3d(path):$/;"	f
+result_size_dist_pcolor	diecutting_hexagonal_analyze.py	/^def result_size_dist_pcolor():$/;"	f
+start	diecutting_hexagonal.py	/^    def start(self, result_set, visualize=True):$/;"	m	class:DieCuttingHexagonal
+visualize_max_size_of_sub_cluster	diecutting_hexagonal.py	/^def visualize_max_size_of_sub_cluster(self):$/;"	f
+visualize_num_of_sub_clusters	diecutting_hexagonal.py	/^def visualize_num_of_sub_clusters(self):$/;"	f
+visualize_results	diecutting_hexagonal.py	/^    def visualize_results(self):$/;"	m	class:DieCuttingHexagonal
+visualize_size_dist_of_sub_clusters	diecutting_hexagonal.py	/^def visualize_size_dist_of_sub_clusters(self):$/;"	f

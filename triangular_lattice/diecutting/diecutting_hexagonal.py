@@ -7,15 +7,41 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.axes3d import Axes3D
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from optimize import Optimize_linear
-import itertools
-from diecutting import DieCutting
+from growing_string import Main
 
 
-class DieCuttingHexagonal(DieCutting):
+class DieCuttingHexagonal(object):
     def __init__(self, params):
-        parent = DieCutting(**params)
-        self.__dict__ = parent.__dict__
+        # parent = DieCutting(**params)
+        # self.__dict__ = parent.__dict__
+
+        self.L = params['L']
+        self.frames = params['frames']
+        self.beta = params['beta']
+        self.weight_const = 1.5
+        self.plot_for_veirification = params['plot']
+
+    def init(self):
+        self.main = Main(
+            Lx=self.L,
+            Ly=self.L,
+            size=[3,] * 1,
+            plot=False,
+            frames=self.frames,
+            beta=self.beta,
+            weight_const=self.weight_const,
+            strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4]}]
+        )
+
+        self.s = self.main.strings[0]
+
+        self.lattice_X = self.main.lattice_X
+        self.lattice_Y = self.main.lattice_Y
+        self.x = self.lattice_X[np.array(self.s.pos.T).tolist()]
+        self.y = self.lattice_Y[np.array(self.s.pos.T).tolist()]
 
     def start(self, result_set, visualize=True):
         self.init()
@@ -115,6 +141,10 @@ class DieCuttingHexagonal(DieCutting):
 
         return res
 
+    def visualize_results(self):
+        for k in self.res.keys():
+            getattr(self, 'visualize_' + k)(self)
+
 
 def visualize_num_of_sub_clusters(self):
     fig, ax = plt.subplots()
@@ -192,8 +222,8 @@ if __name__ == '__main__':
     params = {
         'L': 100,
         'frames': 2000,
-        'beta': 0.,
-        'plot': True
+        'beta': 4.,
+        'plot': False
     }
     main = DieCuttingHexagonal(params)
     main.visualize_num_of_sub_clusters = visualize_num_of_sub_clusters

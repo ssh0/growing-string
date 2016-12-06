@@ -10,6 +10,9 @@ import numpy as np
 import itertools
 from tqdm import tqdm
 import time
+
+import sys, os
+sys.path.append(os.pardir)
 import save_data
 
 
@@ -79,7 +82,7 @@ def eval_simulation_for_one_beta(beta, num_of_strings=30):
     else:
         size_dist = []
 
-    save_data.save("results/data/diecutting/beta=%2.2f_" % beta,
+    save_data.save("../results/data/diecutting/beta=%2.2f_" % beta,
                    beta=beta, num_of_strings=num_of_strings,
                    L=params['L'], frames=params['frames'],
                    Ls=Ls, N_sub=N_sub, size_dist=size_dist)
@@ -87,8 +90,8 @@ def eval_simulation_for_one_beta(beta, num_of_strings=30):
 
 if __name__ == '__main__':
     # === Averaging (sample N: num_of_strings) ===
-    beta = 6.
-    num_of_strings = 100
+    beta = 10.
+    num_of_strings = 30
     print "beta = %2.2f" % beta
     eval_simulation_for_one_beta(beta, num_of_strings)
 
