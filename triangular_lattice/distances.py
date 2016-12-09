@@ -10,7 +10,7 @@ import numpy as np
 from tqdm import tqdm
 import time
 import random
-import save_data
+import save_data as sd
 
 
 def choose_indexes(_list, num, L):
@@ -55,13 +55,15 @@ def get_path_length_and_distances(beta, num_of_strings, L, frames, num_of_pairs=
     lattice_distance = lattices[:, 1] - lattices[:, 0]
     return list(distance), list(lattice_distance)
 
-def execute_simulation_for_one_beta(beta, num_of_strings, L, frames, plot=True,
+def execute_simulation_for_one_beta(beta, num_of_strings, L, frames, 
+                                    num_of_pairs, plot=True,
                                     save_image=False, save_data=False):
-    print "beta = %2.2f" % beta
+    print "beta = %2.2f, frames = %d" % (beta, frames)
     distance_list = []
     path_length = []
     for s in tqdm(range(num_of_strings)):
-        d, pl = get_path_length_and_distances(beta, num_of_strings, L, frames)
+        d, pl = get_path_length_and_distances(beta, num_of_strings, L, frames,
+                                              num_of_pairs)
         distance_list.append(d)
         path_length.append(pl)
 
@@ -69,7 +71,11 @@ def execute_simulation_for_one_beta(beta, num_of_strings, L, frames, plot=True,
     path_length = np.array(path_length).flatten()
 
     if save_data:
-        save_data.save("results/data/distances/beta=%2.2f_" % beta,
+        # sd.save("results/data/distances/beta=%2.2f_" % beta,
+        #                beta=beta, num_of_strings=num_of_strings,
+        #                L=L, frames=frames, distance_list=distance_list,
+        #                path_length=path_length)
+        sd.save("results/data/distances/frames=%d_beta=%2.2f_" % (frames, beta),
                        beta=beta, num_of_strings=num_of_strings,
                        L=L, frames=frames, distance_list=distance_list,
                        path_length=path_length)
@@ -97,14 +103,25 @@ def execute_simulation_for_one_beta(beta, num_of_strings, L, frames, plot=True,
 
 
 if __name__ == '__main__':
+    import argparse
 
-    beta = 20.
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--beta', type=float, nargs=1,
+                        help='parameter beta (inverse temparature)')
+    parser.add_argument('--frames', type=int, nargs=1,
+                        help='simulation frames')
+    args = parser.parse_args()
+    beta = args.beta[0]
+    frames = args.frames[0]
+
     params = {
         'num_of_strings': 30,
-        'L': 2000,
-        'frames': 1000,
+        'L': (frames + 1) * 2,
+        'frames': frames,
         'plot': False,
         'save_image': False,
+        # 'num_of_pairs': 300,
+        'num_of_pairs': 100,
         'save_data': True,
     }
 
