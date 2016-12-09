@@ -21,7 +21,7 @@ class DieCuttingHexagonal(object):
         self.L = params['L']
         self.frames = params['frames']
         self.beta = params['beta']
-        self.weight_const = 1.5
+        self.weight_const = 0.4
         self.plot_for_veirification = params['plot']
 
     def init(self):
@@ -33,7 +33,10 @@ class DieCuttingHexagonal(object):
             frames=self.frames,
             beta=self.beta,
             weight_const=self.weight_const,
-            strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4]}]
+            ## open
+            # strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4]}]
+            ## loop
+            strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4, 2]}]
         )
 
         self.s = self.main.strings[0]

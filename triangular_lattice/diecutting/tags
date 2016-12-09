@@ -13,26 +13,38 @@ diecutting_one_cluster	diecutting_hexagonal.py	/^    def diecutting_one_cluster(
 eval_simulation_for_each_string	diecutting_hexagonal_run.py	/^def eval_simulation_for_each_string(params):$/;"	f
 eval_simulation_for_one_beta	diecutting_hexagonal_run.py	/^def eval_simulation_for_one_beta(beta, num_of_strings=30):$/;"	f
 eval_subclusters	diecutting_hexagonal.py	/^    def eval_subclusters(self):$/;"	m	class:DieCuttingHexagonal
+fit_a_scale	result_N_ave.py	/^def fit_a_scale(path, fixed_loc):$/;"	f
+fit_a_scale	result_n0.py	/^def fit_a_scale(path, fixed_loc):$/;"	f
+fit_a_x0_scale	result_N_ave.py	/^def fit_a_x0_scale(path):$/;"	f
+fit_a_x0_scale	result_n0.py	/^def fit_a_x0_scale(path):$/;"	f
+fit_scale	result_N_ave.py	/^def fit_scale(path, fixed_a, fixed_loc):$/;"	f
+fit_scale	result_n0.py	/^def fit_scale(path, fixed_a, fixed_loc):$/;"	f
 fn	result_N_sub.py	/^    fn = [$/;"	v
 fn	set_data_path.py	/^fn = [$/;"	v
 get_circumfences_of_hexagonal	diecutting_hexagonal.py	/^    def get_circumfences_of_hexagonal(self, x0, y0, L):$/;"	m	class:DieCuttingHexagonal
 get_cutting_sizes	diecutting_hexagonal.py	/^    def get_cutting_sizes(self):$/;"	m	class:DieCuttingHexagonal
 get_results_each_subclusters	diecutting_hexagonal.py	/^    def get_results_each_subclusters(self, sets):$/;"	m	class:DieCuttingHexagonal
 init	diecutting_hexagonal.py	/^    def init(self):$/;"	m	class:DieCuttingHexagonal
+load_data	result_N_ave.py	/^def load_data(_path):$/;"	f
+load_data	result_n0.py	/^def load_data(_path):$/;"	f
 main	diecutting_hexagonal.py	/^    main = DieCuttingHexagonal(params)$/;"	v
-modified_gamma	diecutting_hexagonal_analyze.py	/^    def modified_gamma(x, a, scale):$/;"	f	function:result_N_ave
-modified_gamma_2	diecutting_hexagonal_analyze.py	/^    def modified_gamma_2(x, scale):$/;"	f	function:result_N_ave
+modified_gamma	result_N_ave.py	/^    def modified_gamma(x, a, scale):$/;"	f	function:fit_a_scale
+modified_gamma	result_n0.py	/^    def modified_gamma(x, a, scale):$/;"	f	function:fit_a_scale
+modified_gamma_2	result_N_ave.py	/^    def modified_gamma_2(x, scale):$/;"	f	function:fit_scale
+modified_gamma_2	result_n0.py	/^    def modified_gamma_2(x, scale):$/;"	f	function:fit_scale
 num_of_strings	diecutting_hexagonal_run.py	/^    num_of_strings = 30$/;"	v
 params	diecutting_hexagonal.py	/^    params = {$/;"	v
-result_N_ave	diecutting_hexagonal_analyze.py	/^def result_N_ave():$/;"	f
 result_N_sub	result_N_sub.py	/^def result_N_sub(path):$/;"	f
 result_data_path_base	result_N_sub.py	/^    result_data_path_base = "..\/results\/data\/diecutting\/"$/;"	v
 result_data_path_base	set_data_path.py	/^result_data_path_base = "..\/results\/data\/diecutting\/"$/;"	v
-result_length_of_sub_dist	diecutting_hexagonal_analyze.py	/^def result_length_of_sub_dist():$/;"	f
+result_length_of_sub_dist	result_length_of_sub_dist.py	/^def result_length_of_sub_dist(path):$/;"	f
+result_n0	result_n0.py	/^def result_n0(path):$/;"	f
 result_set	diecutting_hexagonal.py	/^    result_set = {$/;"	v
 result_set	diecutting_hexagonal_run.py	/^result_set = {$/;"	v
 result_size_dist_3d	result_size_dist_3d.py	/^def result_size_dist_3d(path):$/;"	f
-result_size_dist_pcolor	diecutting_hexagonal_analyze.py	/^def result_size_dist_pcolor():$/;"	f
+result_size_dist_pcolor	result_size_dist_pcolor.py	/^def result_size_dist_pcolor(path):$/;"	f
+show_plot1	result_N_ave.py	/^def show_plot1(ax, num_of_strings):$/;"	f
+show_plot1	result_n0.py	/^def show_plot1(ax, num_of_strings):$/;"	f
 start	diecutting_hexagonal.py	/^    def start(self, result_set, visualize=True):$/;"	m	class:DieCuttingHexagonal
 visualize_max_size_of_sub_cluster	diecutting_hexagonal.py	/^def visualize_max_size_of_sub_cluster(self):$/;"	f
 visualize_num_of_sub_clusters	diecutting_hexagonal.py	/^def visualize_num_of_sub_clusters(self):$/;"	f

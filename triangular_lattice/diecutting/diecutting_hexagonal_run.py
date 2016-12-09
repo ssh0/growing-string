@@ -10,9 +10,10 @@ import numpy as np
 import itertools
 from tqdm import tqdm
 import time
+import argparse
 
 import sys, os
-sys.path.append(os.pardir)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import save_data
 
 
@@ -25,6 +26,9 @@ result_set = {
     #     'func': len,
     # },
     'size_dist_of_sub_clusters': {
+        'func': lambda arr: np.bincount(map(len, arr)),
+    },
+    'size_dist_ave_of_sub_clusters': {
         'func': lambda arr: np.bincount(map(len, arr)),
     },
     # 'max_size_of_sub_cluster': {
@@ -73,7 +77,7 @@ def eval_simulation_for_one_beta(beta, num_of_strings=30):
         for k, v in d['size_dist_of_sub_clusters'].items():
             size_dist[k] = map(sum, itertools.izip_longest(*v, fillvalue=0))
         Ls = sorted(size_dist.keys())
-        size_dist = [size_dist[k] for k in sorted(size_dist.keys())]
+        size_dist = [size_dist[k] for k in Ls]
         S = np.zeros((len(size_dist), max(map(len, size_dist))))
         for i, s in enumerate(size_dist):
             for j, num in enumerate(s):
@@ -82,16 +86,40 @@ def eval_simulation_for_one_beta(beta, num_of_strings=30):
     else:
         size_dist = []
 
+    import numpy.ma as ma
+    def masked_average(arr):
+        return ma.array(arr, mask=np.array(arr) == -1).mean()
+
+    if d.has_key('size_dist_ave_of_sub_clusters'):
+        size_dist_ave = {}
+        for k, v in d['size_dist_ave_of_sub_clusters'].items():
+            num_when_L = itertools.izip_longest(*v, fillvalue=-1)
+            size_dist_ave[k] = map(masked_average, num_when_L)
+        Ls = sorted(size_dist_ave.keys())
+        size_dist_ave = [size_dist_ave[k] for k in Ls]
+        S = np.zeros((len(size_dist_ave), max(map(len, size_dist_ave))))
+        for i, s in enumerate(size_dist_ave):
+            for j, num in enumerate(s):
+                S[i][j] = num
+        size_dist_ave = S
+    else:
+        size_dist_ave = []
+
     save_data.save("../results/data/diecutting/beta=%2.2f_" % beta,
                    beta=beta, num_of_strings=num_of_strings,
                    L=params['L'], frames=params['frames'],
-                   Ls=Ls, N_sub=N_sub, size_dist=size_dist)
+                   Ls=Ls, N_sub=N_sub, size_dist=size_dist,
+                   size_dist_ave=size_dist_ave)
 
 
 if __name__ == '__main__':
-    # === Averaging (sample N: num_of_strings) ===
-    beta = 10.
     num_of_strings = 30
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('beta', type=float, nargs=1,
+                        help='parameter beta (inverse temparature)')
+    args = parser.parse_args()
+    beta = args.beta[0]
+
     print "beta = %2.2f" % beta
     eval_simulation_for_one_beta(beta, num_of_strings)
-
