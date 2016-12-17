@@ -25,15 +25,18 @@ if __name__ == '__main__':
         """
         return self.bonding_pairs[i]
 
-    L = 1000
-    frames = 500
+    # L = 10
+    # frames = 20
+    L = 2 ** 7
+    frames = 1000
+    # frames = 100 * 100
 
     params = {
         'Lx': L,
         'Ly': L,
         'frames': frames,
-        'beta': 4.,
-        'weight_const': 0.,
+        'beta': 3.,
+        'weight_const': 0.4,
         'boundary': {'h': 'periodic', 'v': 'periodic'},
         # 'boundary': {'h': 'reflective', 'v': 'reflective'},
         'plot': True,
@@ -44,7 +47,7 @@ if __name__ == '__main__':
     # save img
     # params.update({
     #     'plot': False,
-    #     'plot_surface': True,
+    #     'plot_surface': False,
     #     'save_image': True,
     #     'filename_image': "results/img/growing_string_" + time.strftime("%y%m%d_%H%M%S"),
     # })
@@ -69,12 +72,12 @@ if __name__ == '__main__':
 
 
     # # open
-    # main = Main(strings=[{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4]}],
-    #             **params
-    #             )
-
-    # loop
-    main = Main(strings=[{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4, 2]}],
+    main = Main(strings=[{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4]}],
                 **params
                 )
+
+    # loop
+    # main = Main(strings=[{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4, 2]}],
+    #             **params
+    #             )
 

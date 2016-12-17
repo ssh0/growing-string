@@ -22,7 +22,7 @@ def load_data(_path):
     # Ls = (3 * Ls * (Ls + 1) + 1)
     size_dist = data['size_dist']
 
-    M = np.array([np.sum(l) for l in size_dist])
+    M = np.array([np.sum(l) for l in size_dist]) - 1.
     M_ave = M / np.sum(M)
 
     return {

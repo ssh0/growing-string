@@ -112,57 +112,18 @@ def load_data_averaged(_path):
         'n1_ave': n1_ave,
     }
 
-
 def result_n2(path):
     fig, ax = plt.subplots()
     for i, result_data_path in enumerate(path):
         globals().update(load_data(result_data_path))
-        ## datas
-        ## n0: occupied, 0
-        ## n1: occupied, 1
-        ## n2: occupied, 2 (locked)
-        ## n_minus: not occupied
-
-        # ax.plot(Ls[1:], N_minus_rate[1:], '.', label=r'$\beta = %2.2f$' % beta,
-        #         color=cm.viridis(float(i) / len(path)))
-
-        # ax.plot(Ls[1:], n0, '.', label=r'$\beta = %2.2f$' % beta,
-        #         color=cm.viridis(float(i) / len(path)))
-
-        # ax.plot(Ls[1:], n0 / (6 * Ls[1:]), '.', label=r'$\beta = %2.2f$' % beta,
-        #         color=cm.viridis(float(i) / len(path)))
-
-        # ax.plot(Ls[1:], n1, '.', label=r'$\beta = %2.2f$' % beta,
-        #         color=cm.viridis(float(i) / len(path)))
-
-        # ax.plot(Ls[1:], n1 / (6 * Ls[1:]), '.', label=r'$\beta = %2.2f$' % beta,
-        #         color=cm.viridis(float(i) / len(path)))
-
-        # ax.plot(Ls[1:], n_minus, '.', label=r'$\beta = %2.2f$' % beta,
-        #         color=cm.viridis(float(i) / len(path)))
-
-        # ax.plot(Ls[1:], n_minus / (6 * Ls[1:]), '.', label=r'$\beta = %2.2f$' % beta,
-        #         color=cm.viridis(float(i) / len(path)))
-
-        # ax.plot(Ls[1:], n2, '.', label=r'$\beta = %2.2f$' % beta,
-        #         color=cm.viridis(float(i) / len(path)))
-
-        # ax.plot(Ls[1:], n2 / (6 * Ls[1:]), '.', label=r'$\beta = %2.2f$' % beta,
-        #         color=cm.viridis(float(i) / len(path)))
-
-        ax.plot(Ls[1:], S[1:], '.', label=r'$\beta = %2.2f$' % beta,
+        ax.plot(Ls[1:], n2, '.', label=r'$\beta = %2.2f$' % beta,
                 color=cm.viridis(float(i) / len(path)))
-
-        # ax.plot(Ls[1:], n0 + 0.5 * n1, '.', label=r'$\beta = %2.2f$' % beta,
-        #         color=cm.viridis(float(i) / len(path)))
-
     ax.legend(loc='best')
-    # ax.set_ylim((0., ax.get_ylim()[1]))
-    ax.set_title('Strings in hexagonal region' +
+    ax.set_title('Averaged number of the sites on the cutting edges which \
+                is connected to two neighbors.' + 
                 ' (sample: {})'.format(num_of_strings))
     ax.set_xlabel(r'Cutting size $L$')
     ax.set_ylabel(r'$n_{2}$')
-
     plt.show()
 
 
