@@ -15,17 +15,8 @@ import set_data_path
 class Visualizer(object):
     def __init__(self, subjects):
         self.data_path_list = set_data_path.data_path
-        self.result_set = ['N_minus_rate', 'n0', 'n1', 'n2', 'n_minus', 'S']
-
-        self._analyze = []
-        for subject in subjects:
-            if not subject in self.result_set:
-                print "'{}' is not found in result set".format(subject)
-                continue
-            self._analyze.append(subject)
-
-        if len(self._analyze) != 0:
-            for subject in self._analyze:
+        if len(subjects) != 0:
+            for subject in subjects:
                 getattr(self, 'result_' + subject)()
 
     def load_data(self, _path):
@@ -33,6 +24,8 @@ class Visualizer(object):
         beta = data['beta']
         try:
             size_dist_ave = data['size_dist_ave']
+            if len(size_dist_ave) == 0:
+                raise KeyError
             return self.load_data_averaged(_path)
         except KeyError:
             pass
@@ -197,22 +190,39 @@ class Visualizer(object):
                     label=r'$\beta = %2.2f$' % self.beta,
                     color=cm.viridis(float(i) / len(self.data_path_list)))
         ax.legend(loc='best')
+        ax.set_ylim([0, ax.get_ylim()[1]])
         ax.set_title('Averaged number of the subclusters in the cutted region.'
                      + ' (sample: {})'.format(self.num_of_strings))
         ax.set_xlabel(r'Cutting size $L$')
         ax.set_ylabel(r'$S$')
         plt.show()
 
+    def result_S_rate(self):
+        fig, ax = plt.subplots()
+        for i, result_data_path in enumerate(self.data_path_list):
+            self.load_data(result_data_path)
+            ax.plot(self.Ls[1:], self.S[1:] / np.sum(self.S[1:]), '.',
+                    label=r'$\beta = %2.2f$' % self.beta,
+                    color=cm.viridis(float(i) / len(self.data_path_list)))
+        ax.legend(loc='best')
+        ax.set_ylim([0, ax.get_ylim()[1]])
+        ax.set_title('Averaged number of the subclusters in the cutted region'
+                     + ' (normalized)'
+                     + ' (sample: {})'.format(self.num_of_strings))
+        ax.set_xlabel(r'Cutting size $L$')
+        ax.set_ylabel(r'$S$')
+        plt.show()
 
 if __name__ == '__main__':
     # subject: 'N_minus_rate', 'n0', 'n1', 'n2', 'n_minus', 'S'
     main = Visualizer(
         [
-            'N_minus_rate',
-            'n0',
-            'n1',
-            'n2',
-            'n_minus',
-            'S'
+            # 'N_minus_rate',
+            # 'n0',
+            # 'n1',
+            # 'n2',
+            # 'n_minus',
+            'S',
+            # 'S_rate'
         ]
     )
