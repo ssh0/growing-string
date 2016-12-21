@@ -28,9 +28,9 @@ result_set = {
     'size_dist_of_sub_clusters': {
         'func': lambda arr: np.bincount(map(len, arr)),
     },
-    'size_dist_ave_of_sub_clusters': {
-        'func': lambda arr: np.bincount(map(len, arr)),
-    },
+    # 'size_dist_ave_of_sub_clusters': {
+    #     'func': lambda arr: np.bincount(map(len, arr)),
+    # },
     # 'max_size_of_sub_cluster': {
     #     'func': lambda arr: max(map(len, arr)),
     # }
@@ -75,7 +75,8 @@ def eval_simulation_for_one_beta(beta, num_of_strings=30):
     if d.has_key('size_dist_of_sub_clusters'):
         size_dist = {}
         for k, v in d['size_dist_of_sub_clusters'].items():
-            size_dist[k] = map(sum, itertools.izip_longest(*v, fillvalue=0))
+            # size_dist[k] = map(sum, itertools.izip_longest(*v, fillvalue=0))
+            size_dist[k] = map(sum, itertools.izip_longest(*v, fillvalue=1))
         Ls = sorted(size_dist.keys())
         size_dist = [size_dist[k] for k in Ls]
         S = np.zeros((len(size_dist), max(map(len, size_dist))))

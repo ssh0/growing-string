@@ -100,7 +100,7 @@ class DieCuttingHexagonal(object):
                 pos = list(np.array(self.s.pos[_sub_cluster]).T)
                 x = self.lattice_X[pos]
                 y = self.lattice_Y[pos]
-                ax.plot(x, y, '.-')
+                ax.plot(x, y, '.-', lw=2)
             ax.set_xlim((np.min(self.lattice_X), np.max(self.lattice_X)))
             ax.set_ylim((np.min(self.lattice_Y), np.max(self.lattice_Y)))
             ax.set_title('Strings in hexagonal region')
@@ -224,9 +224,9 @@ if __name__ == '__main__':
     # === Plot one result ===
     params = {
         'L': 100,
-        'frames': 2000,
-        'beta': 4.,
-        'plot': False
+        'frames': 1000,
+        'beta': 2.,
+        'plot': True
     }
     main = DieCuttingHexagonal(params)
     main.visualize_num_of_sub_clusters = visualize_num_of_sub_clusters
@@ -243,4 +243,4 @@ if __name__ == '__main__':
             'func': lambda arr: max(map(len, arr)),
         }
     }
-    main.start(result_set, visualize=True)
+    main.start(result_set, visualize=False)
