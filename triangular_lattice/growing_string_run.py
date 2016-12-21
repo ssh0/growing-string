@@ -27,7 +27,7 @@ if __name__ == '__main__':
 
     # L = 10
     # frames = 20
-    L = 2 ** 7
+    L = 1500
     frames = 1000
     # frames = 100 * 100
 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
         'Lx': L,
         'Ly': L,
         'frames': frames,
-        'beta': 3.,
+        'beta': 12.,
         'weight_const': 0.4,
         'boundary': {'h': 'periodic', 'v': 'periodic'},
         # 'boundary': {'h': 'reflective', 'v': 'reflective'},
@@ -53,13 +53,13 @@ if __name__ == '__main__':
     # })
 
     # save video
-    # params.update({
-    #     'plot': False,
-    #     'plot_surface': True,
-    #     'save_image': False,
-    #     'save_video': True,
-    #     'filename_video': "results/video/growing_string_" + time.strftime("%y%m%d_%H%M%S") + ".mp4",
-    # })
+    params.update({
+        'plot': False,
+        'plot_surface': False,
+        'save_image': False,
+        'save_video': True,
+        'filename_video': "results/video/growing_string_" + time.strftime("%y%m%d_%H%M%S") + ".mp4",
+    })
 
     # save img and video
     # params.update({
