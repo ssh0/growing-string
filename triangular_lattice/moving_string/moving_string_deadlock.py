@@ -71,7 +71,7 @@ class Main(base):
             return ret
 
     def get_next_xy(self, x, y):
-        nnx, nny = self.lattice.neighborhoods[x, y]
+        nnx, nny = self.lattice.neighbor_of8x, y)
         vectors = [i for i in range(6) if not self.occupied[nnx[i], nny[i]]]
         if len(vectors) == 0:
             print_debug("no neighbors")

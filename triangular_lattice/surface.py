@@ -10,7 +10,7 @@ import numpy as np
 def get_surface_points(self, pos):
     surface_points = []
     for i, (x, y) in enumerate(pos):
-        nnx, nny = self.lattice.neighborhoods[x, y]
+        nnx, nny = self.lattice.neighbor_of(x, y)
         for r in [0, 1, 2, 3, 4, 5]:
             nx, ny = nnx[r], nny[r]
             if nx == -1 or ny == -1:
@@ -30,7 +30,7 @@ def set_labels(self, position):
     n = 1
 
     for i, j in np.array(position).T:
-        nnx, nny = self.lattice.neighborhoods[i, j]
+        nnx, nny = self.lattice.neighbor_of(i, j)
         # 6方向のラベルを参照
         tags = list(set([label[nnx[r], nny[r]]
                          for r in [0, 1, 2, 3, 4, 5]]) - set([0]))
@@ -45,7 +45,7 @@ def set_labels(self, position):
         if label[i, j] in checked:
             continue
         else:
-            nnx, nny = self.lattice.neighborhoods[i, j]
+            nnx, nny = self.lattice.neighbor_of(i, j)
             # 6方向のラベル + 自分自身を参照
             nn = (set([label[nnx[r], nny[r]] for r in [0, 1, 2, 3, 4, 5]])
                   | set([label[i, j]])

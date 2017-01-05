@@ -50,7 +50,7 @@ class Eden():
         self.points = [(center_x, center_y)]
         self.occupied[center_x, center_y] = True
         self.neighbors = list(map(
-            tuple, self.lattice.neighborhoods[center_x, center_y].T
+            tuple, np.array(self.lattice.neighbor_of(center_x, center_y)).T
         ))
 
         self.plot = plot
@@ -147,7 +147,7 @@ class Eden():
         self.occupied[x, y] = True
         self.points.append((x, y))
 
-        new_n = set(((nx, ny) for nx, ny in self.lattice.neighborhoods[x, y].T
+        new_n = set(((nx, ny) for nx, ny in np.array(self.lattice.neighbor_of(x, y)).T
                     if nx != -1 and ny != -1))
         updated_n = set(tuple(map(tuple, self.neighbors))) | new_n
         self.neighbors = [pos for pos in updated_n if not self.occupied[pos]]

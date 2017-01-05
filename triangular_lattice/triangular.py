@@ -40,13 +40,13 @@ class LatticeTriangular(object):
         self.scale = float(scale)
         self.x0, self.y0 = x0, y0
 
-        self.neighborhoods = []
-        for i in range(self.Lx):
-            tmp = []
-            for j in range(self.Ly):
-                tmp.append(self.neighbor_of(i, j)[:])
-            self.neighborhoods.append(tmp)
-        self.neighborhoods = np.array(self.neighborhoods)
+        if self.boundary['h'] == 'periodic' and self.boundary['v'] == 'periodic':
+            self.neighbor_of = self.neighbor_of_periodic
+        elif self.boundary['h'] == 'reflective' and self.boundary['v'] == 'reflective':
+            self.neighbor_of = self.neighbor_of_reflective
+        else:
+            self.neighbor_of = self.neighbor_of_combo
+
         self.coordinates_x, self.coordinates_y = self.to_realspace()
 
     def get_for_i_periodic(self, i):
@@ -83,13 +83,40 @@ class LatticeTriangular(object):
             yr = j + 1
         return yl, yr
 
-    def neighbor_of(self, i, j):
+    def neighbor_of_periodic(self, i, j):
+        xu = (i - 1) % self.Lx
+        xd = (i + 1) % self.Lx
+        yl = (j - 1) % self.Ly
+        yr = (j + 1) % self.Ly
+        return [xd, i, xu, xu, i, xd], [j, yr, yr, j, yl, yl]
+
+    def neighbor_of_reflective(self, i, j):
+        if i == 0:
+            xu = -1
+            xd = 1
+        elif i == self.Lx - 1:
+            xu = i - 1
+            xd = -1
+        else:
+            xu = i - 1
+            xd = i + 1
+        if j == 0:
+            yl = -1
+            yr = 1
+        elif j == self.Ly - 1:
+            yl = j - 1
+            yr = -1
+        else:
+            yl = j - 1
+            yr = j + 1
+        return [xd, i, xu, xu, i, xd], [j, yr, yr, j, yl, yl]
+
+    def neighbor_of_combo(self, i, j):
         xu, xd = getattr(self, 'get_for_i_' + self.boundary['h'])(i)
         yl, yr = getattr(self, 'get_for_j_' + self.boundary['v'])(j)
         neighbors_x = np.array([xd, i, xu, xu, i, xd], dtype=np.int)
         neighbors_y = np.array([j, yr, yr, j, yl, yl], dtype=np.int)
-        neighbors = (neighbors_x, neighbors_y)
-        return neighbors
+        return neighbors_x, neighbors_y
 
     def to_realspace(self):
         dx = self.scale / self.Lx
@@ -98,18 +125,22 @@ class LatticeTriangular(object):
         self.dx = unit_lengh
         self.dy = unit_lengh * (np.sqrt(3) / 2)
         # self.dx = 1, self.dy = sqrt(3) / 2
+        x = range(self.Lx)
+        y = range(self.Ly)
 
         if self.boundary['h'] == 'periodic':
-            X = [((0.5 * j + i) * self.dx) % (self.dx * self.Lx) + self.x0
-                 for i in range(self.Lx) for j in range(self.Ly)]
+            X = ((np.mgrid[0:self.Ly, 0:self.Lx][1] \
+                  + 0.5 * np.array([y]).T) * self.dx) \
+                % (self.dx * self.Lx) + self.x0
+            X = X.T.flatten()
         elif self.boundary['h'] == 'reflective':
-            X = [((0.5 * j + i) * self.dx) + self.x0
-                 for i in range(self.Lx) for j in range(self.Ly)]
+            X = (np.mgrid[0:self.Ly, 0:self.Lx][1] \
+                 + 0.5 * np.array([y]).T) * self.dx + self.x0
+            X = X.T.flatten()
 
-        Y = [(0.5 + j) * self.dy + self.y0
-             for i in range(self.Lx) for j in range(self.Ly)]
+        Y = (np.mgrid[0:self.Lx, 0:self.Ly][1] + 0.5) * self.dy + self.y0
 
-        return np.array(X), np.array(Y)
+        return np.array(X), Y.flatten()
 
 
 if __name__ == '__main__':

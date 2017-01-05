@@ -142,7 +142,7 @@ class Main:
             return ret
 
     def get_next_xy(self, x, y, *vec):
-        nnx, nny = self.lattice.neighborhoods[x, y]
+        nnx, nny = self.lattice.neighbor_of(x, y)
         vectors = [i for i in range(6)
                    if not (self.occupied[nnx[i], nny[i]]
                    or (nnx[i] == -1 or nny[i] == -1))

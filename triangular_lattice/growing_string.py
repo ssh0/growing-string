@@ -443,7 +443,7 @@ class Main(base):
 
         for i in rang:
             x, y = s.pos[i]
-            nnx, nny = self.lattice.neighborhoods[x, y]
+            nnx, nny = self.lattice.neighbor_of(x, y)
 
             for r in [0, 1, 2, 3, 4, 5]:
                 nx, ny = nnx[r], nny[r]

@@ -113,7 +113,7 @@ class Main:
             p = random.choice(self.points)
 
             # 速度方向が空いているかどうか
-            nnx, nny = self.lattice.neighborhoods[p.x, p.y]
+            nnx, nny = self.lattice.neighbor_of(p.x, p.y)
 
             # 占有されていないもののみを抽出
             not_occupied = {}
@@ -139,7 +139,7 @@ class Main:
             # 最近接効果(decided by Boltzmann eq)をうけて速度変化
             # 最近接の速度の合計を求める
             velocities = np.array([0., 0.])
-            nnx, nny = self.lattice.neighborhoods[p.x, p.y]
+            nnx, nny = self.lattice.neighbor_of(p.x, p.y)
             not_occupied = {}
             for v, x, y in zip(range(len(nnx)), nnx, nny):
                 if self.lattice_point.has_key((x, y)):
@@ -201,6 +201,6 @@ class Main:
         return m
 
 if __name__ == '__main__':
-    main = Main(Lx=10, Ly=10, rho=0.6, T=1.5, frames=1000, plot=True)
-    # main = Main(Lx=40, Ly=40, T=0.6, frames=1000, plot=True)
+    # main = Main(Lx=10, Ly=10, rho=0.6, T=1.5, frames=1000, plot=True)
+    main = Main(Lx=40, Ly=40, T=0.6, frames=1000, plot=True)
 

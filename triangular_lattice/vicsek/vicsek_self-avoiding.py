@@ -107,7 +107,7 @@ class Main:
             # 最近接効果(decided by Boltzmann eq)をうけて速度変化
             # 最近接の速度の合計を求める
             velocities = np.array([0., 0.])
-            nnx, nny = self.lattice.neighborhoods[p.x, p.y]
+            nnx, nny = self.lattice.neighbor_of(p.x, p.y)
             not_occupied = {}
             for v, x, y in zip(range(len(nnx)), nnx, nny):
                 if self.lattice_point.has_key((x, y)):

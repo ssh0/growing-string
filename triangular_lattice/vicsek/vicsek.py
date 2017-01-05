@@ -106,7 +106,7 @@ class Main:
         for point in lowest.values():
             # 最近接の速度の合計を求める
             velocities = np.array([0., 0.])
-            nnx, nny = self.lattice.neighborhoods[point.x, point.y]
+            nnx, nny = self.lattice.neighbor_of(point.x, point.y)
             for x, y in zip(nnx, nny):
                 if lowest.has_key((x, y)):
                     ang = lowest[(x, y)].vel
@@ -140,7 +140,7 @@ class Main:
         X, Y = [], []
         for point in self.points:
             # Get possible direction
-            newx, newy = self.lattice.neighborhoods[point.x, point.y]
+            newx, newy = self.lattice.neighbor_of(point.x, point.y)
             # Choose one by its velocity
             point.x, point.y = newx[point.vel], newy[point.vel]
             X.append(self.lattice_X[point.x, point.y])

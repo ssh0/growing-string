@@ -84,7 +84,7 @@ class Main(base):
         # sのx, y座標に関して
         for i, (x, y) in enumerate(s.pos):
             # それぞれの近傍点を取得
-            nnx, nny = self.lattice.neighborhoods[x, y]
+            nnx, nny = self.lattice.neighbor_of(x, y)
             # 6方向全てに関して
             for r in range(6):
                 nx, ny = nnx[r], nny[r]

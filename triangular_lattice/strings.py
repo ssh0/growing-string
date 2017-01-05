@@ -23,8 +23,8 @@ class String:
     def update_pos(self):
         self.pos_x, self.pos_y = [self.x], [self.y]
         for i in self.vec:
-            newx, newy = self.lattice.neighborhoods[self.pos_x[-1],
-                                                    self.pos_y[-1]]
+            newx, newy = self.lattice.neighbor_of(self.pos_x[-1],
+                                                  self.pos_y[-1])
             self.pos_x.append(newx[i])
             self.pos_y.append(newy[i])
 
