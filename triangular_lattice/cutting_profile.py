@@ -9,15 +9,12 @@ from triangular import LatticeTriangular as LT
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
-from tqdm import tqdm
-import time
-import random
 import save_data as sd
 
 
 class CuttingProfile(object):
     def __init__(self, frames, beta, c=0.4, L=100, save_result=False,
-                 plot_raw_result=False):
+                 plot_raw_result=False, _plot_dist_to_verify=False):
         self.L = L
         # self.pbar = tqdm(total=frames)
         self.frames = frames
@@ -26,6 +23,7 @@ class CuttingProfile(object):
         self.t = 1
         self.save_result = save_result
         self.plot_raw_result = plot_raw_result
+        self._plot_dist_to_verify = _plot_dist_to_verify
 
     def start(self):
         self.main = Main(
@@ -40,7 +38,10 @@ class CuttingProfile(object):
             weight_const=self.weight_const,
             # pre_function=self.get_cutting_profiles
         )
+
         self.cutting_profiles = self.get_cutting_profiles()
+        self.relative_positions = self.get_relative_positions()
+
         if self.save_result:
             sd.save("results/data/cutting_profile/" +
                     "frames=%d_beta=%2.2f_" % (self.frames, self.beta),
@@ -51,14 +52,17 @@ class CuttingProfile(object):
         if self.plot_raw_result:
             self.plot_result()
 
+        if self._plot_dist_to_verify:
+            self.plot_dist_to_verify()
+
     def get_cutting_profiles(self):
         """6つの方向でそれぞれに対して，ベクトルの向きに対して左側に
-        閉じている領域要素の位置を記録
+        閉じている領域要素の位置(格子座標)を記録
         """
         return [self.get_cutting_profile_for(k) for k in range(6)]
 
     def get_cutting_profile_for(self, k):
-        """k方向のベクトルに対して左側に閉じた部分領域の位置を取得"""
+        """k方向のベクトルに対して左側に閉じた部分領域の位置(格子座標)を取得"""
         positions = []
         s = self.main.strings[0]
         vec = s.vec
@@ -71,25 +75,67 @@ class CuttingProfile(object):
                     positions.append(s.pos[i])
         return positions
 
+    def get_relative_positions(self):
+        """重心からの相対座標を求める"""
+        s = self.main.strings[0]
+        lX = self.main.lattice_X
+        lY = self.main.lattice_Y
+        self.x0 = np.average(lX[s.pos_x, s.pos_y])
+        self.y0 = np.average(lY[s.pos_x, s.pos_y])
+        self.real_position = {}
+        self.real_position_x = {}
+        self.real_position_y = {}
+        relative_positions = {}
+        for k in range(6):
+            positions = np.array(self.cutting_profiles[k]).T
+            if len(positions) == 0:
+                continue
+            index_x, index_y = positions[0], positions[1]
+            # self.real_position.append(
+            #     np.array(lX[index_x, index_y], lY[index_x, index_y]).T)
+            X = lX[index_x, index_y]
+            Y = lY[index_x, index_y]
+            self.real_position_x[k] = X
+            self.real_position_y[k] = Y
+            self.real_position[k] = np.array([X, Y]).T
+            relative_positions[k] = np.array([X - self.x0, Y - self.y0]).T
+        return relative_positions
+
     def plot_result(self):
         self.main.plot_all()
+        lX = self.main.lattice_X
+        lY = self.main.lattice_Y
+        self.main.ax.plot(self.x0, self.y0, 'o', color='k')
         for k in range(6):
-            positions = self.cutting_profiles[k]
-            X = [self.main.lattice_X[_x, _y] for _x, _y in positions]
-            Y = [self.main.lattice_Y[_x, _y] for _x, _y in positions]
-            self.main.ax.plot(X, Y, 'o', label='vec: {}'.format(k),
+            positions = np.array(self.cutting_profiles[k]).T
+            if len(positions) == 0:
+                continue
+            index_x, index_y = positions[0], positions[1]
+            self.main.ax.plot(lX[index_x, index_y], lY[index_x, index_y], 'o',
+                              label='vec: {}'.format(k),
                               color=cm.rainbow(float(k) / 5))
 
         self.main.ax.legend(loc='best')
         plt.show()
 
+    def plot_dist_to_verify(self):
+        fig, ax = plt.subplots()
+        for k in range(6):
+            if self.relative_positions.has_key(k):
+                ax.plot(*self.relative_positions[k].T, marker='.', ls='none',
+                        label='vec: {}'.format(k),
+                        color=cm.rainbow(float(k) / 5))
+        ax.legend(loc='best')
+        plt.show()
+
 if __name__ == '__main__':
     params = {
-        'beta': 0,
-        'L': 100,
+        'beta': 10.,
+        'L': 400,
         'frames': 1000,
         'save_result': False,
         'plot_raw_result': True,
+        '_plot_dist_to_verify': True,
     }
     main = CuttingProfile(**params)
     main.start()
