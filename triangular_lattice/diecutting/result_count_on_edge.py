@@ -58,6 +58,7 @@ class Visualizer(object):
         self.num_of_strings = num_of_strings
         self.frames = frames
         self.Ls = Ls
+        self.N = N
         self.N_minus = N_minus
         self.N_minus_rate = N_minus_rate
         self.S = S
@@ -99,6 +100,7 @@ class Visualizer(object):
         self.num_of_strings = num_of_strings
         self.frames = frames
         self.Ls = Ls
+        self.N = N
         self.N_minus = N_minus
         self.N_minus_rate = N_minus_rate
         self.S = S
@@ -107,6 +109,20 @@ class Visualizer(object):
         self.n2 = n2
         self.n_minus = n_minus
         self.n1_ave = n1_ave
+
+    def result_N(self):
+        fig, ax = plt.subplots()
+        for i, result_data_path in enumerate(self.data_path_list):
+            self.load_data(result_data_path)
+            ax.plot(self.Ls[1:], self.N[1:], '.',
+                    label=r'$\beta = %2.2f$' % self.beta,
+                    color=cm.viridis(float(i) / len(self.data_path_list)))
+        ax.legend(loc='best')
+        ax.set_title('Occupied points in the cutting region' +
+                    ' (sample: {})'.format(self.num_of_strings))
+        ax.set_xlabel(r'Cutting size $L$')
+        ax.set_ylabel(r'$N$')
+        plt.show()
 
     def result_N_minus_rate(self):
         fig, ax = plt.subplots()
@@ -201,7 +217,8 @@ class Visualizer(object):
         fig, ax = plt.subplots()
         for i, result_data_path in enumerate(self.data_path_list):
             self.load_data(result_data_path)
-            ax.plot(self.Ls[1:], self.S[1:] / np.sum(self.S[1:]), '.',
+            # ax.plot(self.Ls[1:], self.S[1:] / np.sum(self.S[1:]), '.',
+            ax.plot(self.Ls[1:], self.S[1:] / self.N[1:], '.',
                     label=r'$\beta = %2.2f$' % self.beta,
                     color=cm.viridis(float(i) / len(self.data_path_list)))
         ax.legend(loc='best')
@@ -213,10 +230,12 @@ class Visualizer(object):
         ax.set_ylabel(r'$S$')
         plt.show()
 
+
 if __name__ == '__main__':
-    # subject: 'N_minus_rate', 'n0', 'n1', 'n2', 'n_minus', 'S'
+    # subject: 'N', 'N_minus_rate', 'n0', 'n1', 'n2', 'n_minus', 'S'
     main = Visualizer(
         [
+            # 'N',
             # 'N_minus_rate',
             # 'n0',
             # 'n1',

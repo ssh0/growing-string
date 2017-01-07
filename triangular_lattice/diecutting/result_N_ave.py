@@ -35,7 +35,7 @@ def load_data(_path):
 
 def show_plot1(ax, num_of_strings):
     ax.legend(loc='best')
-    ax.set_ylim((0., 0.05))
+    ax.set_ylim((0., ax.get_ylim()[1]))
     ax.set_title('Strings in hexagonal region' +
                 ' (sample: {})'.format(num_of_strings))
     ax.set_xlabel(r'Cutting size $L$')
@@ -78,7 +78,7 @@ def fit_a_x0_scale(path):
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
     ax1.plot(betas, a, 'o')
     [ax.set_xlabel(r'$\beta$') for ax in [ax1, ax2, ax3]]
-    [ax.set_xlim((0, 11)) for ax in [ax1, ax2, ax3]]
+    [ax.set_xlim((0, max(betas))) for ax in [ax1, ax2, ax3]]
     ax1.set_ylabel(r'Shape parameter: $a$')
     ax2.plot(betas, loc, 'o')
     ax2.set_ylabel(r'Translation parameter: $x_{0}$')
@@ -124,7 +124,7 @@ def fit_a_scale(path, fixed_loc):
     ax1.set_title(r'Fitting parameter (fixed: $x_{0} = 0$)')
     ax1.plot(betas, a, 'o')
     [ax.set_xlabel(r'$\beta$') for ax in [ax1, ax2]]
-    [ax.set_xlim((0, 11)) for ax in [ax1, ax2]]
+    [ax.set_xlim((0, max(betas))) for ax in [ax1, ax2]]
     ax1.set_ylabel(r'Shape parameter: $a$')
     ax2.plot(betas, scale, 'o')
     ax2.set_ylabel(r'Scale parameter: $\theta$')
@@ -167,7 +167,7 @@ def fit_scale(path, fixed_a, fixed_loc):
     fig, ax = plt.subplots(1, 1)
     ax.set_title(r'Fitting parameter (fixed: $a = 3$, $x_{0} = 0$)')
     ax.plot(betas, scale, 'o')
-    ax.set_xlim((0, 11))
+    ax.set_xlim((0, max(betas)))
     ax.set_xlabel(r'$\beta$')
     ax.set_ylabel(r'Scale parameter: $\theta$')
     plt.show()
