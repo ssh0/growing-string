@@ -7,6 +7,7 @@
 
 from cutting_profile import CuttingProfile
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 import matplotlib.cm as cm
 import numpy as np
 from tqdm import tqdm
@@ -81,6 +82,28 @@ def plot_all_points(relative_positions):
     ax.set_ylim((-max_height, max_height))
     ax.legend(loc='best')
     plt.show()
+
+def plot_3d_wireframe(relative_positions, bins=30):
+    for k in range(6):
+        if relative_positions.has_key(k):
+            fig, ax = plt.subplots()
+            ax = fig.add_subplot(111, projection='3d')
+            x, y = relative_positions[k].T
+            max_width = np.max(np.abs(x))
+            max_height = np.max(np.abs(y))
+
+            hist, xedges, yedges = np.histogram2d(x, y, bins=bins)
+            X, Y = np.meshgrid(xedges[:-1]+xedges[1:], yedges[:-1]+yedges[1:])
+            X, Y = X/2., Y/2.
+            ax.plot_wireframe(X, Y, hist)
+            ax.set_title('vec: {}'.format(k))
+            ax.set_xlabel(r'$x$')
+            ax.set_ylabel(r'$y$')
+            ax.set_zlabel(r'$f$')
+            ax.set_xlim((-max_width, max_width))
+            ax.set_ylim((-max_height, max_height))
+            plt.show()
+            plt.close()
 
 
 if __name__ == '__main__':

@@ -101,9 +101,11 @@ class Visualizer(object):
         self.frames = frames
         self.Ls = Ls
         self.N = N
+        self.N_all = N_all
         self.N_minus = N_minus
         self.N_minus_rate = N_minus_rate
         self.S = S
+        self.n_all = 6 * Ls[1:]
         self.n0 = n0
         self.n1 = n1
         self.n2 = n2
@@ -218,6 +220,7 @@ class Visualizer(object):
         for i, result_data_path in enumerate(self.data_path_list):
             self.load_data(result_data_path)
             # ax.plot(self.Ls[1:], self.S[1:] / np.sum(self.S[1:]), '.',
+            # ax.plot(self.Ls[1:], self.S[1:] / self.n_all, '.',
             ax.plot(self.Ls[1:], self.S[1:] / self.N[1:], '.',
                     label=r'$\beta = %2.2f$' % self.beta,
                     color=cm.viridis(float(i) / len(self.data_path_list)))
