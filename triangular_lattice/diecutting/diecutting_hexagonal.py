@@ -34,9 +34,9 @@ class DieCuttingHexagonal(object):
             beta=self.beta,
             weight_const=self.weight_const,
             ## open
-            # strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4]}]
+            strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4]}]
             ## loop
-            strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4, 2]}]
+            # strings=[{'id': 1, 'x': self.L/4, 'y': self.L/2, 'vec': [0, 4, 2]}]
         )
 
         self.s = self.main.strings[0]
