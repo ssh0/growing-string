@@ -50,18 +50,23 @@ def main(num_of_strings=30, beta=0., frames=1000, L=100, save_result=True,
         # plot_all_points(relative_positions)
         plot_hist(relative_positions)
 
-def plot_hist(relative_positions):
+def plot_hist(relative_positions, save_image=False):
+
+    cmap = cm.viridis
     for k in range(6):
         if relative_positions.has_key(k):
             fig, ax = plt.subplots()
             x, y = relative_positions[k].T
-            ax.hist2d(x, y, bins=20)
+            ax.hist2d(x, y, bins=50, cmap=cmap)
             ax.set_aspect('equal')
             ax.set_title('vec: {}'.format(k))
-            plt.show()
+            if save_image:
+                save_fig(fig, fn='hist_vec={}_'.format(k))
+            else:
+                plt.show()
             plt.close()
 
-def plot_all_points(relative_positions):
+def plot_all_points(relative_positions, save_image=False):
     fig, ax = plt.subplots()
     max_width = 0
     max_height = 0
@@ -81,9 +86,12 @@ def plot_all_points(relative_positions):
     ax.set_xlim((-max_width, max_width))
     ax.set_ylim((-max_height, max_height))
     ax.legend(loc='best')
-    plt.show()
+    if save_image:
+        save_fig(fig)
+    else:
+        plt.show()
 
-def plot_3d_wireframe(relative_positions, bins=30):
+def plot_3d_wireframe(relative_positions, bins=30, save_image=False):
     for k in range(6):
         if relative_positions.has_key(k):
             fig, ax = plt.subplots()
@@ -102,8 +110,18 @@ def plot_3d_wireframe(relative_positions, bins=30):
             ax.set_zlabel(r'$f$')
             ax.set_xlim((-max_width, max_width))
             ax.set_ylim((-max_height, max_height))
-            plt.show()
+            if save_image:
+                save_fig(fig)
+            else:
+                plt.show()
             plt.close()
+
+def save_fig(fig, fn=''):
+    import time
+    current_time = time.strftime("%y%m%d_%H%M%S")
+    base_dir = './results/img/cutting_profile/'
+    filename = base_dir + fn + current_time + '.png'
+    fig.savefig(filename)
 
 
 if __name__ == '__main__':
