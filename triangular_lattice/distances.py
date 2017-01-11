@@ -115,7 +115,7 @@ if __name__ == '__main__':
     frames = args.frames[0]
 
     params = {
-        'num_of_strings': 30,
+        'num_of_strings': 1000,
         'L': (frames + 1) * 2,
         'frames': frames,
         'plot': False,
