@@ -38,7 +38,7 @@ class Main(base):
                  frames=1000,
                  beta = 2.,
                  interval=1,
-                 weight_const=0.4,
+                 weight_const=0.5,
                  strings=None,
                  pre_function=None,
                  post_function=None):
@@ -479,17 +479,17 @@ class Main(base):
 
 
 if __name__ == '__main__':
-    # import random
     # import timeit
-    # print(timeit.timeit("Main(Lx=60, Ly=60, size=[3,] * 1, \
-    #                           strings=[{'id': 1, 'x': 30, 'y': 15, 'vec': [0, 4]}], \
+    # print(timeit.timeit("Main(Lx=1000, Ly=1000, size=[3,] * 1, \
+    #                           strings=[{'id': 1, 'x': 250, 'y': 500, 'vec': [0, 4]}], \
     #                           plot=False)",
     #                     setup="from __main__ import Main",
     #                     number=10
     #                     ))
 
     L = 100
-    main= Main(Lx=L, Ly=L, size=[3,] * 1, frames=500,
-               beta=3.,
+
+    main= Main(Lx=L, Ly=L, size=[3,] * 1, frames=1000,
+               beta=0.,
                plot=True, plot_surface=False,
                strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
