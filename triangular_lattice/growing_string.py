@@ -166,16 +166,12 @@ class Main(base):
         v, w (int): ベクトル(0〜5の整数で表す)"""
         if (w + 6 - v) % 6 == 0:
             return 1
-        elif (w + 6 - v) % 6 == 1:
+        elif (w + 6 - v) % 6 == 1 or (w + 6 - v) % 6 == 5:
             return 0.5
-        elif (w + 6 - v) % 6 == 2:
+        elif (w + 6 - v) % 6 == 2 or (w + 6 - v) % 6 == 4:
             return -0.5
         elif (w + 6 - v) % 6 == 3:
             return -1.
-        elif (w + 6 - v) % 6 == 4:
-            return -0.5
-        elif (w + 6 - v) % 6 == 5:
-            return 0.5
 
     def plot_all(self):
         """軸の設定，三角格子の描画，線分描画要素の用意などを行う
