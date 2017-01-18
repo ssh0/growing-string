@@ -52,7 +52,7 @@ def calc_fractal_dim_for_each_beta_manual(ax, i, filename):
     distance_list = data['distance_list']
     path_length = data['path_length']
 
-    num_of_pairs = 300
+    num_of_pairs = 100
 
     x = np.array(path_length)
     x = x.reshape((num_of_strings, int(x.shape[0] / num_of_strings / num_of_pairs), num_of_pairs))
@@ -67,8 +67,9 @@ def calc_fractal_dim_for_each_beta_manual(ax, i, filename):
     ax.loglog(X, Y, ls='', marker='.', label=r'$\beta = %2.2f$' % beta,
               alpha=0.5)
     ax.legend(loc='best')
+    ax.set_title('frames = {}, beta = {}'.format(frames, beta))
     def onselect(vmin, vmax):
-        global result
+        global result, selected_index
         ax.cla()
         selected_index = np.where((X >= vmin) & (X <= vmax))
         optimizer = Optimize_powerlaw(
@@ -82,9 +83,11 @@ def calc_fractal_dim_for_each_beta_manual(ax, i, filename):
                   ls='-', marker='', color='k',
                   label=r'$D = %2.2f$' % result['D'])
         ax.legend(loc='best')
+        ax.set_title('frames = {}, beta = {}'.format(frames, beta))
     span = SpanSelector(ax, onselect, direction='horizontal')
     plt.show()
     plt.close()
+    print selected_index
     return beta, result['D']
 
 
