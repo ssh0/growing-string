@@ -14,7 +14,7 @@ import itertools
 
 
 class DieCutting(object):
-    def __init__(self, L=60, frames=1000, sample=3, beta=2., c=1.5,
+    def __init__(self, L=60, frames=1000, sample=3, beta=2., c=0.5,
                  plot=False):
         self.L = L
         self.frames = frames

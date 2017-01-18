@@ -20,7 +20,7 @@ def get_mass_in_r_for_one_string(L, frames, beta, r=None):
         'Ly': L,
         'frames': frames,
         'beta': beta,
-        'weight_const': 0.,
+        'weight_const': 0.5,
         'strings': [{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4, 2]}, ],
         # 'boundary': {'h': 'reflective', 'v': 'reflective'},
         'boundary': {'h': 'periodic', 'v': 'periodic'},

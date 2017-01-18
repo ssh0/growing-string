@@ -36,7 +36,7 @@ if __name__ == '__main__':
         'Ly': L,
         'frames': frames,
         'beta': 12.,
-        'weight_const': 0.4,
+        'weight_const': 0.5,
         'boundary': {'h': 'periodic', 'v': 'periodic'},
         # 'boundary': {'h': 'reflective', 'v': 'reflective'},
         'plot': True,

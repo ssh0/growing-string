@@ -25,7 +25,7 @@ class FilledKagome:
             'Ly': L,
             'frames': frames,
             'beta': beta,
-            'weight_const': 0.,
+            'weight_const': 0.5,
             'strings': [{'id': 1, 'x': L / 2, 'y': L / 2, 'vec': [0, 4, 2]}, ],
             'boundary': {'h': 'reflective', 'v': 'reflective'},
             'plot': False,

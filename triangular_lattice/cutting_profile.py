@@ -13,7 +13,7 @@ import save_data as sd
 
 
 class CuttingProfile(object):
-    def __init__(self, frames, beta, c=0.4, L=100, save_result=False,
+    def __init__(self, frames, beta, c=0.5, L=100, save_result=False,
                  plot_raw_result=False, _plot_dist_to_verify=False):
         self.L = L
         # self.pbar = tqdm(total=frames)
