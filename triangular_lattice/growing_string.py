@@ -164,7 +164,18 @@ class Main(base):
         """0〜5で表された6つのベクトルの内積を計算する。
 
         v, w (int): ベクトル(0〜5の整数で表す)"""
-        return [1., 0.5, -0.5, -1., -0.5, 0.5][(w + 6 - v) % 6]
+        if (w + 6 - v) % 6 == 0:
+            return 1
+        elif (w + 6 - v) % 6 == 1:
+            return 0.5
+        elif (w + 6 - v) % 6 == 2:
+            return -0.5
+        elif (w + 6 - v) % 6 == 3:
+            return -1.
+        elif (w + 6 - v) % 6 == 4:
+            return -0.5
+        elif (w + 6 - v) % 6 == 5:
+            return 0.5
 
     def plot_all(self):
         """軸の設定，三角格子の描画，線分描画要素の用意などを行う
