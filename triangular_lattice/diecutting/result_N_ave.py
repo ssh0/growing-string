@@ -4,12 +4,15 @@
 # written by Shotaro Fujimoto
 # 2016-12-06
 
+import matplotlib
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.axes3d import Axes3D
 import matplotlib.cm as cm
+from matplotlib.backends.backend_pdf import PdfPages
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.stats import gamma
+import time
 import set_data_path
 
 
@@ -41,8 +44,6 @@ def show_plot1(ax, num_of_strings):
     ax.set_xlabel(r'Cutting size $L$')
     ax.set_ylabel('Average number of the sub-clusters (normalized)')
 
-    plt.show()
-
 def fit_a_x0_scale(path):
     betas = []
     a = []
@@ -69,6 +70,7 @@ def fit_a_x0_scale(path):
                     '-', label=r'fitted $\beta = %2.2f$' % beta,
                     color=cm.viridis(float(i) / len(path)))
     show_plot1(ax, num_of_strings)
+    plt.show()
 
     betas = np.array(betas)
     a = np.array(a)
@@ -115,6 +117,7 @@ def fit_a_scale(path, fixed_loc):
                     '-', label=r'fitted $\beta = %2.2f$' % beta,
                     color=cm.viridis(float(i) / len(path)))
     show_plot1(ax, num_of_strings)
+    plt.show()
 
     betas = np.array(betas)
     a = np.array(a)
@@ -130,7 +133,9 @@ def fit_a_scale(path, fixed_loc):
     ax2.set_ylabel(r'Scale parameter: $\theta$')
     plt.show()
 
-def fit_scale(path, fixed_a, fixed_loc):
+def fit_scale(path, fixed_a, fixed_loc, save_image=False):
+
+    matplotlib.rcParams['savefig.dpi'] = 300
 
     def modified_gamma_2(x, scale):
         a = fixed_a
@@ -152,8 +157,9 @@ def fit_scale(path, fixed_a, fixed_loc):
 
         x = np.linspace(0, max(Ls), num=5*max(Ls))
         ax.plot(x, modified_gamma_2(x, scale=popt[0]),
-                    '-', label=r'fitted $\beta = %2.2f$' % beta,
-                    color=cm.viridis(float(i) / len(path)))
+                '-',
+                # label=r'fitted $\beta = %2.2f$' % beta,
+                color=cm.viridis(float(i) / len(path)))
 
         # critcal_point = (3. - 1) * popt[0]  # x = (a - 1) * scale
 
@@ -161,19 +167,46 @@ def fit_scale(path, fixed_a, fixed_loc):
         #         color=cm.viridis(float(i) / len(path)))
     show_plot1(ax, num_of_strings)
 
+    if save_image:
+        result_image_path = "../results/img/diecutting/fitted_gamma_fixed_a_x0"
+        result_image_path += "_" + time.strftime("%y%m%d_%H%M%S")
+        pdf = PdfPages(result_image_path + ".pdf")
+        plt.savefig(result_image_path + ".png")
+        pdf.savefig()
+        pdf.close()
+        plt.close()
+        print "[saved] " + result_image_path
+    else:
+        plt.show()
+        plt.close()
+
     betas = np.array(betas)
     scale = np.array(scale)
 
-    fig, ax = plt.subplots(1, 1)
+    fig, ax = plt.subplots()
     ax.set_title(r'Fitting parameter (fixed: $a = 3$, $x_{0} = 0$)')
     ax.plot(betas, scale, 'o')
     ax.set_xlim((0, max(betas)))
     ax.set_xlabel(r'$\beta$')
     ax.set_ylabel(r'Scale parameter: $\theta$')
+
+    if save_image:
+        result_image_path = "../results/img/diecutting/fitted_parameters_fixed_a_x0"
+        result_image_path += "_" + time.strftime("%y%m%d_%H%M%S")
+        pdf = PdfPages(result_image_path + ".pdf")
+        plt.savefig(result_image_path + ".png")
+        pdf.savefig()
+        pdf.close()
+        plt.close()
+        print "[saved] " + result_image_path
+    else:
+        plt.show()
+        plt.close()
+
     plt.show()
 
 
 if __name__ == '__main__':
     # fit_a_x0_scale(set_data_path.data_path)
     # fit_a_scale(set_data_path.data_path, fixed_loc=0.)
-    fit_scale(set_data_path.data_path, fixed_a=3., fixed_loc=0.)
+    fit_scale(set_data_path.data_path, fixed_a=3., fixed_loc=0., save_image=True)
