@@ -42,7 +42,6 @@ def calc_fractal_dim_for_each_beta(ax, i, filename):
               label=r'$D = %2.2f$' % result['D'])
     return beta, result['D']
 
-
 def calc_fractal_dim_for_each_beta_manual(ax, i, filename):
     data = np.load(filename)
     beta = data['beta']
@@ -89,7 +88,6 @@ def calc_fractal_dim_for_each_beta_manual(ax, i, filename):
     plt.close()
     print selected_index
     return beta, result['D']
-
 
 def fractal_dims(result_data_path):
     fig, (ax1, ax2) = plt.subplots(2, 1)
@@ -203,6 +201,7 @@ def variation_of_fd(distance_data, plot=True, save_image=False):
     ax.set_title('Fractal dimension')
     ax.legend(loc='best')
     plt.show()
+
 
 if __name__ == '__main__':
     import time
