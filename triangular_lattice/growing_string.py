@@ -468,7 +468,7 @@ class Main(base):
                                                (nx, ny),
                                                [[0, r_rev, nx, ny], W])
                         elif i == len(s.pos) - 1:
-                            w = self.dot(s.vec[i - 2], r) + self.weight_const
+                            w = self.dot(s.vec[i - 1], r) + self.weight_const
                             W = np.exp(self.beta * w)
                             self.__update_dict(bonding_pairs,
                                                (nx, ny),
