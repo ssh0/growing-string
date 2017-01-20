@@ -436,7 +436,7 @@ if __name__ == '__main__':
     L = 100
 
     main = SAW(Lx=L, Ly=L, size=[3,], frames=1000,
-               beta=3.,
+               beta=4.,
                interval=0,
                plot=True, plot_surface=True,
                strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}]

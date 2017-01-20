@@ -27,9 +27,9 @@ def main(data_path):
 
     # print relative_positions
     ## Plot results
-    # plot_all_points(relative_positions)
-    # plot_hist(relative_positions)
-    plot_3d_wireframe(relative_positions)
+    # plot_all_points(relative_positions, save_image=False)
+    plot_hist(relative_positions, save_image=True)
+    # plot_3d_wireframe(relative_positions, save_image=False)
 
 
 if __name__ == '__main__':
@@ -44,4 +44,4 @@ if __name__ == '__main__':
         # ls -1 ./results/data/cutting_profile/*.npz
     ]
 
-    main(base_dir + fn[0])
+    main(base_dir + fn[5])

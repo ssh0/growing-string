@@ -509,9 +509,11 @@ if __name__ == '__main__':
     #                     number=10
     #                     ))
 
-    L = 100
+    L = 200
 
-    main= Main(Lx=L, Ly=L, size=[3,] * 1, frames=1000,
-               beta=0.,
+    main= Main(Lx=L, Ly=L, size=[3,] * 1, frames=2000,
+               beta=2.,
                plot=True, plot_surface=False,
-               strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
+               interval=0,
+               strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}]
+               )

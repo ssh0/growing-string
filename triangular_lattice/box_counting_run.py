@@ -11,7 +11,7 @@ import argparse
 
 if __name__ == '__main__':
 
-    sample = 8
+    sample = 4
 
     parser = argparse.ArgumentParser()
     parser.add_argument('beta', type=float, nargs=1,
