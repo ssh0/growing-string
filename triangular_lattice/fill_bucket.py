@@ -159,7 +159,7 @@ if __name__ == '__main__':
         'Ly': 5,
         'frames': frames,
         'beta': 0.,
-        'weight_const': 0.,
+        'weight_const': 0.5,
         'boundary': {'h': 'periodic', 'v': 'periodic'},
         # 'boundary': {'h': 'reflective', 'v': 'reflective'},
         'plot': False,
