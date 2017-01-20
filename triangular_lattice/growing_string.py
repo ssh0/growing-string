@@ -109,7 +109,9 @@ class Main(base):
         for key in self.bonding_pairs.keys():
             value = self.get_bonding_pairs(
                 s=self.strings[key],
-                indexes=[[0, len(self.strings[key].pos)]]
+                # indexes=[[0, len(self.strings[key].pos)]]
+                index_start=0,
+                index_stop=len(self.strings[key].pos)
             )
 
             # TODO: 隣接点がないとき，全体のシミュレーションを終了する
@@ -190,8 +192,9 @@ class Main(base):
         self.ax.set_yticklabels([])
         self.ax.set_aspect('equal')
 
-        triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
-        self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
+        if max(self.lattice.Lx, self.lattice.Ly) < 200:
+            triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
+            self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
 
         self.lines = [self.ax.plot([], [], linestyle='-',
                                    color='black',
@@ -338,30 +341,40 @@ class Main(base):
 
         # pp.pprint(self.bonding_pairs[key])
 
-        if i == 0:
-            # if s.loop:
-            #     indexes = [[len(s.vec) - 2, len(s.vec)], [0, 2]]
-            # else:
-            # indexes = [[0, 2]]
-            indexes = [[0, len(s.pos)]]
-        elif i == len(s.pos) - 1:
-            # if s.loop:
-            #     indexes = [[len(s.vec) - 2, len(s.vec)], [0, 1]]
-            # else:
-                # indexes = [[len(s.vec) - 2, len(s.vec)]]
-            indexes = [[max(0, len(s.pos)), len(s.pos)]]
-        else:
-            # indexes = [[i, len(s.pos)]]
-            indexes = [[i, len(s.pos)]]
+        # if i == 0:
+        #     # if s.loop:
+        #     #     indexes = [[len(s.vec) - 2, len(s.vec)], [0, 2]]
+        #     # else:
+        #     # indexes = [[0, 2]]
+        #     index_start = 0
+        #     index_stop = min(3, len(s.pos))
+        #     # index_stop = len(s.pos)
+        # elif i == len(s.pos) - 1:
+        #     # if s.loop:
+        #     #     indexes = [[len(s.vec) - 2, len(s.vec)], [0, 1]]
+        #     # else:
+        #         # indexes = [[len(s.vec) - 2, len(s.vec)]]
+        #     # index_start = max(0, len(s.pos))
+        #     index_start = max(0, len(s.pos) - 3)
+        #     index_stop = len(s.pos)
+        # else:
+        #     # indexes = [[i, len(s.pos)]]
+        #     index_start = i
+        #     index_stop = len(s.pos)
+        index_start = i
+        index_stop = len(s.pos)
+        # print(index_start, index_stop)
 
         self.cleanup_bonding_pairs(
             key=key,
-            indexes=indexes
+            index_start=index_start,
+            index_stop=index_stop
         )
 
         value = self.get_bonding_pairs(
             s=self.strings[key],
-            indexes=indexes
+            index_start=index_start,
+            index_stop=index_stop
         )
 
 
@@ -383,10 +396,10 @@ class Main(base):
         # pp.pprint(self.bonding_pairs[key].keys())
 
 
-    def cleanup_bonding_pairs(self, key, indexes):
-        rang = []
-        for (start, stop) in indexes:
-            rang += range(start, stop)
+    def cleanup_bonding_pairs(self, key, index_start, index_stop):
+        rang = range(index_start, index_stop)
+        # for (start, stop) in indexes:
+        #     rang += range(start, stop)
         for (x, y), l in self.bonding_pairs[key].items():
             tmp = []
             for i, (bonding_pair, w) in enumerate(l):
@@ -427,23 +440,25 @@ class Main(base):
         """
 
         if (i == 1) and (not s.loop):
-            w = self.dot(r_rev, s.vec[i]) - self.dot(s.vec[0], s.vec[1])
+            w = self.dot(r_rev, s.vec[i]) - self.dot(s.vec[0], s.vec[1]) - self.weight_const
         elif (i == len(s.pos) - 1) and (not s.loop):
-            w = self.dot(s.vec[i - 2], r_i) - self.dot(s.vec[i - 2], s.vec[i - 1])
+            w = self.dot(s.vec[i - 2], r_i) - self.dot(s.vec[i - 2], s.vec[i - 1]) - self.weight_const
         else:
             # w = self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[i % len(s.vec)])
             w = (self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[i % len(s.vec)])) \
-                - (self.dot(s.vec[i - 2], s.vec[i - 1]) + self.dot(s.vec[i - 1], s.vec[i % len(s.vec)]))
+                - (self.dot(s.vec[i - 2], s.vec[i - 1]) + self.dot(s.vec[i - 1], s.vec[i % len(s.vec)])) - self.weight_const
 
         W = np.exp(self.beta * w)
         return W
 
-    def get_bonding_pairs(self, s, indexes):
+    def get_bonding_pairs(self, s, index_start, index_stop):
         bonding_pairs = {}
         neighbors_dict = {}
-        rang = []
-        for (start, stop) in indexes:
-            rang += range(start, stop)
+        # rang = []
+        # for (start, stop) in indexes:
+        #     rang += range(start, stop)
+
+        rang = range(index_start, index_stop)
 
         if s.loop and (0 in rang):
             rang.append(0)
@@ -462,13 +477,13 @@ class Main(base):
                 if not neighbors_dict.has_key((nx, ny)):
                     if not s.loop:
                         if i == 0:
-                            w = self.weight_const + self.dot(r_rev, s.vec[0])
+                            w = self.dot(r_rev, s.vec[0])
                             W = np.exp(self.beta * w)
                             self.__update_dict(bonding_pairs,
                                                (nx, ny),
                                                [[0, r_rev, nx, ny], W])
                         elif i == len(s.pos) - 1:
-                            w = self.dot(s.vec[i - 1], r) + self.weight_const
+                            w = self.dot(s.vec[i - 1], r)
                             W = np.exp(self.beta * w)
                             self.__update_dict(bonding_pairs,
                                                (nx, ny),

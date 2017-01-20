@@ -99,7 +99,8 @@ class SAW(base):
         for key in self.bonding_pairs.keys():
             value = self.get_bonding_pairs(
                 s=self.strings[key],
-                indexes=[[0, len(self.strings[key].pos)]]
+                index_start=0,
+                index_stop=len(self.strings[key].pos)
             )
 
             # TODO: 隣接点がないとき，全体のシミュレーションを終了する
@@ -180,8 +181,9 @@ class SAW(base):
         self.ax.set_yticklabels([])
         self.ax.set_aspect('equal')
 
-        triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
-        self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
+        if max(self.lattice.Lx, self.lattice.Ly) < 200:
+            triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
+            self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
 
         self.lines = [self.ax.plot([], [], linestyle='-',
                                    color='black',
@@ -329,16 +331,19 @@ class SAW(base):
 
         # pp.pprint(self.bonding_pairs[key])
 
-        indexes = [[0, len(s.pos)]]
+        index_start = i
+        index_stop = len(s.pos)
 
         self.cleanup_bonding_pairs(
             key=key,
-            indexes=indexes
+            index_start=index_start,
+            index_stop=index_stop
         )
 
         value = self.get_bonding_pairs(
             s=self.strings[key],
-            indexes=indexes
+            index_start=index_start,
+            index_stop=index_stop
         )
 
 
@@ -360,10 +365,8 @@ class SAW(base):
         # pp.pprint(self.bonding_pairs[key].keys())
 
 
-    def cleanup_bonding_pairs(self, key, indexes):
-        rang = []
-        for (start, stop) in indexes:
-            rang += range(start, stop)
+    def cleanup_bonding_pairs(self, key, index_start, index_stop):
+        rang = range(index_start, index_stop)
         for (x, y), l in self.bonding_pairs[key].items():
             tmp = []
             for i, (bonding_pair, w) in enumerate(l):
@@ -399,30 +402,10 @@ class SAW(base):
         # print(bonding_pairs[choiced_index])
         return bonding_pairs[choiced_index]
 
-    def calc_weight(self, s, i, r_i=None, r_rev=None):
-        """ベクトルの内積を元に，Boltzmann分布に従って成長点選択の重みを決定
-        """
-
-        if (i == 1) and (not s.loop):
-            w = self.dot(r_rev, s.vec[i]) - self.dot(s.vec[0], s.vec[1])
-        elif (i == len(s.pos) - 1) and (not s.loop):
-            w = self.dot(s.vec[i - 2], r_i) - self.dot(s.vec[i - 2], s.vec[i - 1])
-        else:
-            # w = self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[i % len(s.vec)])
-            w = (self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[i % len(s.vec)])) \
-                - (self.dot(s.vec[i - 2], s.vec[i - 1]) + self.dot(s.vec[i - 1], s.vec[i % len(s.vec)]))
-
-        W = np.exp(self.beta * w)
-        return W
-
-    def get_bonding_pairs(self, s, indexes):
+    def get_bonding_pairs(self, s, index_start, index_stop):
         bonding_pairs = {}
         neighbors_dict = {}
-        rang = []
-        for (start, stop) in indexes:
-            rang += range(start, stop)
-            # rang += [start, stop - 1]
-
+        rang = range(index_start, index_stop)
         for i in rang:
             x, y = s.pos[i]
             nnx, nny = self.lattice.neighbor_of(x, y)
@@ -435,13 +418,13 @@ class SAW(base):
                 r_rev = (r + 3) % 6
 
                 if i == 0:
-                    w = self.weight_const + self.dot(r_rev, s.vec[0])
+                    w = self.dot(r_rev, s.vec[0])
                     W = np.exp(self.beta * w)
                     self.__update_dict(bonding_pairs,
                                        (nx, ny),
                                        [[0, r_rev, nx, ny], W])
                 elif i == len(s.pos) - 1:
-                    w = self.dot(s.vec[i - 1], r) + self.weight_const
+                    w = self.dot(s.vec[i - 1], r)
                     W = np.exp(self.beta * w)
                     self.__update_dict(bonding_pairs,
                                        (nx, ny),
