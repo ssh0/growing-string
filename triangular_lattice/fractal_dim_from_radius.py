@@ -92,17 +92,20 @@ if __name__ == '__main__':
         # "./results/data/radius/frames=2000_beta=8.00_170120_181404.npz",
         # "./results/data/radius/frames=2000_beta=10.00_170120_181405.npz",
 
-        "./results/data/radius/frames=2000_beta=0.00_sample=100_170120_191732.npz",
-        "./results/data/radius/frames=2000_beta=2.00_sample=100_170120_193745.npz",
-        "./results/data/radius/frames=2000_beta=4.00_sample=100_170120_201105.npz",
-        "./results/data/radius/frames=2000_beta=6.00_sample=100_170120_203628.npz",
-        "./results/data/radius/frames=2000_beta=8.00_sample=100_170120_210938.npz",
-        "./results/data/radius/frames=2000_beta=10.00_sample=100_170120_212150.npz",
+        # "./results/data/radius/frames=2000_beta=0.00_sample=100_170120_191732.npz",
+        # "./results/data/radius/frames=2000_beta=2.00_sample=100_170120_193745.npz",
+        # "./results/data/radius/frames=2000_beta=4.00_sample=100_170120_201105.npz",
+        # "./results/data/radius/frames=2000_beta=6.00_sample=100_170120_203628.npz",
+        # "./results/data/radius/frames=2000_beta=8.00_sample=100_170120_210938.npz",
+        # "./results/data/radius/frames=2000_beta=10.00_sample=100_170120_212150.npz",
+
+        "./results/data/radius/frames=2000_beta=0.00_sample=200_170120_225734.npz",
+        "./results/data/radius/frames=2000_beta=2.00_sample=200_170120_233421.npz",
     ]
 
-    _plot_data_for_validation(result_data_paths)
+    # _plot_data_for_validation(result_data_paths)
 
-    # get_fractal_dim(result_data_paths[5])
+    get_fractal_dim(result_data_paths[1])
 
     # for path in result_data_paths:
     #     get_fractal_dim(path)
