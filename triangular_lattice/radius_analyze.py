@@ -4,11 +4,10 @@
 # written by Shotaro Fujimoto
 # 2016-10-18
 
-import time
 import numpy as np
-from tqdm import tqdm
-from multiprocessing import Pool
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+import time
 
 Ds = []
 err = []

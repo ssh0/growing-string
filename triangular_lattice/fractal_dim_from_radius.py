@@ -62,7 +62,6 @@ def get_fractal_dim(path):
                        r'$D = %2.2f$' % D,
                        ha='center', va='bottom',
                        rotation=np.arctan(result['D']) * (180 / np.pi))
-        ax.legend(loc='best')
 
     def press(event):
         global ln

@@ -204,7 +204,7 @@ class Visualizer(object):
         fig, ax = plt.subplots()
         for i, result_data_path in enumerate(self.data_path_list):
             self.load_data(result_data_path)
-            ax.plot(self.Ls[1:], self.S[1:], '.',
+            ax.plot(self.Ls[1:], self.S[1:] / np.sum(self.S[1:]), '.',
                     label=r'$\beta = %2.2f$' % self.beta,
                     color=cm.viridis(float(i) / len(self.data_path_list)))
         ax.legend(loc='best')
