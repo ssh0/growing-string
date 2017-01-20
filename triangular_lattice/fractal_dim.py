@@ -21,7 +21,7 @@ def calc_fractal_dim_for_each_beta(ax, i, filename):
     distance_list = data['distance_list']
     path_length = data['path_length']
 
-    num_of_pairs = 300
+    num_of_pairs = 100
 
     x = np.array(path_length)
     x = x.reshape((num_of_strings, int(x.shape[0] / num_of_strings / num_of_pairs), num_of_pairs))
@@ -35,14 +35,15 @@ def calc_fractal_dim_for_each_beta(ax, i, filename):
     Y = x[0, :, 0]
     ax.loglog(X, Y, ls='', marker='.', label=r'$\beta = %2.2f$' % beta,
               alpha=0.5)
-    optimizer = Optimize_powerlaw(args=(X[:], Y[:]), parameters=[0.1, 2.])
-    result = optimizer.fitting()
-    print "beta = {}, D = {}".format(beta, result['D'])
-    ax.loglog(X, optimizer.fitted(X), ls='-', marker='', color='k',
-              label=r'$D = %2.2f$' % result['D'])
+    result = {'D': None}
+    # optimizer = Optimize_powerlaw(args=(X[:], Y[:]), parameters=[0.1, 2.])
+    # result = optimizer.fitting()
+    # print "beta = {}, D = {}".format(beta, result['D'])
+    # ax.loglog(X, optimizer.fitted(X), ls='-', marker='', color='k',
+    #           label=r'$D = %2.2f$' % result['D'])
     return beta, result['D']
 
-def calc_fractal_dim_for_each_beta_manual(ax, i, filename):
+def calc_fractal_dim_for_each_beta_manual(ax, i, filename, save_image=False):
     data = np.load(filename)
     beta = data['beta']
     num_of_strings = data['num_of_strings']
@@ -53,6 +54,7 @@ def calc_fractal_dim_for_each_beta_manual(ax, i, filename):
 
     num_of_pairs = 100
 
+    ## path_length に対して distance_list の平均を取る方法
     x = np.array(path_length)
     x = x.reshape((num_of_strings, int(x.shape[0] / num_of_strings / num_of_pairs), num_of_pairs))
 
@@ -63,6 +65,19 @@ def calc_fractal_dim_for_each_beta_manual(ax, i, filename):
 
     X = np.average(y_ave, axis=0)
     Y = x[0, :, 0]
+
+    ## distance に対して path_length の平均を取る方法(✘)
+    # hist, xedges, yedges = np.histogram2d(distance_list, path_length, bins=(100, 20))
+    # xpos, ypos = np.meshgrid(xedges[:-1] + (xedges[1] - xedges[0]) / 2.,
+    #                          yedges[:-1] + (yedges[1] - yedges[0]) / 2.)
+    # summention = np.sum(hist, axis=1)
+    # not_zero = np.where(summention > 0)[0]
+    # z_ave = np.dot(hist, ypos.T[0])[not_zero] / summention[not_zero]
+
+    # X = xpos[0][not_zero]
+    # Y = z_ave
+
+    ## X: distance, Y: path_length
     ax.loglog(X, Y, ls='', marker='.', label=r'$\beta = %2.2f$' % beta,
               alpha=0.5)
     ax.legend(loc='best')
@@ -85,8 +100,22 @@ def calc_fractal_dim_for_each_beta_manual(ax, i, filename):
         ax.set_title('frames = {}, beta = {}'.format(frames, beta))
     span = SpanSelector(ax, onselect, direction='horizontal')
     plt.show()
+
+    ax.set_xlabel(r'$\delta$')
+    ax.set_ylabel(r'Averaged path length $\bar{L}$')
+    ax.set_title(r'$\delta$ -- $L$ (frames=%d)' % frames)
+    ax.legend(loc='best')
+
+    if save_image:
+        result_image_path = "results/img/fractal_dim/d_L_frames=%d_beta=%2.2f" % (frames, beta)
+        result_image_path += "_" + time.strftime("%y%m%d_%H%M%S")
+        result_image_path += ".png"
+        plt.savefig(result_image_path)
+        plt.close()
+        print "[saved] " + result_image_path
+
     plt.close()
-    print selected_index
+
     return beta, result['D']
 
 def fractal_dims(result_data_path):
@@ -127,7 +156,7 @@ def variation_of_fd(distance_data, plot=True, save_image=False):
         for i, f in enumerate(distance_data[frames]):
             fig, ax1 = plt.subplots()
             # beta, D = calc_fractal_dim_for_each_beta(ax1, i, f)
-            beta, D = calc_fractal_dim_for_each_beta_manual(ax1, i, f)
+            beta, D = calc_fractal_dim_for_each_beta_manual(ax1, i, f, save_image)
             betas.append(beta)
             Ds.append(D)
 
@@ -151,23 +180,23 @@ def variation_of_fd(distance_data, plot=True, save_image=False):
         # else:
         #     plt.close()
 
-        fig, ax2 = plt.subplots()
-        ax2.set_xlabel(r'$\beta$')
-        ax2.set_ylabel(r'Fractal dimension $D$')
-        ax2.set_title(r'$\beta$ -- $D$')
-        ax2.plot(betas, Ds, 'o')
+        # fig, ax2 = plt.subplots()
+        # ax2.set_xlabel(r'$\beta$')
+        # ax2.set_ylabel(r'Fractal dimension $D$')
+        # ax2.set_title(r'$\beta$ -- $D$')
+        # ax2.plot(betas, Ds, 'o')
 
-        if plot:
-            plt.show()
-        elif save_image:
-            result_image_path = "results/img/fractal_dim/t_D_frames=%d" % frames
-            result_image_path += "_" + time.strftime("%y%m%d_%H%M%S")
-            result_image_path += ".png"
-            plt.savefig(result_image_path)
-            plt.close()
-            print "[saved] " + result_image_path
-        else:
-            plt.close()
+        # if plot:
+        #     plt.show()
+        # elif save_image:
+        #     result_image_path = "results/img/fractal_dim/t_D_frames=%d" % frames
+        #     result_image_path += "_" + time.strftime("%y%m%d_%H%M%S")
+        #     result_image_path += ".png"
+        #     plt.savefig(result_image_path)
+        #     plt.close()
+        #     print "[saved] " + result_image_path
+        # else:
+        #     plt.close()
 
     T = np.array(T)
     D = np.array(D_T).T
@@ -207,4 +236,4 @@ if __name__ == '__main__':
     import time
     from fractal_dim_data import result_data_path, distance_data
     # fractal_dims(result_data_path)
-    variation_of_fd(distance_data, plot=False, save_image=False)
+    variation_of_fd(distance_data, plot=False, save_image=True)
