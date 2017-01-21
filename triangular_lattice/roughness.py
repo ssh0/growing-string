@@ -8,8 +8,10 @@
 from growing_string import Main
 from optimize import Optimize_powerlaw
 from surface import get_surface_points, set_labels, get_labeled_position
+from matplotlib.widgets import SpanSelector
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 
 class Roughness(Main):
@@ -19,7 +21,6 @@ class Roughness(Main):
                       beta=beta,
                       strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}]
                       )
-
 
 def eval_fluctuation_on_surface(self, pos, test=False):
     position = get_surface_points(self, pos)
@@ -39,8 +40,7 @@ def eval_fluctuation_on_surface(self, pos, test=False):
     label_list = label_lattice[index]
     return np.array([theta, r]), R, label_list
 
-
-def plot_to_veirfy(theta, r, R_t, label_list):
+def plot_to_verify(beta, frames, theta, r, R_t, label_list, save_image=False):
     fig = plt.figure()
     ax_left = fig.add_subplot(121)
     ax_right = fig.add_subplot(122)
@@ -49,22 +49,29 @@ def plot_to_veirfy(theta, r, R_t, label_list):
         x1, y1 = R_t * np.cos(theta_), R_t * np.sin(theta_)
         x2, y2 = r_ * np.cos(theta_), r_ * np.sin(theta_)
         ax_left.plot([x1, x2], [y1, y2], color='k', alpha=0.5)
-        ax_left.text(x2, y2, label)
+        # ax_left.text(x2, y2, label)
 
-    ax_left.plot(r * np.cos(theta), r * np.sin(theta), 'o')
     th = np.linspace(0., 2 * np.pi, num=100)
-    ax_left.plot(R_t * np.cos(th), R_t * np.sin(th))
-    ax_left.set_aspect('equal')
-    ax_left.set_title('Real space')
+    ax_left.plot(R_t * np.cos(th), R_t * np.sin(th), 'k', alpha=0.5)
+    ax_right.plot([0., 2 * np.pi * R_t], [0., 0.], 'k', alpha=0.5)
 
-    ax_right.plot(R_t * theta, r - R_t)
-    ax_right.plot([0., 2 * np.pi * R_t], [0., 0.])
+    for label in sorted(list(set(label_list))):
+        index = np.where(label_list == label)[0]
+        ax_left.plot(r[index] * np.cos(theta[index]),
+                     r[index] * np.sin(theta[index]),
+                     '.')
+        ax_right.plot(R_t * theta[index], r[index] - R_t)
+
+    ax_left.set_aspect('equal')
+    ax_left.set_title(r"Real space ($\beta = {}$, $T = {}$)".format(beta, frames))
     ax_right.set_title('Fluctuation of surface')
     ax_right.set_xlabel(r'$ R \theta$')
     ax_right.set_ylabel(r'$r_{i} - R$')
-
-    ax_left.set_title('Real space')
-
+    if save_image:
+        fn = "results/img/roughness/raw_frames=%d_beta=%2.2f" % (frames, beta)
+        fn += "_" + time.strftime("%y%m%d_%H%M%S") + ".png"
+        plt.savefig(fn)
+        print "[saved] " + fn
 
 def eval_std_various_width(theta, r, R_t):
     L = theta * R_t
@@ -103,63 +110,93 @@ def eval_std_various_width(theta, r, R_t):
 
     return res_width, res_std
 
-
-def plot_result(x, y, ax=None):
+def plot_result(beta, frames, x, y, ax=None):
     if ax is None:
         fig, ax = plt.subplots()
     ax.loglog(x, y, 'o-')
     # ax.semilogx(x, y, 'o-')
     # ax.semilogy(x, y, 'o-')
-    ax.set_title('Roughness (averaged) at some width')
+    ax.set_title(r"Roughness (averaged) at some width"
+                 + r"($\beta = {}$, $T = {}$)".format(beta, frames))
     ax.set_xlabel(r'width')
     ax.set_ylabel(r'$\sigma$')
+    ax.set_aspect('equal')
     return ax
 
+def fitting_manual(fig, ax, x, y):
+    x = np.array(x)
+    y = np.array(y)
 
-def fitting(ax, x, y, index_start, index_end):
-    optimizer = Optimize_powerlaw(args=(x[index_start:index_end],
-                                        y[index_start:index_end]),
-                                  parameters=[0., 0.5])
-    result = optimizer.fitting()
-    print result['D']
-    ax.loglog(x[index_start:index_end],
-              optimizer.fitted(x[index_start:index_end]),
-              lw=2, label='D = %f' % result['D'])
-    ax.legend(loc='best')
+    def onselect(vmin, vmax):
+        global result, selected_index, ln, text
+        if globals().has_key('ln') and ln:
+            ln.remove()
+            text.remove()
 
+        selected_index = np.where((x >= vmin) & (x <= vmax))
+        optimizer = Optimize_powerlaw(
+            args=(x[selected_index], y[selected_index]),
+            parameters=[1., 0.5])
+        result = optimizer.fitting()
+        D = result['D']
+        print result['D']
+        # print "beta = {}, D = {}".format(beta, D)
+        optimizer.c = result['c'] + 0.15
+        X = x[selected_index]
+        Y = optimizer.fitted(X)
+        ln, = ax.loglog(X, Y, ls='-', marker='', color='k')
+        text = ax.text((X[0] + X[-1]) / 2., (Y[0] + Y[-1]) / 2.,
+                       r'$D = %2.2f$' % D,
+                       ha='center', va='bottom',
+                       rotation=np.arctan(result['D']) * (180 / np.pi))
 
-if __name__ == '__main__':
+    def press(event):
+        global ln
+        if event.key == 'a':
+            ln = False
 
-    fig, ax = plt.subplots()
-    for i in range(1):
-        # main = Roughness(L=60, frames=1000)
-        main = Roughness(L=120, frames=2000, beta=0.)
+        if event.key == 'x':
+            # save image
+            fn = "results/img/roughness/frames=%d_beta=%2.2f" % (frames, beta)
+            fn += "_" + time.strftime("%y%m%d_%H%M%S") + ".png"
+            plt.savefig(fn)
+            print "[saved] " + fn
+            plt.close()
 
-        # 隣接格子点に同じラベルを振る
-        # 元
-        # (theta, r), R_t, label_list = eval_fluctuation_on_surface(main, main.strings[0], test=True)
-        # index_sorted = np.argsort(theta)
-        # theta, r, label_list = theta[index_sorted], r[index_sorted], label_list[index_sorted]
-        # plot_to_veirfy(theta, r, R_t, label_list)
-        # plt.show()
+    span = SpanSelector(ax, onselect, direction='horizontal')
+    fig.canvas.mpl_connect('key_press_event', press)
+    plt.show()
 
-        # 最大クラスターのみ表示
-        (theta, r), R_t, label_list = eval_fluctuation_on_surface(main,
-                                                                main.strings[0].pos)
-        index_sorted = np.argsort(theta)
-        theta = theta[index_sorted]
-        r = r[index_sorted]
-        label_list = label_list[index_sorted]
+def start(beta, frames, plot_to_verify_bool=True, save_image_bool=False):
+    L = (frames + 1) * 2
+    main = Roughness(L=L, frames=frames, beta=beta)
 
-        plot_to_veirfy(theta, r, R_t, label_list)
+    ## 隣接格子点に同じラベルを振る
+    ## すべてのラベル
+    # (theta, r), R_t, label_list = eval_fluctuation_on_surface(
+    #     main, main.strings[0].pos, test=True)
+    ## 最大クラスターのみ表示
+    (theta, r), R_t, label_list = eval_fluctuation_on_surface(
+        main, main.strings[0].pos, test=False)
+
+    i_srted = np.argsort(theta)
+    theta, r, label_list = theta[i_srted], r[i_srted], label_list[i_srted]
+
+    ## plot to verify
+    if plot_to_verify_bool:
+        plot_to_verify(beta, frames, theta, r, R_t, label_list, save_image_bool)
         plt.show()
 
-        # res_width, res_std = eval_std_various_width(theta, r, R_t)
-        # ax = plot_result(res_width, res_std, ax)
+    ## Plot the relation between width and std.
+    fig, ax = plt.subplots()
+    res_width, res_std = eval_std_various_width(theta, r, R_t)
+    ax = plot_result(beta, frames, res_width, res_std, ax)
+    fitting_manual(fig, ax, res_width, res_std)
 
-        # # FIXME: フィッティング領域の選択の自動化
-        # # fitting(ax, res_width, res_std, 7, 38)  # <- {L: 60, frames=1000}
-        # fitting(ax, res_width, res_std, 7, 35)  # <- {L: 120, frames=3000}
+if __name__ == '__main__':
+    frames = 1000
+    # start(2., frames, plot_to_verify_bool=True, save_image_bool=False)
 
-    # plt.show()
+    for beta in [0., 2., 4., 6., 8., 10.]:
+        start(beta, frames, plot_to_verify_bool=True, save_image_bool=False)
 
