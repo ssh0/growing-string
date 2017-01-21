@@ -167,7 +167,7 @@ class Main(base):
 
         v, w (int): ベクトル(0〜5の整数で表す)"""
         if (w + 6 - v) % 6 == 0:
-            return 1
+            return 1.
         elif (w + 6 - v) % 6 == 1 or (w + 6 - v) % 6 == 5:
             return 0.5
         elif (w + 6 - v) % 6 == 2 or (w + 6 - v) % 6 == 4:
@@ -192,6 +192,7 @@ class Main(base):
         self.ax.set_yticklabels([])
         self.ax.set_aspect('equal')
 
+        # if the lattice size exceeds 200, don't draw triangular lattice.
         if max(self.lattice.Lx, self.lattice.Ly) < 200:
             triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
             self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
@@ -302,8 +303,7 @@ class Main(base):
                 self.post_func_res.append(self.post_function(self, i, s))
 
         if self.plot or self.save_video:
-            ret = self.plot_string()
-            return ret
+            return self.plot_string()
 
     def update_each_string(self, key):
         X = self.get_neighbor_xy(key)
