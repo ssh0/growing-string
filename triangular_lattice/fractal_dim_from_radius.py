@@ -101,6 +101,10 @@ if __name__ == '__main__':
 
         "./results/data/radius/frames=2000_beta=0.00_sample=200_170120_225734.npz",
         "./results/data/radius/frames=2000_beta=2.00_sample=200_170120_233421.npz",
+        "./results/data/radius/frames=2000_beta=4.00_sample=200_170121_003705.npz",
+        "./results/data/radius/frames=2000_beta=6.00_sample=200_170121_012543.npz",
+        "./results/data/radius/frames=2000_beta=8.00_sample=200_170121_021643.npz",
+        "./results/data/radius/frames=2000_beta=10.00_sample=200_170121_024946.npz",
     ]
 
     # _plot_data_for_validation(result_data_paths)
