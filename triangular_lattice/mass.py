@@ -5,6 +5,7 @@
 # 2017-01-21
 
 import numpy as np
+import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import argparse
@@ -15,19 +16,29 @@ import save_data
 
 def mass_for_beta_one(beta, frames_list, N_r=100, num_of_strings=100):
     frames = np.max(frames_list)
+    center_sample = int(np.min(frames_list) / 2)
     L = (frames + 1) * 2
 
     def calc_mass_in_r(self, i, s):
-        N = float(len(s.vec) + 1)
+        N = len(s.vec) + 1
         if N - 3 in frames_list:
             pos = list(s.pos.T)
             x, y = self.lattice_X[pos], self.lattice_Y[pos]
             X, Y = np.average(x), np.average(y)
-            R = np.sqrt(np.sum((x - X) ** 2 + (y - Y) ** 2) / N)
+            R = np.sqrt(np.sum((x - X) ** 2 + (y - Y) ** 2) / float(N))
             dist = np.sqrt((x - X) ** 2 + (y - Y) ** 2)
             r = np.logspace(1, np.log2(max(dist)), num=N_r, base=2.)
-            res = np.array([len(np.where(dist < _r)[0]) for _r in r])
-            return np.array([r, res]).T
+            centers_index = sorted(random.sample(range(N), center_sample))
+            M = []
+            for _r in r:
+                res = []
+                for c in centers_index:
+                    index_x, index_y = s.pos[c]
+                    dist = np.sqrt((x - self.lattice_X[index_x, index_y]) ** 2
+                                   + (y - self.lattice_Y[index_x, index_y]) ** 2)
+                    res.append(len(np.where(dist < _r)[0]))
+                M.append(np.average(res))
+            return np.array([r, M]).T
 
     main = Main(Lx=L, Ly=L, plot=False,
                 frames=frames,
@@ -59,6 +70,7 @@ def mass_for_beta_one(beta, frames_list, N_r=100, num_of_strings=100):
 
 if __name__ == '__main__':
 
+    # frames_list = np.linspace(200, 600, num=3, dtype=np.int)
     frames_list = np.linspace(200, 2000, num=10, dtype=np.int)
 
     parser = argparse.ArgumentParser()
@@ -68,5 +80,5 @@ if __name__ == '__main__':
     beta = args.beta[0]
     # beta = 0.
 
-    # mass_for_beta_one(beta, N_r=4, num_of_strings=3)
+    # mass_for_beta_one(beta, frames_list, N_r=4, num_of_strings=3)
     mass_for_beta_one(beta, frames_list, N_r=100, num_of_strings=100)
