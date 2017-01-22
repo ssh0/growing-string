@@ -40,24 +40,25 @@ if __name__ == '__main__':
     beta_list = [0, 2, 4, 6, 8, 10]
     ##           0  1  2  3  4  5
 
-    # Ds = read_from_csv('./results/img/mass_in_r/data_170122.csv').T
-    Ds = manual_data()
-    print Ds
+    Ds = read_from_csv('./results/img/mass_in_r/data_170122.csv').T
+    # Ds = manual_data()
 
-    # markers = ['o', 'v', '^', 's', 'D', 'h']
+    markers = ['o', 'v', '^', 's', 'D', 'h']
 
-    # fig, ax = plt.subplots()
-    # for i, beta in enumerate(beta_list):
-    #     color = cm.viridis(float(i) / (len(beta_list) - 1))
-    #     ax.plot(frames_list, Ds[i], marker=markers[i % len(markers)],
-    #             ls='', color=color, label=r'$\beta = %2.2f$' % beta)
+    fig, ax = plt.subplots()
+    for i, beta in enumerate(beta_list):
+        color = cm.viridis(float(i) / (len(beta_list) - 1))
+        ax.plot(frames_list, Ds[i], marker=markers[i % len(markers)],
+                ls='', color=color, label=r'$\beta = %2.2f$' % beta)
     # ax.legend(loc='best')
-    # ax.set_title(r'Fractal dimension $D$')
-    # ax.set_xlabel(r'$T$')
-    # ax.set_ylabel(r'$D$')
-    # ax.set_xlim(0, 2200)
-    # ax.set_ylim(1., 2.)
-    # plt.show()
+    ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    fig.subplots_adjust(right=0.8)
+    ax.set_title(r'Fractal dimension $D$')
+    ax.set_xlabel(r'$T$')
+    ax.set_ylabel(r'$D$')
+    ax.set_xlim(0, 2200)
+    ax.set_ylim(1., 2.)
+    plt.show()
 
 
 

@@ -29,7 +29,7 @@ def _plot_data_for_validation(paths, raw=False):
             beta, num_of_strings, N_r, frames, r, M = load_data(path)
             ax.loglog(r, M, '.',
                       label=r'$\beta = %2.2f$, $T = %d$' % (beta, frames))
-        ax.set_title('Mass in the circle of radius $r$')
+        ax.set_title(r'Mass in the circle of radius $r$')
         ax.set_ylabel(r'Mass in the circle of radius')
     else:  # Plot averaged data
         for path in paths:
@@ -37,7 +37,7 @@ def _plot_data_for_validation(paths, raw=False):
             r, M = averaging_data(r, M, N_r, scale='log')
             ax.loglog(r, M, '.',
                       label=r'$\beta = %2.2f$, $T = %d$' % (beta, frames))
-        ax.set_title('Averaged mass in the circle of radius $r$')
+        ax.set_title(r'Averaged mass in the circle of radius $r$')
         ax.set_ylabel(r'Averaged mass in the circle of radius')
     ax.legend(loc='best')
     ax.set_aspect('equal')
@@ -77,7 +77,7 @@ def get_fractal_dim(path):
     ax.set_ylabel(r'Averaged mass in the circle of radius')
 
     def onselect(vmin, vmax):
-        global result, selected_index, ln, text
+        global result, selected_index, ln, text, D
         if globals().has_key('ln') and ln:
             ln.remove()
             text.remove()
@@ -114,6 +114,7 @@ def get_fractal_dim(path):
     span = SpanSelector(ax, onselect, direction='horizontal')
     fig.canvas.mpl_connect('key_press_event', press)
     plt.show()
+    return D
 
 def get_paths(fix=None, beta_num=0, frame_num=0, ver=1):
     """get specific condtion datas
@@ -276,10 +277,10 @@ def get_paths(fix=None, beta_num=0, frame_num=0, ver=1):
 
 
 if __name__ == '__main__':
-    ## frame = [200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000]
-    ##          0    1    2    3    4     5     6     7     8     9
-    ## beta = [0, 2, 4, 6, 8, 10]
-    ##         0  1  2  3  4  5
+    frames_list = [200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000]
+    ##             0    1    2    3    4     5     6     7     8     9
+    beta_list = [0, 2, 4, 6, 8, 10]
+    ##           0  1  2  3  4  5
 
     # result_data_paths = get_paths(beta_num=5, frame_num=9)
     # result_data_paths = get_paths(fix='frames', frame_num=7, ver=0)
