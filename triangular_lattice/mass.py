@@ -13,8 +13,7 @@ from optimize import Optimize_powerlaw
 import save_data
 
 
-def mass_for_beta_one(beta, N_r=100, num_of_strings=100):
-    frames_list = np.linspace(200, 2000, num=10, dtype=np.int)
+def mass_for_beta_one(beta, frames_list, N_r=100, num_of_strings=100):
     frames = np.max(frames_list)
     L = (frames + 1) * 2
 
@@ -45,7 +44,7 @@ def mass_for_beta_one(beta, N_r=100, num_of_strings=100):
                     strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}],
                     post_function=calc_mass_in_r)
         _M = np.array([m for m in main.post_func_res if m is not None])
-        print _M.shape
+        # print _M.shape
         for i, frames in enumerate(frames_list):
             Ms[frames] = np.vstack((Ms[frames], _M[i]))
 
@@ -59,6 +58,9 @@ def mass_for_beta_one(beta, N_r=100, num_of_strings=100):
 
 
 if __name__ == '__main__':
+
+    frames_list = np.linspace(200, 2000, num=10, dtype=np.int)
+
     parser = argparse.ArgumentParser()
     parser.add_argument('beta', type=float, nargs=1,
                         help='parameter beta')
@@ -66,4 +68,5 @@ if __name__ == '__main__':
     beta = args.beta[0]
     # beta = 0.
 
-    mass_for_beta_one(beta, N_r=4, num_of_strings=3)
+    # mass_for_beta_one(beta, N_r=4, num_of_strings=3)
+    mass_for_beta_one(beta, frames_list, N_r=100, num_of_strings=100)
