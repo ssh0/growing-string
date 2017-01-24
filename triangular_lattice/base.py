@@ -30,7 +30,7 @@ class Main:
                           boundary={'h': 'periodic', 'v': 'periodic'})
 
         self.occupied = np.zeros((Lx, Ly), dtype=np.bool)
-        self.number_of_lines = len(size)
+        self.number_of_lines = Lx
 
         # Put the strings to the lattice
         self.strings = self.create_random_strings(N, size)
