@@ -16,12 +16,12 @@ import save_data as sd
 def choose_indexes(_list, num, L):
     """Choose the index pairs whose width is fixed. """
     N = len(_list)
-    if N - (2 * L) < num:
+    if N - L < num:
         raise StopIteration('list index is smaller than expected (%d), '
-                            % (num + 2 * L)
+                            % (num + L)
                             + 'given (%d).' % N
                             )
-    return sorted(random.sample(_list[L:N - L], num))
+    return sorted(random.sample(_list[:N - L], num))
 
 def get_path_length_and_distances(beta, num_of_strings, L, frames, num_of_pairs=300):
     main = Main(Lx=L, Ly=L, size=[3,] * 1, plot=False, frames=frames, beta=beta,
@@ -34,7 +34,7 @@ def get_path_length_and_distances(beta, num_of_strings, L, frames, num_of_pairs=
     # random_j = np.random.randint(len_vec, size=num_of_pairs)
 
     # (1.B) 等パス長となる2点を同数ずつ抽出
-    Lp = range(2, (len_vec - num_of_pairs) / 2)
+    Lp = range(2, len_vec - num_of_pairs)
     random_i, random_j = [], []
     for lp in Lp:
         random_i.append(np.array(choose_indexes(range(len_vec + 1),

@@ -18,12 +18,12 @@ import save_data
 def choose_indexes(_list, num, L):
     """Choose the index pairs whose width is fixed. """
     N = len(_list)
-    if N - (2 * L) < num:
+    if N - L < num:
         raise StopIteration('list index is smaller than expected (%d), '
-                            % (num + 2 * L)
+                            % (num + L)
                             + 'given (%d).' % N
                             )
-    return sorted(random.sample(_list[L:N - L], num))
+    return sorted(random.sample(_list[:N - L], num))
 
 def _to_radian(i, j):
     """ベクトルiとベクトルjのなす角を返す"""
@@ -57,7 +57,7 @@ def calc_order_param(theta):
 
 def get_correlation(beta, num_of_strings, L, frames, num_of_pairs=300):
     len_vec = frames + 2
-    Lp = range(2, (len_vec - num_of_pairs) / 2)
+    Lp = range(2, len_vec - num_of_pairs)
     _Cs = []
     for s in tqdm(range(num_of_strings)):
         _Cs.append(get_correlation_for_each_string(Lp, L, frames, num_of_pairs))
@@ -66,7 +66,8 @@ def get_correlation(beta, num_of_strings, L, frames, num_of_pairs=300):
 
 def get_correlation_for_each_string(Lp, L, frames, num_of_pairs):
     main = Main(Lx=L, Ly=L, plot=False, frames=frames, beta=beta,
-                strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
+                # strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}])
+                strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 0]}])
     len_vec = len(main.strings[0].vec)
 
     # 等パス長となる2点を同数ずつ抽出
@@ -97,13 +98,16 @@ def get_correlation_for_each_string(Lp, L, frames, num_of_pairs):
 if __name__ == '__main__':
 
     start_time = time.strftime("%y%m%d_%H%M%S")
-    num_of_strings = 30
-    betas = [0., 5., 10., 15., 20.]
+    num_of_strings = 100
+    # betas = [0., 5., 10., 15., 20.]
+    # betas = [0., 2., 4., 6., 8., 10.]
+    # betas = [12., 14., 16.,]
+    betas = [18., 20.]
     # betas = [float(i) for i in range(11)]
     # betas = [20.]
     frames = 1000
-    L = 1000
-    num_of_pairs = 300
+    L = (frames + 1) * 2
+    num_of_pairs = 100
 
     fig, ax = plt.subplots()
 
