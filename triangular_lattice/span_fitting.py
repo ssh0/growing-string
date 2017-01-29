@@ -45,7 +45,6 @@ class SpanFitting:
         self.parameters = parameters
         self.attach_text = attacth_text
         self.attach_label = attacth_label
-        self.height_span = height_span
         self.ln = None
 
     def onselect(self, vmin, vmax):
@@ -72,7 +71,7 @@ class SpanFitting:
             self.ln, = self.plot(X, Y, ls='-', marker='', color='k')
         if self.attach_text:
             self.text = self.ax.text(
-                (X[0] + X[-1]) / 2., (Y[0] + Y[-1]) / 2. + self.height_span,
+                (X[0] + X[-1]) / 2., (Y[0] + Y[-1]) / 2.,
                 result_text, ha='center', va='bottom'
             )
 
