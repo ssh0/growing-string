@@ -138,7 +138,8 @@ class BoxCounting(object):
                 int,
                 np.logspace(0, np.log(self.L) / np.log(1.5), base=1.5, num=N_L)
             ))))
-        self.cutting_size_ys = self.cutting_size_xs * (np.sqrt(3) / 2)
+        # self.cutting_size_ys = self.cutting_size_xs * (np.sqrt(3) / 2)
+        self.cutting_size_ys = self.cutting_size_xs
         self.cutting_size_max_width = self.cutting_size_xs[-1]
         self.cutting_size_max_height = self.cutting_size_ys[-1]
 
