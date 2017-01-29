@@ -184,18 +184,31 @@ class InsideString(object):
         )
 
         _weight_list = np.array([
-            -2., -1.5, -0.5, 0.,
+            # -2., -1.5, -0.5, 0.,
+            # -1.5, -1., 0., 0.5,
+            # -0.5, 0., 1., 1.5,
+            # 0., 0.5, 1.5, 2.,
+            # -2., -1.5, -0.5, 0.,
+            # -1.5, -1., 0., 0.5,
+            # -0.5, 0., 1., 1.5,
+            # 0., 0.5, 1.5, 2.,
+            # -2., -1.5, -0.5, 0.,
+            # -1.5, -1., 0., 0.5,
+            # -0.5, 0., 1., 1.5,
+            # 0., 0.5, 1.5, 2.,
+
             -1.5, -1., 0., 0.5,
-            -0.5, 0., 1., 1.5,
+            -1., -0.5, 0.5, 1.,
             0., 0.5, 1.5, 2.,
-            -2., -1.5, -0.5, 0.,
+            0.5, 1., 2., 2.5,
             -1.5, -1., 0., 0.5,
-            -0.5, 0., 1., 1.5,
+            -1., -0.5, 0.5, 1.,
             0., 0.5, 1.5, 2.,
-            -2., -1.5, -0.5, 0.,
+            0.5, 1., 2., 2.5,
             -1.5, -1., 0., 0.5,
-            -0.5, 0., 1., 1.5,
+            -1., -0.5, 0.5, 1.,
             0., 0.5, 1.5, 2.,
+            0.5, 1., 2., 2.5,
         ])
 
 
@@ -269,15 +282,15 @@ class InsideString(object):
         """格子座標(x, y)の第一近傍の点の座標を返す(xが偶数の時)"""
         return {
             '1': ((x - 1) % self.kagome_Lx, y),
-            '2': (x + 1, y),
-            '3': (x + 1, (y - 1) % self.kagome_Ly),
+            '2': ((x + 1) % self.kagome_Lx, y),
+            '3': ((x + 1) % self.kagome_Lx, (y - 1) % self.kagome_Ly),
         }
 
     def get_nn1_odd(self, x, y):
         """格子座標(x, y)の第一近傍の点の座標を返す(xが奇数の時)"""
         return {
-            '1': (x - 1, y),
-            '2': (x - 1, (y + 1) % self.kagome_Ly),
+            '1': ((x - 1) % self.kagome_Lx, y),
+            '2': ((x - 1) % self.kagome_Lx, (y + 1) % self.kagome_Ly),
             '3': ((x + 1) % self.kagome_Lx, y),
         }
 
@@ -329,8 +342,10 @@ class InsideString(object):
         triang = tri.Triangulation(lattice_X, lattice_Y)
         self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
 
-        self.points = [self.ax.plot([], [], 'g^')[0],
-                       self.ax.plot([], [], 'gv')[0]]
+        # self.points = [self.ax.plot([], [], 'g^')[0],
+        #                self.ax.plot([], [], 'gv')[0]]
+        self.points = [self.ax.plot([], [], 'k.')[0],
+                       self.ax.plot([], [], 'k.')[0]]
         if self.plot_surface:
             self.points.append(self.ax.plot([], [], '.', color='#ff0000')[0])
 
@@ -421,9 +436,9 @@ class InsideString(object):
 
 
 if __name__ == '__main__':
-    L = 60
+    L = 100
     frames = 1000
-    beta = 0.
+    beta = 4.
 
     params = {
         'Lx': L,
