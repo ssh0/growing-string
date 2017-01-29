@@ -8,7 +8,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-from matplotlib.lines import Line2D
 import fractal_dim_from_mass as fd
 
 
@@ -59,6 +58,3 @@ if __name__ == '__main__':
     ax.set_xlim(0, 2200)
     ax.set_ylim(1., 2.)
     plt.show()
-
-
-

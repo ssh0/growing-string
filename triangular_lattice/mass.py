@@ -21,24 +21,26 @@ def mass_for_beta_one(beta, frames_list, N_r=100, num_of_strings=100):
 
     def calc_mass_in_r(self, i, s):
         N = len(s.vec) + 1
-        if N - 3 in frames_list:
-            pos = list(s.pos.T)
-            x, y = self.lattice_X[pos], self.lattice_Y[pos]
-            X, Y = np.average(x), np.average(y)
-            R = np.sqrt(np.sum((x - X) ** 2 + (y - Y) ** 2) / float(N))
-            dist = np.sqrt((x - X) ** 2 + (y - Y) ** 2)
-            r = np.logspace(1, np.log2(max(dist)), num=N_r, base=2.)
-            centers_index = sorted(random.sample(range(N), center_sample))
-            M = []
-            for _r in r:
-                res = []
-                for c in centers_index:
-                    index_x, index_y = s.pos[c]
-                    dist = np.sqrt((x - self.lattice_X[index_x, index_y]) ** 2
-                                   + (y - self.lattice_Y[index_x, index_y]) ** 2)
-                    res.append(len(np.where(dist < _r)[0]))
-                M.append(np.average(res))
-            return np.array([r, M]).T
+        if N - 3 not in frames_list:
+            return None
+
+        pos = list(s.pos.T)
+        x, y = self.lattice_X[pos], self.lattice_Y[pos]
+        X, Y = np.average(x), np.average(y)
+        R = np.sqrt(np.sum((x - X) ** 2 + (y - Y) ** 2) / float(N))
+        dist = np.sqrt((x - X) ** 2 + (y - Y) ** 2)
+        r = np.logspace(1, np.log2(max(dist)), num=N_r, base=2.)
+        centers_index = sorted(random.sample(range(N), center_sample))
+        M = []
+        for _r in r:
+            res = []
+            for c in centers_index:
+                index_x, index_y = s.pos[c]
+                dist = np.sqrt((x - self.lattice_X[index_x, index_y]) ** 2
+                                + (y - self.lattice_Y[index_x, index_y]) ** 2)
+                res.append(len(np.where(dist < _r)[0]))
+            M.append(np.average(res))
+        return np.array([r, M]).T
 
     main = Main(Lx=L, Ly=L, plot=False,
                 frames=frames,

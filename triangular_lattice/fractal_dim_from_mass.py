@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import SpanSelector
 from optimize import Optimize_powerlaw
+from span_fitting import SpanFitting
 import time
 
 
@@ -275,6 +276,34 @@ def get_paths(fix=None, beta_num=0, frame_num=0, ver=1):
         result_data_paths = [result_data_paths[beta_num * 10 + frame_num]]
     return result_data_paths
 
+def get_fractal_dim_all(frames_list, beta_list):
+    fig, ax = plt.subplots(10, 6, sharex=True, sharey=True)
+
+    print ax.shape
+
+    for i, frames in enumerate(frames_list):
+        for j, beta in enumerate(beta_list):
+            path = get_paths(beta_num=j, frame_num=i)[0]
+            beta, num_of_strings, N_r, frames, r, M = load_data(path)
+            r, M = averaging_data(r, M, N_r, scale='log')
+            ax[i, j].loglog(r, M, '.')
+            # ax[i, j].set_aspect('equal')
+            # ax[i, j].set_xlabel(r'Radius $r$')
+            # ax[i, j].set_ylabel(r'Averaged mass in the circle of radius')
+            span = SpanFitting(ax[i, j], r, M, Optimize_powerlaw, [0.5, 2.])
+
+    def press(event):
+        if event.key == 'x':
+            # save image
+            fn = "./results/img/mass_in_r/frames=%d_beta=%2.2f" % (frames, beta)
+            fn += "_" + time.strftime("%y%m%d_%H%M%S") + ".png"
+            plt.savefig(fn)
+            print "[saved] " + fn
+            plt.close()
+
+    fig.canvas.mpl_connect('key_press_event', press)
+    plt.show()
+
 
 if __name__ == '__main__':
     frames_list = [200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000]
@@ -282,14 +311,15 @@ if __name__ == '__main__':
     beta_list = [0, 2, 4, 6, 8, 10]
     ##           0  1  2  3  4  5
 
-    # result_data_paths = get_paths(beta_num=5, frame_num=9)
+    result_data_paths = get_paths(beta_num=2, frame_num=9)
     # result_data_paths = get_paths(fix='frames', frame_num=7, ver=0)
+    # result_data_paths = get_paths(fix='frames', frame_num=9)
+    # result_data_paths = get_paths(fix='beta', beta_num=5, ver=1)
 
-    result_data_paths = get_paths(fix='beta', beta_num=5, ver=1)
-
-    # _plot_data_for_validation(result_data_paths, raw=True)
+    _plot_data_for_validation(result_data_paths, raw=True)
     # _plot_data_for_validation(result_data_paths)
 
-    for path in result_data_paths:
-        get_fractal_dim(path)
+    # for path in result_data_paths:
+    #     get_fractal_dim(path)
 
+    # get_fractal_dim_all(frames_list, beta_list)
