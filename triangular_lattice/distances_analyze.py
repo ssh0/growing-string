@@ -12,17 +12,23 @@ from mpl_toolkits.mplot3d.axes3d import Axes3D
 
 def get_paths():
     result_data_paths = [
-        "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=0.00_170112_201642.npz",
-        "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=2.00_170112_222648.npz",
-        "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=4.00_170113_003238.npz",
-        "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=6.00_170113_031836.npz",
-        "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=8.00_170113_061634.npz",
-        "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=10.00_170113_092219.npz",
+        # "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=0.00_170112_201642.npz",
+        # "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=2.00_170112_222648.npz",
+        # "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=4.00_170113_003238.npz",
+        # "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=6.00_170113_031836.npz",
+        # "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=8.00_170113_061634.npz",
+        # "/media/shotaro/STOCK/growing_string/data/results/distances/frames=1000_beta=10.00_170113_092219.npz",
+        "./results/data/distances/frames=1000_beta=0_170131_210134.npz",
+        "./results/data/distances/frames=1000_beta=2_170131_210658.npz",
+        "./results/data/distances/frames=1000_beta=4_170131_211535.npz",
+        "./results/data/distances/frames=1000_beta=6_170131_212258.npz",
+        "./results/data/distances/frames=1000_beta=8_170131_213012.npz",
+        "./results/data/distances/frames=1000_beta=10_170131_212800.npz",
     ]
     return result_data_paths
 
 def calc_tortuosity_for_each_beta(filename):
-    data = np.load(result_data_path)
+    data = np.load(filename)
     beta = data['beta']
     num_of_strings = data['num_of_strings']
     L = data['L']
@@ -37,17 +43,63 @@ def calc_tortuosity_for_each_beta(filename):
 
     y = np.array(distance_list)
     y = y.reshape((num_of_strings, int(y.shape[0] / num_of_strings / num_of_pairs), num_of_pairs))
-    # tortuosity = length_of_the_curve / distance_between_the_ends_of_it
     y_ave = np.average(y, axis=2)
+    # tortuosity = length_of_the_curve / distance_between_the_ends_of_it
     T = x[:, :, 0] / y_ave
 
     L = x[0, :, 0]
     T_ave = np.average(T, axis=0)
     return L, T_ave
     # return L, np.average(y_ave, axis=0)
-    # X = np.average(y_ave, axis=0)
-    # Y = L
-    # return Y, X
+
+def plot_tortuosity():
+    result_data_paths = get_paths()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    betas = [0, 2, 4, 6, 8, 10]
+    for beta, result_data_path in zip(betas, result_data_paths):
+        x, y = calc_tortuosity_for_each_beta(result_data_path)
+        ax.plot(x, y, '.', label=r'$\beta = %2.2f$' % beta,
+                color=cm.viridis(float(beta) / (2 * (len(betas) - 1))))
+    ax.set_xlabel(r'Path length $L$')
+    ax.set_ylabel(r'Tortuosity $T$')
+    ax.set_ylim(0, ax.get_ylim()[1])
+    ax.set_title(r'Tortuosity $T = L / \lambda_{avg}$')
+    ax.legend(loc='best')
+    plt.show()
+
+def plot_hist():
+    result_data_paths = get_paths()
+    cmap = cm.viridis
+
+    fig, ax = plt.subplots(3, 2, sharex=True)
+    ax = ax.flatten()
+    betas = [0, 2, 4, 6, 8, 10]
+    for i, (beta, result_data_path) in enumerate(zip(betas, result_data_paths)):
+        data = np.load(result_data_path)
+        beta = data['beta']
+        num_of_strings = data['num_of_strings']
+        L = data['L']
+        frames = data['frames']
+        distance_list = data['distance_list']
+        path_length = data['path_length']
+
+        ax[i].hist2d(path_length, distance_list, bins=20, cmap=cmap)
+        # ax_title = ax[i].set_title(r'$\beta = %2.2f$' % beta)
+        ax_title = ax[i].text(450, 0.8 * np.max(distance_list),
+                              r'$\beta = %2.2f$' % beta,
+                              horizontalalignment='center',
+                              fontsize=15,
+                              )
+        plt.setp(ax_title, color='w')
+
+    ax[4].set_xlabel(r'$L$')
+    ax[5].set_xlabel(r'$L$')
+    ax[0].set_ylabel(r'$d$')
+    ax[2].set_ylabel(r'$d$')
+    ax[4].set_ylabel(r'$d$')
+    fig.subplots_adjust(hspace=0.)
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -62,8 +114,6 @@ if __name__ == '__main__':
     # result_data_path = "./results/data/distances/beta=0.00_161015_153311.npz"
 
 
-    result_data_paths = get_paths()
-    fig = plt.figure()
     # ax = fig.add_subplot(111, projection='3d')
     # data = np.load(result_data_path)
     # beta = data['beta']
@@ -94,18 +144,8 @@ if __name__ == '__main__':
     # ax.set_title('Path length and distances between two points in the cluster'
     #             + r'($\beta = %2.2f$)' % beta)
 
-    ax = fig.add_subplot(111)
-    betas = [0, 2, 4, 6, 8, 10]
-    for beta, result_data_path in zip(betas, result_data_paths):
-        x, y = calc_tortuosity_for_each_beta(result_data_path)
-        ax.plot(x, y, '.', label=r'$\beta = %2.2f$' % beta,
-                color=cm.viridis(float(beta) / (2 * (len(betas) - 1))))
-    ax.set_xlabel(r'Path length $L$')
-    ax.set_ylabel(r'Tortuosity $T$')
-    ax.set_ylim(0, ax.get_ylim()[1])
-    ax.set_title(r'Tortuosity $T = L / \lambda_{avg}$')
-    ax.legend(loc='best')
-
-    plt.show()
     # fig.savefig('./results/img/tortuosity/frames=1000_num_of_strings=1000.png')
     # plt.close()
+
+    plot_tortuosity()
+    # plot_hist()
