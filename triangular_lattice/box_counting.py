@@ -148,8 +148,8 @@ class BoxCounting(object):
         return
 
     def diecutting_one_cluster(self, width, height, x0, y0):
-        return np.any((self.x > x0) & 
-                      (self.y > y0) &
+        return np.any((self.x >= x0) & 
+                      (self.y >= y0) &
                       (self.x < (x0 + width)) &
                       (self.y < (y0 + height))
                       )
