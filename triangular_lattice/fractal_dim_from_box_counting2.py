@@ -21,7 +21,8 @@ if __name__ == '__main__':
     beta_list = [0, 2, 4, 6, 8, 10]
     ##           0  1  2  3  4  5
 
-    Ds = read_from_csv('./results/img/fractal_dim/2017-01-27/data_170129.csv').T
+    # Ds = read_from_csv('./results/img/fractal_dim/2017-01-27/data_170129.csv').T
+    Ds = read_from_csv('./results/img/fractal_dim/2017-01-29/data_170131.csv').T
 
     # Ds = manual_data()
 
