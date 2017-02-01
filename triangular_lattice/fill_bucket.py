@@ -151,14 +151,14 @@ class FillBucket(object):
 
 
 if __name__ == '__main__':
-    L = 6
+    L = 100
     frames = 1000
 
     params = {
-        'Lx': 6,
-        'Ly': 5,
+        'Lx': L,
+        'Ly': L,
         'frames': frames,
-        'beta': 0.,
+        'beta': 2.,
         'weight_const': 0.5,
         'boundary': {'h': 'periodic', 'v': 'periodic'},
         # 'boundary': {'h': 'reflective', 'v': 'reflective'},
@@ -168,36 +168,10 @@ if __name__ == '__main__':
     }
 
     # loop
-    # main = Main(strings=[{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4, 2]}],
-    #             **params
-    #             )
-    # main = Main(strings=[{'id': 1, 'x': L / 2, 'y': L / 2, 'vec': [0, 4, 2]}],
-    #             **params
-    #             )
-    # bucket = FillBucket(main, plot_type='fill')
-    # bucket = FillBucket(main)
-
-    class Main(object):
-        def __init__(self, Lx, Ly, boundary, **otherparams):
-            self.lattice = LT(
-                np.zeros((Lx, Ly), dtype=np.int),
-                scale=float(max(Lx, Ly)),
-                boundary=boundary
-            )
-            self.lattice_X = self.lattice.coordinates_x.reshape(
-                self.lattice.Lx,
-                self.lattice.Ly
-            )
-            self.lattice_Y = self.lattice.coordinates_y.reshape(
-                self.lattice.Lx,
-                self.lattice.Ly
-            )
-            self.strings = [String(self.lattice,
-                                   id=1, x=1, y=2, vec=[0, 4, 2])
-                            ]
-
-    main = Main(**params)
-    bucket = FillBucket(main)
+    main = Main(strings=[{'id': 1, 'x': L / 4, 'y': L / 2, 'vec': [0, 4, 2]}],
+                **params
+                )
+    bucket = FillBucket(main, plot_type='fill')
     # bucket.plot_all(plot_type='point')
     bucket.plot_all(plot_type='fill')
 
