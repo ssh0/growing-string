@@ -44,9 +44,10 @@ def eval_simulation_for_each_string(params):
 
 def eval_simulation_for_one_beta(beta, num_of_strings=30):
     current_time = time.strftime("%y%m%d_%H%M%S")
+    frames = 1000
     params = {
-        'L': 1000,
-        'frames': 500,
+        'L': (frames + 2) * 2,
+        'frames': frames,
         'beta': beta,
         'plot': False
     }
@@ -114,7 +115,7 @@ def eval_simulation_for_one_beta(beta, num_of_strings=30):
 
 
 if __name__ == '__main__':
-    num_of_strings = 30
+    num_of_strings = 100
 
     parser = argparse.ArgumentParser()
     parser.add_argument('beta', type=float, nargs=1,

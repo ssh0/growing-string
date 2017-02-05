@@ -197,6 +197,7 @@ class Main(base):
             triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
             self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
 
+
         self.lines = [self.ax.plot([], [], linestyle='-',
                                    color='black',
                                    markerfacecolor='black',
@@ -509,11 +510,12 @@ if __name__ == '__main__':
     #                     number=10
     #                     ))
 
-    L = 200
+    L = 100
 
-    main= Main(Lx=L, Ly=L, size=[3,] * 1, frames=2000,
-               beta=2.,
+    main= Main(Lx=L, Ly=L, size=[3,] * 1, frames=1000,
+               beta=3.,
                plot=True, plot_surface=False,
                interval=0,
                strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}]
+               # strings=[{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4, 2]}]
                )

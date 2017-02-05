@@ -105,13 +105,13 @@ class CuttingProfile(object):
         self.main.plot_all()
         lX = self.main.lattice_X
         lY = self.main.lattice_Y
-        self.main.ax.plot(self.x0, self.y0, 'o', color='k')
+        self.main.ax.plot(self.x0, self.y0, '.', color='k')
         for k in range(6):
             positions = np.array(self.cutting_profiles[k]).T
             if len(positions) == 0:
                 continue
             index_x, index_y = positions[0], positions[1]
-            self.main.ax.plot(lX[index_x, index_y], lY[index_x, index_y], 'o',
+            self.main.ax.plot(lX[index_x, index_y], lY[index_x, index_y], '.',
                               label='vec: {}'.format(k),
                               color=cm.rainbow(float(k) / 5))
 
@@ -130,8 +130,8 @@ class CuttingProfile(object):
 
 if __name__ == '__main__':
     params = {
-        'beta': 10.,
-        'L': 400,
+        'beta': 3.,
+        'L': 120,
         'frames': 1000,
         'save_result': False,
         'plot_raw_result': True,

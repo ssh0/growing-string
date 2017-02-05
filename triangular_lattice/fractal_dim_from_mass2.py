@@ -50,7 +50,7 @@ if __name__ == '__main__':
         ax.plot(frames_list, Ds[i], marker=markers[i % len(markers)],
                 ls='', color=color, label=r'$\beta = %2.2f$' % beta)
     # ax.legend(loc='best')
-    ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0, numpoints=1)
     fig.subplots_adjust(right=0.8)
     ax.set_title(r'Fractal dimension $D$')
     ax.set_xlabel(r'$T$')

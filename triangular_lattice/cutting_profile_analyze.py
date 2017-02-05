@@ -5,13 +5,8 @@
 # 2017-01-09
 
 
-from cutting_profile_run import plot_hist, plot_all_points, plot_3d_wireframe
-# import matplotlib.pyplot as plt
-# import matplotlib.cm as cm
+from cutting_profile_run import plot_hist, plot_all_points, plot_3d_wireframe, joint_plot
 import numpy as np
-# from tqdm import tqdm
-# import save_data as sd
-# import argparse
 
 
 def main(data_path):
@@ -28,8 +23,9 @@ def main(data_path):
     # print relative_positions
     ## Plot results
     # plot_all_points(relative_positions, save_image=False)
-    plot_hist(relative_positions, save_image=True)
+    # plot_hist(relative_positions, save_image=False)
     # plot_3d_wireframe(relative_positions, save_image=False)
+    joint_plot(relative_positions, save_image=True)
 
 
 if __name__ == '__main__':
@@ -44,4 +40,7 @@ if __name__ == '__main__':
         # ls -1 ./results/data/cutting_profile/*.npz
     ]
 
-    main(base_dir + fn[5])
+    # main(base_dir + fn[4])
+
+    for f in fn:
+        main(base_dir + f)

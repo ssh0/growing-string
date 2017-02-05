@@ -25,7 +25,8 @@ def load_data(_path):
     # Ls = (3 * Ls * (Ls + 1) + 1)
     size_dist = data['size_dist']
 
-    M = np.array([np.sum(l) for l in size_dist]) - 1.
+    # M = np.array([np.sum(l) for l in size_dist]) - 1.
+    M = np.array([np.sum(l) - 1 for l in size_dist])
     M_ave = M / np.sum(M)
 
     return {
@@ -161,8 +162,8 @@ def fit_scale(path, fixed_a, fixed_loc, save_image=False):
                 # label=r'fitted $\beta = %2.2f$' % beta,
                 color=cm.viridis(float(i) / len(path)))
 
-        # critcal_point = (3. - 1) * popt[0]  # x = (a - 1) * scale
-
+        ## critical point
+        # critcal_point = 2. * popt[0]  # x = (a - 1) * scale
         # ax.plot([critcal_point] * 2, [0., 0.05], '-',
         #         color=cm.viridis(float(i) / len(path)))
     show_plot1(ax, num_of_strings)
@@ -183,10 +184,23 @@ def fit_scale(path, fixed_a, fixed_loc, save_image=False):
     betas = np.array(betas)
     scale = np.array(scale)
 
+    # beta_theta = lambda x, a, b: a*x + b
+    beta_theta = lambda x, a, b: a*np.log(x) + b
+
     fig, ax = plt.subplots()
-    ax.set_title(r'Fitting parameter (fixed: $a = 3$, $x_{0} = 0$)')
+    ax.set_title(r'Fitting parameter')
     ax.plot(betas, scale, 'o')
+    popt = curve_fit(beta_theta, xdata=betas, ydata=scale, p0=[15., 0.])[0]
+    x = np.linspace(min(betas), max(betas))
+    # ax.plot(x, beta_theta(x, popt[0], popt[1]), '-', color='k',
+    #         label=r'$\theta = {} \beta + {}$'.format(*popt),
+    #         )
+    ax.plot(x, beta_theta(x, popt[0], popt[1]), '-', color='k',
+            label=r'$\theta = {} \log \beta + {}$'.format(*popt),
+            )
+    ax.legend(loc='best')
     ax.set_xlim((0, max(betas)))
+    ax.set_ylim((0, ax.get_ylim()[1]))
     ax.set_xlabel(r'$\beta$')
     ax.set_ylabel(r'Scale parameter: $\theta$')
 
@@ -205,8 +219,52 @@ def fit_scale(path, fixed_a, fixed_loc, save_image=False):
 
     plt.show()
 
+def no_fit(path, fixed_a, fixed_loc, _a, _b, save_image=False):
+
+    matplotlib.rcParams['savefig.dpi'] = 300
+
+    def modified_gamma_3(x, beta):
+        a = fixed_a
+        loc = fixed_loc
+        # scale = _a * beta + _b
+        scale = _a * np.log(beta) + _b
+        return gamma.pdf(x, a=a, loc=loc, scale=scale)
+
+    betas = []
+    scale = []
+
+    fig, ax = plt.subplots()
+    for i, result_data_path in enumerate(path):
+        globals().update(load_data(result_data_path))
+        ax.plot(Ls, M_ave, '.', label=r'$\beta = %2.2f$' % beta,
+                color=cm.viridis(float(i) / len(path)), alpha=0.5)
+        betas.append(beta)
+
+        x = np.linspace(0, max(Ls), num=5*max(Ls))
+        ax.plot(x, modified_gamma_3(x, beta),
+                '-',
+                # label=r'fitted $\beta = %2.2f$' % beta,
+                color=cm.viridis(float(i) / len(path)))
+
+    show_plot1(ax, num_of_strings)
+
+    if save_image:
+        result_image_path = "../results/img/diecutting/fitted_gamma_fixed_a_x0"
+        result_image_path += "_" + time.strftime("%y%m%d_%H%M%S")
+        pdf = PdfPages(result_image_path + ".pdf")
+        plt.savefig(result_image_path + ".png")
+        pdf.savefig()
+        pdf.close()
+        plt.close()
+        print "[saved] " + result_image_path
+    else:
+        plt.show()
+        plt.close()
+
 
 if __name__ == '__main__':
     # fit_a_x0_scale(set_data_path.data_path)
     # fit_a_scale(set_data_path.data_path, fixed_loc=0.)
-    fit_scale(set_data_path.data_path, fixed_a=3., fixed_loc=0., save_image=True)
+    # fit_scale(set_data_path.data_path, fixed_a=3., fixed_loc=0., save_image=False)
+    # no_fit(set_data_path.data_path, fixed_a=3., fixed_loc=0., _a=3.6, _b=0.,  save_image=False)
+    no_fit(set_data_path.data_path, fixed_a=3., fixed_loc=0., _a=19., _b=-8.,  save_image=False)

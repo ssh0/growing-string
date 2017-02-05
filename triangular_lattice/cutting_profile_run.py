@@ -9,6 +9,8 @@ from cutting_profile import CuttingProfile
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 import matplotlib.cm as cm
+import pandas as pd
+import seaborn as sns
 import numpy as np
 from tqdm import tqdm
 import save_data as sd
@@ -116,11 +118,33 @@ def plot_3d_wireframe(relative_positions, bins=30, save_image=False):
                 plt.show()
             plt.close()
 
+def joint_plot(relative_positions, save_image=False):
+    sns.set(style="white")
+    for k in range(6):
+        if relative_positions.has_key(k):
+            x, y = relative_positions[k].T
+            x = pd.Series(x, name='$x$')
+            y = pd.Series(y, name='$y$')
+            g = sns.jointplot(x, y, kind='hex', stat_func=None, joint_kws={'gridsize': 30})
+            wid = max([abs(_x) for _x in g.ax_joint.get_xlim()])
+            hei = max([abs(_y) for _y in g.ax_joint.get_ylim()])
+            mx = max(wid, hei)
+            g.ax_joint.set_xlim([-mx, mx])
+            g.ax_joint.set_ylim([-mx, mx])
+            plt.subplots_adjust(top=0.9)
+            g.fig.suptitle('vec: {}'.format(k))
+            if save_image:
+                save_fig(g, fn='hist_vec={}_'.format(k))
+            else:
+                plt.show()
+            plt.close()
+
 def save_fig(fig, fn=''):
     import time
     current_time = time.strftime("%y%m%d_%H%M%S")
     base_dir = './results/img/cutting_profile/'
-    filename = base_dir + fn + current_time + '.png'
+    # filename = base_dir + fn + current_time + '.png'
+    filename = base_dir + fn + current_time + '.pdf'
     fig.savefig(filename)
 
 
