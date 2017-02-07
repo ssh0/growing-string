@@ -11,7 +11,9 @@ import numpy as np
 from growing_string import Main
 
 
-def plot_boxes(self, num):
+def plot_boxes(self, delta):
+    L = 100
+    num = int(L / delta) + 1
     self.plot_all()
 
     xticks = np.linspace(0, self.lattice.Lx, num=num)
@@ -30,9 +32,12 @@ def plot_boxes(self, num):
                                             x1 - x0, y1 - y0,
                                             alpha=0.2, facecolor='k',
                                             edgecolor='none'))
+    N = len(ps)
+    print('N = {}'.format(N))
     for p in ps:
         self.ax.add_patch(p)
     self.ax.grid(zorder=0, ls='-')
+    # self.ax.text(50, 80, r'$N(\delta = {}) = {}$'.format(delta, N), fontsize=36, ha='center')
     plt.show()
 
 
@@ -50,9 +55,9 @@ if __name__ == '__main__':
 
     #### box_counting_demo
     ## L = 100
-    deltas = np.array([1., 2., 4., 5., 10., 20.])
-    nums = map(int, (L / deltas) + 1)
-    for num in nums:
-        plot_boxes(main, num)
+    # deltas = np.array([1., 2., 4., 5., 10., 20.])
+    deltas = np.array([2., 5., 10.])
+    for delta in deltas:
+        plot_boxes(main, delta)
 
 
