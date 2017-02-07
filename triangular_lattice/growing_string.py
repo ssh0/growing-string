@@ -380,26 +380,6 @@ class Main(base):
 
         # pp.pprint(self.bonding_pairs[key])
 
-        # if i == 0:
-        #     # if s.loop:
-        #     #     indexes = [[len(s.vec) - 2, len(s.vec)], [0, 2]]
-        #     # else:
-        #     # indexes = [[0, 2]]
-        #     index_start = 0
-        #     index_stop = min(3, len(s.pos))
-        #     # index_stop = len(s.pos)
-        # elif i == len(s.pos) - 1:
-        #     # if s.loop:
-        #     #     indexes = [[len(s.vec) - 2, len(s.vec)], [0, 1]]
-        #     # else:
-        #         # indexes = [[len(s.vec) - 2, len(s.vec)]]
-        #     # index_start = max(0, len(s.pos))
-        #     index_start = max(0, len(s.pos) - 3)
-        #     index_stop = len(s.pos)
-        # else:
-        #     # indexes = [[i, len(s.pos)]]
-        #     index_start = i
-        #     index_stop = len(s.pos)
         index_start = i
         index_stop = len(s.pos)
         # print(index_start, index_stop)
@@ -416,7 +396,6 @@ class Main(base):
             index_stop=index_stop
         )
 
-
         # pp.pprint(value)
         # pp.pprint(self.bonding_pairs[key])
 
@@ -425,7 +404,6 @@ class Main(base):
                 self.bonding_pairs[key][k] += v
             else:
                 self.bonding_pairs[key][k] = v
-            # self.bonding_pairs[key] = value
 
         # pp.pprint(self.bonding_pairs[key])
 
@@ -437,17 +415,12 @@ class Main(base):
 
     def cleanup_bonding_pairs(self, key, index_start, index_stop):
         rang = range(index_start, index_stop)
-        # for (start, stop) in indexes:
-        #     rang += range(start, stop)
-        for (x, y), l in self.bonding_pairs[key].items():
-            tmp = []
-            for i, (bonding_pair, w) in enumerate(l):
-                if not bonding_pair[0] in rang:
-                    tmp.append(l[i])
+        for pos, l in self.bonding_pairs[key].items():
+            tmp = [l[i] for i, (bp, w) in enumerate(l) if not bp[0] in rang]
             if len(tmp) == 0:
-                del self.bonding_pairs[key][(x, y)]
+                del self.bonding_pairs[key][pos]
             else:
-                self.bonding_pairs[key][(x, y)] = tmp
+                self.bonding_pairs[key][pos] = tmp
 
     def get_neighbor_xy(self, key):
         """Stringクラスのインスタンスsの隣接する非占有格子点の座標を取得する
@@ -460,9 +433,7 @@ class Main(base):
         # bonding_pairsの選ばれやすさを適切に重みを付けて評価
         weights = []
         bonding_pairs = []
-        b = reduce(operator.add, self.bonding_pairs[key].values())
-        # print(b)
-        for (pair, w) in b:
+        for (pair, w) in reduce(operator.add, self.bonding_pairs[key].values()):
             bonding_pairs.append(pair)
             weights.append(w)
 
@@ -479,13 +450,18 @@ class Main(base):
         """
 
         if (i == 1) and (not s.loop):
-            w = self.dot(r_rev, s.vec[i]) - self.dot(s.vec[0], s.vec[1]) - self.weight_const
-        elif (i == len(s.pos) - 1) and (not s.loop):
-            w = self.dot(s.vec[i - 2], r_i) - self.dot(s.vec[i - 2], s.vec[i - 1]) - self.weight_const
+            w = self.dot(r_rev, s.vec[i]) - self.dot(s.vec[0], s.vec[1]) \
+                - self.weight_const
+        elif (i == len(s.pos) - 2) and (not s.loop):
+            w = self.dot(s.vec[i - 2], r_i) - \
+                self.dot(s.vec[i - 2], s.vec[i - 1]) - self.weight_const
         else:
             # w = self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[i % len(s.vec)])
-            w = (self.dot(s.vec[i - 2], r_i) + self.dot(r_rev, s.vec[i % len(s.vec)])) \
-                - (self.dot(s.vec[i - 2], s.vec[i - 1]) + self.dot(s.vec[i - 1], s.vec[i % len(s.vec)])) - self.weight_const
+            w = (self.dot(s.vec[i - 2], r_i) + \
+                 self.dot(r_rev, s.vec[i % len(s.vec)])) \
+                - (self.dot(s.vec[i - 2], s.vec[i - 1]) + \
+                   self.dot(s.vec[i - 1], s.vec[i % len(s.vec)])) \
+                - self.weight_const
 
         W = np.exp(self.beta * w)
         return W
@@ -493,10 +469,6 @@ class Main(base):
     def get_bonding_pairs(self, s, index_start, index_stop):
         bonding_pairs = {}
         neighbors_dict = {}
-        # rang = []
-        # for (start, stop) in indexes:
-        #     rang += range(start, stop)
-
         rang = range(index_start, index_stop)
 
         if s.loop and (0 in rang):
