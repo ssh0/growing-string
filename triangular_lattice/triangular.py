@@ -10,7 +10,7 @@ import numpy as np
 class LatticeTriangular(object):
 
     def __init__(self, lattice=None, boundary={'h': 'periodic', 'v': 'periodic'},
-                 scale=10, x0=0, y0=0
+                 scale=10., x0=0, y0=0
                  ):
         """Initialize triangular lattice
 
@@ -119,28 +119,22 @@ class LatticeTriangular(object):
         return neighbors_x, neighbors_y
 
     def to_realspace(self):
-        dx = self.scale / self.Lx
-        dy = self.scale / self.Ly
-        unit_lengh = min(dx, (2 / np.sqrt(3)) * dy)
-        self.dx = unit_lengh
-        self.dy = unit_lengh * (np.sqrt(3) / 2)
+        unit_lengh = min(self.scale / self.Lx,
+                         (2 / np.sqrt(3)) * (self.scale / self.Ly))
+        self.dx, self.dy = unit_lengh, unit_lengh * (np.sqrt(3) / 2)
         # self.dx = 1, self.dy = sqrt(3) / 2
-        x = range(self.Lx)
-        y = range(self.Ly)
+        y = np.arange(self.Ly)
 
         if self.boundary['h'] == 'periodic':
-            X = ((np.mgrid[0:self.Ly, 0:self.Lx][1] \
-                  + 0.5 * np.array([y]).T) * self.dx) \
-                % (self.dx * self.Lx) + self.x0
-            X = X.T.flatten()
+            X = ((2 * np.mgrid[:self.Ly, :self.Lx][1].T + y) % (2 * self.Lx)) \
+                * (0.5 * self.dx) + self.x0
         elif self.boundary['h'] == 'reflective':
-            X = (np.mgrid[0:self.Ly, 0:self.Lx][1] \
-                 + 0.5 * np.array([y]).T) * self.dx + self.x0
-            X = X.T.flatten()
+            X = (2 * np.mgrid[:self.Ly, :self.Lx][1].T + y) \
+                * (0.5 * self.dx) + self.x0
 
-        Y = (np.mgrid[0:self.Lx, 0:self.Ly][1] + 0.5) * self.dy + self.y0
+        Y = (np.mgrid[:self.Lx, :self.Ly][1] + 0.5) * self.dy + self.y0
 
-        return np.array(X), Y.flatten()
+        return X.flatten(), Y.flatten()
 
 
 if __name__ == '__main__':
