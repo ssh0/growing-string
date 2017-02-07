@@ -9,6 +9,7 @@ from __future__ import print_function
 from triangular import LatticeTriangular as LT
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri
+import matplotlib.cm as cm
 import matplotlib.animation as animation
 from base import Main as base
 from strings import String
@@ -204,7 +205,12 @@ class Main(base):
                                    markeredgecolor='black')[0]
                       for i in range(self.number_of_lines)]
         if self.plot_surface:
-            self.lines.append(self.ax.plot([], [], '.', color='#ff0000')[0])
+            # self.__num_surface = 1
+            # self.lines.append(self.ax.plot([], [], '.', color='#ff0000')[0])
+            self.__num_surface = 9
+            self.lines += [self.ax.plot([], [], '.',
+                                        )[0]
+                           for i in range(self.__num_surface)]
 
         self.lattice_X = self.lattice_X.reshape(self.lattice.Lx,
                                                 self.lattice.Ly)
@@ -265,23 +271,55 @@ class Main(base):
                 self.lines[i].set_data(X, Y)
                 i += 1
 
+        num_plot_surface = 0
         if self.plot_surface:
-            neighbors = []
+            # neighbors = []
+            # for bonding_pairs in self.bonding_pairs.values():
+            #     # print(bonding_pairs)
+            #     for pos in bonding_pairs.keys():
+            #         neighbors.append(pos)
+            # neighbors = list(np.array(neighbors).T)
+            # # print(neighbors)
+            # X, Y = self.lattice_X[neighbors], self.lattice_Y[neighbors]
+            # # print(X, Y)
+            # self.lines[-k].set_data(X, Y)
+
+            # === 
+            w = {}
             for bonding_pairs in self.bonding_pairs.values():
                 # print(bonding_pairs)
-                for pos in bonding_pairs.keys():
-                    neighbors.append(pos)
-            neighbors = list(np.array(neighbors).T)
-            # print(neighbors)
-            X, Y = self.lattice_X[neighbors], self.lattice_Y[neighbors]
-            # print(X, Y)
-            self.lines[-1].set_data(X, Y)
+                for pos, bps in bonding_pairs.items():
+                    for bp, _w in bps:
+                        if w.has_key(_w):
+                            w[_w].append(pos)
+                        else:
+                            w[_w] = [pos,]
+            num_plot_surface = len(w)
+            # W = sorted(w.keys(), reverse=True)
+            sum_w = np.sum([len(w[_w]) for _w in w.keys()])
+            W = [(_w, (_w * len(w[_w])) / sum_w) for _w in w.keys()]
+            ave_W = np.average(W, axis=0)[1] 
+            min_W = np.exp(self.beta * (-2.5)) /sum_w
+            max_W = np.exp(self.beta * 2.5) /sum_w
+            for k, (wi, _w) in enumerate(W):
+                neighbors = list(np.array(w[wi]).T)
+                X, Y = self.lattice_X[neighbors], self.lattice_Y[neighbors]
+                self.lines[-(k + 1)].set_data(X, Y)
+                ## color setting
+                dw = _w - ave_W
+                if min_W == ave_W:
+                    _c = 0.5
+                elif dw < 0:
+                    _c = (0.5 / (ave_W - min_W)) * (_w - min_W)
+                else:
+                    _c = (0.5 / (max_W - ave_W)) * dw + 0.5
+                self.lines[-(k + 1)].set_color(cm.plasma(_c))
 
 
         # 最終的に，iの数だけ線を引けばよくなる
         # それ以上のオブジェクトはリセット
         if self.plot_surface:
-            max_obj = len(self.lines) - 1
+            max_obj = len(self.lines) - num_plot_surface
         else:
             max_obj = len(self.lines)
         for j in range(i, max_obj):
