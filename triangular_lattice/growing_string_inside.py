@@ -340,7 +340,7 @@ class InsideString(object):
         self.ax.set_aspect('equal')
 
         triang = tri.Triangulation(lattice_X, lattice_Y)
-        self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
+        self.ax.triplot(triang, color='#d5d5d5', lw=0.5)
 
         # self.points = [self.ax.plot([], [], 'g^')[0],
         #                self.ax.plot([], [], 'gv')[0]]

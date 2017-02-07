@@ -88,8 +88,7 @@ class Main:
             self.ax1.set_title("Lattice-Gas model for collective motion")
             self.triang = tri.Triangulation(self.lattice_X.flatten(),
                                             self.lattice_Y.flatten())
-            self.ax1.triplot(self.triang, color='whitesmoke', marker='o',
-                             markersize=1)
+            self.ax1.triplot(self.triang, color='whitesmoke', lw=0.5)
             self.quiver = self.ax1.quiver(np.array([]), np.array([]),
                                           np.array([]), np.array([]),
                                           units='xy', angles='uv', color='k', scale=10)

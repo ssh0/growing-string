@@ -92,19 +92,19 @@ class Eden():
         self.ax.set_yticklabels([])
         self.ax.set_aspect('equal')
 
-        triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
-        self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
-
+        ## if the lattice size exceeds 200, don't draw triangular lattice.
+        if max(self.lattice.Lx, self.lattice.Ly) < 200:
+            triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
+            self.ax.triplot(triang, color='#d5d5d5', lw=0.5)
         self.scatter = [
-            self.ax.plot([], [], '.', color='black')[0],
-            self.ax.plot([], [], 'o', color='#ff0000')[0]
+            self.ax.plot([], [], 'k.')[0],
+            self.ax.plot([], [], 'r.')[0]
         ]
 
         self.lattice_X = self.lattice_X.reshape(self.lattice.Lx,
                                                 self.lattice.Ly)
         self.lattice_Y = self.lattice_Y.reshape(self.lattice.Lx,
                                                 self.lattice.Ly)
-        self.plot_points()
 
         def init_func(*arg):
             return self.scatter
@@ -118,8 +118,8 @@ class Eden():
     def plot_points(self):
         """self.pointsに格納されている格子座標を元にプロット
         """
-        points = self.points  # [(x1, y1), (x2, y2), (x3, y3), ...]
-        index = list(np.array(points).T)
+        ## self.points: [(x1, y1), (x2, y2), (x3, y3), ...]
+        index = list(np.array(self.points).T)
         X = self.lattice_X[index]
         Y = self.lattice_Y[index]
         self.scatter[0].set_data(X, Y)

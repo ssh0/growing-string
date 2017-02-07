@@ -168,7 +168,7 @@ if __name__ == '__main__':
     ax.set_aspect('equal')
 
     triang = tri.Triangulation(lattice_X, lattice_Y)
-    ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
+    ax.triplot(triang, color='#d5d5d5', lw=0.5)
 
 
     # trilattice.lattice[neighbors] = 2

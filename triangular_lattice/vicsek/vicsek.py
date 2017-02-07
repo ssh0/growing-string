@@ -70,8 +70,7 @@ class Main:
             self.ax1.set_title("Lattice-Gas model for collective motion")
             self.triang = tri.Triangulation(self.lattice_X.flatten(),
                                             self.lattice_Y.flatten())
-            self.ax1.triplot(self.triang, color='whitesmoke', marker='.',
-                             markersize=1)
+            self.ax1.triplot(self.triang, color='whitesmoke', lw=0.5)
 
             self.l, = self.ax2.plot([], [], 'b-')
             self.ax2.set_title(r"Order parameter $m=\frac{1}{N} |\sum \vec{u}_{i}|$ ($T = %.2f$)"

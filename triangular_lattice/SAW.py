@@ -183,7 +183,7 @@ class SAW(base):
 
         if max(self.lattice.Lx, self.lattice.Ly) < 200:
             triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
-            self.ax.triplot(triang, color='#d5d5d5', marker='.', markersize=1)
+            self.ax.triplot(triang, color='#d5d5d5', lw=0.5)
 
         self.lines = [self.ax.plot([], [], linestyle='-',
                                    color='black',
