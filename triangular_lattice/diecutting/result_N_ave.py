@@ -220,6 +220,76 @@ def fit_scale(path, fixed_a, fixed_loc, save_image=False):
 
     plt.show()
 
+def fit_fermi(path, save_image=False):
+
+    matplotlib.rcParams['savefig.dpi'] = 300
+
+    def fitting_func(x, theta):
+        return 0.5 * ((x ** 2.) / ((theta ** 3.) * (np.exp(x / theta) - 1.)))
+
+    betas = []
+    scale = []
+
+    fig, ax = plt.subplots()
+    for i, result_data_path in enumerate(path):
+        globals().update(load_data(result_data_path))
+        ax.plot(Ls, M_ave, '.', label=r'$\beta = %2.2f$' % beta,
+                color=cm.viridis(float(i) / len(path)))
+        popt = curve_fit(fitting_func, xdata=Ls, ydata=M_ave, p0=[10.,])[0]
+        # print beta, popt
+        betas.append(beta)
+        scale.append(popt[0])
+
+        x = np.linspace(0, max(Ls), num=5*max(Ls))
+        ax.plot(x, fitting_func(x, theta=popt[0]),
+                '-',
+                # label=r'fitted $\beta = %2.2f$' % beta,
+                color=cm.viridis(float(i) / len(path)))
+
+        ## critical point
+        # critcal_point = 2. * popt[0]  # x = (a - 1) * scale
+        # ax.plot([critcal_point] * 2, [0., 0.05], '-',
+        #         color=cm.viridis(float(i) / len(path)))
+    show_plot1(ax, num_of_strings)
+
+    if save_image:
+        result_image_path = "../results/img/diecutting/fitted_gamma_fixed_a_x0"
+        result_image_path += "_" + time.strftime("%y%m%d_%H%M%S")
+        pdf = PdfPages(result_image_path + ".pdf")
+        plt.savefig(result_image_path + ".png")
+        pdf.savefig()
+        pdf.close()
+        plt.close()
+        print "[saved] " + result_image_path
+    else:
+        plt.show()
+        plt.close()
+
+    betas = np.array(betas)
+    scale = np.array(scale)
+
+    fig, ax = plt.subplots()
+    ax.set_title(r'Fitting parameter')
+    ax.plot(betas, scale, 'o')
+    ax.set_xlabel(r'$\beta$')
+    ax.set_xlim((0, max(betas)))
+    ax.set_ylabel(r'$\theta$')
+
+    if save_image:
+        result_image_path = "../results/img/diecutting/fitted_parameters_fixed_a_x0"
+        result_image_path += "_" + time.strftime("%y%m%d_%H%M%S")
+        pdf = PdfPages(result_image_path + ".pdf")
+        plt.savefig(result_image_path + ".png")
+        pdf.savefig()
+        pdf.close()
+        plt.close()
+        print "[saved] " + result_image_path
+    else:
+        plt.show()
+        plt.close()
+
+    plt.show()
+
 def fermi(path, fixed_a, fixed_loc, save_image=False):
     matplotlib.rcParams['savefig.dpi'] = 300
 
@@ -372,6 +442,7 @@ if __name__ == '__main__':
     # fit_a_x0_scale(set_data_path.data_path)
     # fit_a_scale(set_data_path.data_path, fixed_loc=0.)
     # fit_scale(set_data_path.data_path, fixed_a=3., fixed_loc=0., save_image=False)
+    # fit_fermi(set_data_path.data_path, save_image=False)
     # # no_fit(set_data_path.data_path, fixed_a=3., fixed_loc=0., _a=3.6, _b=0.,  save_image=False)
     # no_fit(set_data_path.data_path, fixed_a=3., fixed_loc=0., _a=19., _b=-8.,  save_image=False)
     fermi(set_data_path.data_path, fixed_a=3., fixed_loc=0., save_image=False)
