@@ -56,6 +56,7 @@ class Main(base):
             scale=float(max(Lx, Ly)),
             boundary=boundary
         )
+
         self.lattice_X = self.lattice.coordinates_x.reshape(
             self.lattice.Lx,
             self.lattice.Ly
@@ -183,10 +184,10 @@ class Main(base):
         """
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
 
-        self.lattice_X = self.lattice.coordinates_x
-        self.lattice_Y = self.lattice.coordinates_y
-        X_min, X_max = min(self.lattice_X) - 0.1, max(self.lattice_X) + 0.1
-        Y_min, Y_max = min(self.lattice_Y) - 0.1, max(self.lattice_Y) + 0.1
+        lattice_X = self.lattice.coordinates_x
+        lattice_Y = self.lattice.coordinates_y
+        X_min, X_max = min(lattice_X) - 0.1, max(lattice_X) + 0.1
+        Y_min, Y_max = min(lattice_Y) - 0.1, max(lattice_Y) + 0.1
         self.ax.set_xlim([X_min, X_max])
         self.ax.set_ylim([Y_min, Y_max])
         self.ax.set_xticklabels([])
@@ -195,7 +196,7 @@ class Main(base):
 
         ## if the lattice size exceeds 200, don't draw triangular lattice.
         if max(self.lattice.Lx, self.lattice.Ly) < 200:
-            triang = tri.Triangulation(self.lattice_X, self.lattice_Y)
+            triang = tri.Triangulation(lattice_X, lattice_Y)
             self.ax.triplot(triang, color='#d5d5d5', lw=0.5)
 
 
@@ -212,10 +213,6 @@ class Main(base):
                                         )[0]
                            for i in range(self.__num_surface)]
 
-        self.lattice_X = self.lattice_X.reshape(self.lattice.Lx,
-                                                self.lattice.Ly)
-        self.lattice_Y = self.lattice_Y.reshape(self.lattice.Lx,
-                                                self.lattice.Ly)
         self.plot_string()
 
     def start_animation(self, filename=""):
