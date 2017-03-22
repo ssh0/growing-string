@@ -99,7 +99,7 @@ class Main:
                             self.lattice_Y[pos2[0], pos2[1]])
                 # print j, pos1, pos2
                 # print dist_x, dist_y
-                if dist_x > 1.5 * self.lattice.dx or dist_y > 1.5 * self.lattice.dy:
+                if dist_x > 2.1 * self.lattice.dx or dist_y > 2.1 * self.lattice.dy:
                     x = s.pos_x[start:j + 1]
                     y = s.pos_y[start:j + 1]
                     X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]

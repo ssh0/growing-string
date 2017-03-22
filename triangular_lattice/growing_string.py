@@ -252,7 +252,8 @@ class Main(base):
                             self.lattice_Y[pos2[0], pos2[1]])
                 # print j, pos1, pos2
                 # print dist_x, dist_y
-                if dist_x > 1.5 * self.lattice.dx or dist_y > 1.5 * self.lattice.dy:
+                # sqrt(2^{2} + (1/2)^{2}) ~ 2.06
+                if dist_x > 2.1 * self.lattice.dx or dist_y > 2.1 * self.lattice.dx:
                     x = s.pos_x[start:j + 1]
                     y = s.pos_y[start:j + 1]
                     X = [self.lattice_X[_x, _y] for _x, _y in zip(x, y)]
@@ -408,7 +409,6 @@ class Main(base):
 
         # pp.pprint(self.strings[key].pos)
         # pp.pprint(self.bonding_pairs[key].keys())
-
 
     def cleanup_bonding_pairs(self, key, index_start, index_stop):
         rang = range(index_start, index_stop)
