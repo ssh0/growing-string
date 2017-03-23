@@ -174,6 +174,94 @@ class Sim(Main):
                            for i in range(self.__num_surface)]
         self.plot_string()
 
+    def _vector(self, X1, Y1, X2, Y2):
+        """Return 2-d vector from (X1, Y1) to (X2, Y2).
+        Remark: X1, X2,... are grid coordinates and are not coordinates in
+        real 2d space."""
+        x1, y1 = self.lattice_X[X1][Y1], self.lattice_Y[X1][Y1]
+        x2, y2 = self.lattice_X[X2][Y2], self.lattice_Y[X2][Y2]
+        return np.array([x2 - x1, y2 - y1])
+
+    def get_bonding_pairs(self, s, index_start, index_stop):
+        def _vec_(i):
+            """Get vector from the point in string 's' indexed 'i' to the point
+            indexed 'i+1'."""
+            X1, Y1 = s.pos[i]
+            X2, Y2 = s.pos[i+1]
+            return self._vector(X1, Y1, X2, Y2)
+
+        bonding_pairs = {}
+        neighbors_dict = {}
+        rang = range(index_start, index_stop)
+
+        if s.loop and (0 in rang):
+            rang.append(0)
+
+        for i in rang:
+            x, y = s.pos[i]
+            nnx, nny = self.lattice.neighbor_of(x, y)
+
+            for r_int in [0, 1, 2, 3, 4, 5]:
+                nx, ny = nnx[r_int], nny[r_int]
+                if self.occupied[nx, ny] or nx == -1 or ny == -1:
+                    continue
+
+                r = self._vector(x, y, nx, ny)
+                r_rev = self._vector(nx, ny, x, y)
+                r_rev_int = (r_int + 3) % 6
+
+                if not neighbors_dict.has_key((nx, ny)):
+                    if not s.loop:
+                        if i == 0:
+                            w = np.dot(r_rev, _vec_(i))
+                            W = np.exp(self.beta * w)
+                            self._update_dict(bonding_pairs,
+                                               (nx, ny),
+                                               [[0, r_rev_int, nx, ny], W])
+                        elif i == len(s.pos) - 1:
+                            w = np.dot(_vec_(i - 1), r)
+                            W = np.exp(self.beta * w)
+                            self._update_dict(bonding_pairs,
+                                               (nx, ny),
+                                               [[i, r_int], W])
+                    neighbors_dict[(nx, ny)] = [(i, r, r_int),]
+                else:
+                    if neighbors_dict[(nx, ny)][-1][0] == i - 1:
+                        r_i = neighbors_dict[(nx, ny)][-1][1]
+                        r_i_int = neighbors_dict[(nx, ny)][-1][2]
+
+                        if (i == 1) and (not s.loop):
+                            w = (
+                                np.dot(r_i, r_rev) + \
+                                np.dot(r_rev, _vec_(i))
+                            ) - (
+                                np.dot(_vec_(i - 1), _vec_(i))
+                            )
+
+                        elif (i == len(s.pos) - 1) and (not s.loop):
+                            w = (
+                                np.dot(_vec_(i - 2), r_i) + \
+                                np.dot(r_i, r_rev)
+                            ) - (
+                                np.dot(_vec_(i - 2), _vec_(i - 1))
+                            )
+                        else:
+                            w = (
+                                np.dot(_vec_(i - 2), r_i) + \
+                                np.dot(r_i, r_rev) + \
+                                np.dot(r_rev, _vec_(i % len(s.vec)))
+                            ) - (
+                                np.dot(_vec_(i - 2), _vec_(i - 1)) + \
+                                np.dot(_vec_(i - 1), _vec_(i % len(s.vec)))
+                            )
+
+                        W = np.exp(self.beta * w)
+                        self._update_dict(bonding_pairs,
+                                           (nx, ny),
+                                           [[i - 1, r_i_int, r_rev_int], W])
+                    neighbors_dict[(nx, ny)].append((i, r, r_int))
+        return bonding_pairs
+
 
 if __name__ == '__main__':
     L = 100
