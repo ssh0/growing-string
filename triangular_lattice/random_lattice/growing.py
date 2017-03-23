@@ -29,7 +29,7 @@ class Sim(Main):
                  filename_video="",
                  frames=1000,
                  beta = 2.,
-                 interval=1,
+                 interval=0,
                  weight_const=0.5,
                  strings=None,
                  pre_function=None,
@@ -166,12 +166,8 @@ class Sim(Main):
                                    markeredgecolor='black')[0]
                       for i in range(self.number_of_lines)]
         if self.plot_surface:
-            # self.__num_surface = 1
-            # self.lines.append(self.ax.plot([], [], '.', color='#ff0000')[0])
-            self.__num_surface = 9
-            self.lines += [self.ax.plot([], [], '.',
-                                        )[0]
-                           for i in range(self.__num_surface)]
+            self._num_surface = 1
+            self.lines.append(self.ax.plot([], [], '.', color='#ff0000')[0])
         self.plot_string()
 
     def _vector(self, X1, Y1, X2, Y2):
@@ -182,12 +178,23 @@ class Sim(Main):
         x2, y2 = self.lattice_X[X2][Y2], self.lattice_Y[X2][Y2]
         return np.array([x2 - x1, y2 - y1])
 
+    def dot(self, vec1, vec2):
+        """Calculate user-defined 'inner product' from the two 2d vectors
+        `vec1` and `vec2`.
+        """
+        ## normal inner product
+        # res = np.dot(vec1, vec2)
+
+        ## only depend on angle
+        res = np.dot(vec1 / np.linalg.norm(vec1), vec2 / np.linalg.norm(vec2))
+        return res
+
     def get_bonding_pairs(self, s, index_start, index_stop):
         def _vec_(i):
             """Get vector from the point in string 's' indexed 'i' to the point
             indexed 'i+1'."""
             X1, Y1 = s.pos[i]
-            X2, Y2 = s.pos[i+1]
+            X2, Y2 = s.pos[i + 1]
             return self._vector(X1, Y1, X2, Y2)
 
         bonding_pairs = {}
@@ -213,17 +220,17 @@ class Sim(Main):
                 if not neighbors_dict.has_key((nx, ny)):
                     if not s.loop:
                         if i == 0:
-                            w = np.dot(r_rev, _vec_(i))
+                            w = self.dot(r_rev, _vec_(i % len(s.vec)))
                             W = np.exp(self.beta * w)
                             self._update_dict(bonding_pairs,
-                                               (nx, ny),
-                                               [[0, r_rev_int, nx, ny], W])
+                                              (nx, ny),
+                                              [[0, r_rev_int, nx, ny], W])
                         elif i == len(s.pos) - 1:
-                            w = np.dot(_vec_(i - 1), r)
+                            w = self.dot(_vec_(i - 1), r)
                             W = np.exp(self.beta * w)
                             self._update_dict(bonding_pairs,
-                                               (nx, ny),
-                                               [[i, r_int], W])
+                                              (nx, ny),
+                                              [[i, r_int], W])
                     neighbors_dict[(nx, ny)] = [(i, r, r_int),]
                 else:
                     if neighbors_dict[(nx, ny)][-1][0] == i - 1:
@@ -232,27 +239,27 @@ class Sim(Main):
 
                         if (i == 1) and (not s.loop):
                             w = (
-                                np.dot(r_i, r_rev) + \
-                                np.dot(r_rev, _vec_(i))
+                                self.dot(r_i, r_rev) + \
+                                self.dot(r_rev, _vec_(i))
                             ) - (
-                                np.dot(_vec_(i - 1), _vec_(i))
+                                self.dot(_vec_(i - 1), _vec_(i))
                             )
 
                         elif (i == len(s.pos) - 1) and (not s.loop):
                             w = (
-                                np.dot(_vec_(i - 2), r_i) + \
-                                np.dot(r_i, r_rev)
+                                self.dot(_vec_(i - 2), r_i) + \
+                                self.dot(r_i, r_rev)
                             ) - (
-                                np.dot(_vec_(i - 2), _vec_(i - 1))
+                                self.dot(_vec_(i - 2), _vec_(i - 1))
                             )
                         else:
                             w = (
-                                np.dot(_vec_(i - 2), r_i) + \
-                                np.dot(r_i, r_rev) + \
-                                np.dot(r_rev, _vec_(i % len(s.vec)))
+                                self.dot(_vec_(i - 2), r_i) + \
+                                self.dot(r_i, r_rev) + \
+                                self.dot(r_rev, _vec_(i % len(s.vec)))
                             ) - (
-                                np.dot(_vec_(i - 2), _vec_(i - 1)) + \
-                                np.dot(_vec_(i - 1), _vec_(i % len(s.vec)))
+                                self.dot(_vec_(i - 2), _vec_(i - 1)) + \
+                                self.dot(_vec_(i - 1), _vec_(i % len(s.vec)))
                             )
 
                         W = np.exp(self.beta * w)
@@ -269,13 +276,13 @@ if __name__ == '__main__':
         'Lx': L,
         'Ly': L,
         'size': [3,] * 1, 
-        'frames': 1000,
-        'beta': 2.,
+        'frames': 2000,
+        'beta': 20.,
         'plot': True,
         'plot_surface': False,
         'interval': 0,
-        'strings': [{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}]
-        # 'strings': [{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4, 2]}]
+        # 'strings': [{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4]}]
+        'strings': [{'id': 1, 'x': L/4, 'y': L/2, 'vec': [0, 4, 2]}]
     }
 
     main= Sim(**params)
