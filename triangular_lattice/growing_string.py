@@ -158,7 +158,7 @@ class Main(base):
             plt.close()
             # print("Image file is successfully saved at '%s'." % filename_image)
 
-    def __update_dict(self, dict, key, value):
+    def _update_dict(self, dict, key, value):
         if dict.has_key(key):
             dict[key].append(value)
         else:
@@ -449,7 +449,7 @@ class Main(base):
         if (i == 1) and (not s.loop):
             w = self.dot(r_rev, s.vec[i]) - self.dot(s.vec[0], s.vec[1]) \
                 - self.weight_const
-        elif (i == len(s.pos) - 2) and (not s.loop):
+        elif (i == len(s.pos) - 1) and (not s.loop):
             w = self.dot(s.vec[i - 2], r_i) - \
                 self.dot(s.vec[i - 2], s.vec[i - 1]) - self.weight_const
         else:
@@ -487,23 +487,23 @@ class Main(base):
                         if i == 0:
                             w = self.dot(r_rev, s.vec[0])
                             W = np.exp(self.beta * w)
-                            self.__update_dict(bonding_pairs,
+                            self._update_dict(bonding_pairs,
                                                (nx, ny),
                                                [[0, r_rev, nx, ny], W])
                         elif i == len(s.pos) - 1:
                             w = self.dot(s.vec[i - 1], r)
                             W = np.exp(self.beta * w)
-                            self.__update_dict(bonding_pairs,
+                            self._update_dict(bonding_pairs,
                                                (nx, ny),
                                                [[i, r], W])
                     neighbors_dict[(nx, ny)] = [(i, r),]
                 else:
                     if neighbors_dict[(nx, ny)][-1][0] == i - 1:
                         r_i = neighbors_dict[(nx, ny)][-1][1]
-                        w = self.calc_weight(s, i, r_i, r_rev)
-                        self.__update_dict(bonding_pairs,
+                        W = self.calc_weight(s, i, r_i, r_rev)
+                        self._update_dict(bonding_pairs,
                                            (nx, ny),
-                                           [[i - 1, r_i, r_rev], w])
+                                           [[i - 1, r_i, r_rev], W])
                     neighbors_dict[(nx, ny)].append((i, r))
         return bonding_pairs
 
