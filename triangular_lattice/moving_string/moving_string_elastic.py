@@ -10,7 +10,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from triangular import LatticeTriangular as LT
-from string import String
+from strings import String
 from base import Main as base
 import numpy as np
 import random
