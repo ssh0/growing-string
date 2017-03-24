@@ -23,8 +23,8 @@ class Main(base):
                  beta=4.):
         self.plot = plot
         self.beta = beta
-        self.interval = 50
-        self.frames = 1000
+        self.interval = 1
+        self.frames = 20000
 
         # Create triangular lattice with given parameters
         self.lattice = LT(np.zeros((Lx, Ly), dtype=np.int),
@@ -84,8 +84,16 @@ class Main(base):
         for s in self.strings:
             X = self.get_next_xy(s.x, s.y, self._vec_(s, 0))
             if not X:
-                ## dead lockの縛りはなくす
+                ## Stop all simulation
                 # raise StopIteration
+
+                ## Stop one string
+                # continue
+
+                ## Reverse head
+                s.x, s.y = s.pos_x[-1], s.pos_y[-1]
+                s.vec = [(vec + 3) % 6 for vec in reversed(s.vec)]
+                s.update_pos()
                 continue
 
             # update starting position
