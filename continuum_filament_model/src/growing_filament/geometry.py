@@ -273,6 +273,20 @@ SegmentContact = SegmentContactGeometry
 FeatureType = SegmentFeature
 
 
+def _distance_from_contact(value: SegmentContactGeometry) -> SegmentDistance:
+    """Preserve the historical closest-pair dict shape for diagnostics."""
+
+    return SegmentDistance(
+        segment_i=value.segment_i,
+        segment_j=value.segment_j,
+        distance=value.distance,
+        point_i=value.point_i,
+        point_j=value.point_j,
+        parameter_i=value.parameter_i,
+        parameter_j=value.parameter_j,
+    )
+
+
 @dataclass(frozen=True)
 class SweptIntersection:
     """First detected intersection during a linear endpoint trial."""
@@ -743,9 +757,9 @@ def initial_geometry_diagnostic(
     if not np.isfinite(contact_distance) or contact_distance < 0.0:
         raise ValueError("contact_distance must be finite and non-negative")
     segment_lengths = np.linalg.norm(np.diff(values, axis=0), axis=1)
-    distances = nonlocal_segment_distances(values)
-    closest = min(distances, key=lambda value: value.distance) if distances else None
     contacts = nonlocal_segment_contacts(values, contact_distance)
+    closest_contact = min(contacts, key=lambda value: value.distance) if contacts else None
+    closest = _distance_from_contact(closest_contact) if closest_contact else None
     intersections = tuple(
         (value.segment_i, value.segment_j)
         for value in contacts
