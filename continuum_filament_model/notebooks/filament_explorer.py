@@ -24,6 +24,9 @@ def _():
         ```
 
         プリセットを選び、必要なパラメータを変更してから実行ボタンを押してください。
+        送信のたびに軌跡と中心線アニメーションを再生成します。アニメーションの再生ボタン・
+        スライダー、または下の「表示フレーム」スライダーで、初期・中間・最終状態を確認できます。
+        計算フレーム数・描画フレーム数・埋め込みHTMLサイズには上限があります。
         実行セルには計算負荷の上限があり、不正な入力・モデルの `RuntimeError`・可視化依存不足は原因とともに表示します。
         `crossing_rejection` の `RuntimeError` は、交差棄却を確認するための期待される診断です。
         """
@@ -113,6 +116,8 @@ def _(
 
     MAX_STEPS = 1200
     MAX_ESTIMATED_NODES = 180
+    MAX_DRAW_FRAMES = 90
+    MAX_ANIMATION_HTML_BYTES = 1_500_000
 
     DEFAULT_CONFIG = {
         "preset": "straight",
@@ -398,7 +403,14 @@ def _(
         lines.extend("| " + " | ".join(str(value) for value in row) + " |" for row in rows)
         return "\n".join(lines)
 
-    return DEFAULT_CONFIG, PRESET_LABELS, execute_once, markdown_table
+    return (
+        DEFAULT_CONFIG,
+        MAX_ANIMATION_HTML_BYTES,
+        MAX_DRAW_FRAMES,
+        PRESET_LABELS,
+        execute_once,
+        markdown_table,
+    )
 
 
 @app.cell
@@ -618,6 +630,8 @@ def _(
 
 @app.cell
 def _(
+    MAX_ANIMATION_HTML_BYTES,
+    MAX_DRAW_FRAMES,
     arc_length_weighted_radius_of_gyration,
     contour_length,
     discrete_curvature,
@@ -758,6 +772,133 @@ def _(
         ax_shape.legend(loc="best")
         fig_visual.tight_layout()
 
+        animation_html = None
+        animation_size_bytes = 0
+        animation_error = None
+        draw_indices = np.asarray([], dtype=int)
+        try:
+            from matplotlib.animation import FuncAnimation
+
+            def sampled_indices(n_frames, max_frames):
+                count = min(int(n_frames), int(max_frames))
+                if count <= 0:
+                    return np.asarray([], dtype=int)
+                if count == 1:
+                    return np.asarray([0], dtype=int)
+                return np.unique(
+                    np.linspace(0, n_frames - 1, count, dtype=int)
+                )
+
+            def render_centerline_animation(indices):
+                animation_figure, animation_axis = plt.subplots(figsize=(7, 5))
+                animation_positions = np.concatenate(
+                    [trajectory[index].positions for index in indices], axis=0
+                )
+                x_min, y_min = np.min(animation_positions, axis=0)
+                x_max, y_max = np.max(animation_positions, axis=0)
+                span = max(float(x_max - x_min), float(y_max - y_min), 1.0)
+                margin = 0.05 * span
+                animation_axis.set_xlim(x_min - margin, x_max + margin)
+                animation_axis.set_ylim(y_min - margin, y_max + margin)
+                animation_axis.set_aspect("equal", adjustable="box")
+                animation_axis.set_xlabel("x")
+                animation_axis.set_ylabel("y")
+                animation_axis.set_title("中心線の時間発展")
+                animation_axis.grid(alpha=0.25)
+                line, = animation_axis.plot(
+                    [], [], "-o", lw=2, ms=3, label="centerline"
+                )
+                left_anchor, = animation_axis.plot(
+                    [], [], "o", ms=7, label="left endpoint"
+                )
+                right_anchor, = animation_axis.plot(
+                    [], [], "o", ms=7, label="right endpoint"
+                )
+                time_label = animation_axis.text(
+                    0.02,
+                    0.98,
+                    "",
+                    transform=animation_axis.transAxes,
+                    va="top",
+                )
+                animation_axis.legend(loc="best")
+
+                def update(frame_number):
+                    state = trajectory[int(indices[frame_number])]
+                    state_positions = state.positions
+                    line.set_data(state_positions[:, 0], state_positions[:, 1])
+                    left_anchor.set_data(
+                        [state_positions[0, 0]], [state_positions[0, 1]]
+                    )
+                    right_anchor.set_data(
+                        [state_positions[-1, 0]], [state_positions[-1, 1]]
+                    )
+                    time_label.set_text(
+                        f"t={state.time:.6g}  state={int(indices[frame_number])}"
+                    )
+                    return line, left_anchor, right_anchor, time_label
+
+                animation = FuncAnimation(
+                    animation_figure,
+                    update,
+                    frames=len(indices),
+                    init_func=lambda: update(0),
+                    interval=100,
+                    repeat=True,
+                    cache_frame_data=False,
+                )
+                try:
+                    return animation.to_jshtml(fps=10, embed_frames=True)
+                finally:
+                    plt.close(animation_figure)
+
+            draw_indices = sampled_indices(len(trajectory), MAX_DRAW_FRAMES)
+            while len(draw_indices):
+                candidate_html = render_centerline_animation(draw_indices)
+                candidate_size = len(candidate_html.encode("utf-8"))
+                if candidate_size <= MAX_ANIMATION_HTML_BYTES:
+                    animation_html = candidate_html
+                    animation_size_bytes = candidate_size
+                    break
+                if len(draw_indices) == 1:
+                    animation_size_bytes = candidate_size
+                    break
+                draw_indices = sampled_indices(
+                    len(trajectory), max(1, len(draw_indices) // 2)
+                )
+        except Exception as exc:
+            animation_error = exc
+
+        if animation_html is not None:
+            first_index = int(draw_indices[0])
+            middle_index = int(draw_indices[len(draw_indices) // 2])
+            last_index = int(draw_indices[-1])
+            animation_view = mo.vstack(
+                [
+                    mo.md(
+                        "### 中心線アニメーション\n"
+                        f"accepted state `{first_index}` → `{last_index}` を時間順に表示。 "
+                        f"描画フレーム数: `{len(draw_indices)}` / 上限 `{MAX_DRAW_FRAMES}`、"
+                        f"HTMLサイズ: `{animation_size_bytes:,}` bytes / 上限 `{MAX_ANIMATION_HTML_BYTES:,}`。\n\n"
+                        f"初期・中間・最終 state index: `{first_index}`, `{middle_index}`, `{last_index}`。"
+                    ),
+                    mo.Html(animation_html),
+                ]
+            )
+        elif animation_error is not None:
+            animation_view = mo.md(
+                "### 中心線アニメーション\n"
+                "アニメーション生成に失敗しました。下のフレームスライダーは利用できます。\n\n"
+                f"```text\n{type(animation_error).__name__}: {animation_error}\n```"
+            )
+        else:
+            animation_view = mo.md(
+                "### 中心線アニメーション\n"
+                "埋め込みHTMLサイズ上限を超えたため、アニメーションは省略しました。"
+                f"（生成サイズ: `{animation_size_bytes:,}` bytes / 上限 `{MAX_ANIMATION_HTML_BYTES:,}`）\n\n"
+                "下のフレームスライダーで初期・中間・最終フレームを確認できます。"
+            )
+
         rows = [
             ("time", f"{selected_state.time:.8g}"),
             ("step", selected_state.step),
@@ -849,7 +990,7 @@ def _(
                 error_view,
             ]
         )
-        display_view = fig_visual
+        display_view = mo.vstack([fig_visual, animation_view])
 
     display_view
     return (report_view,)
