@@ -396,6 +396,42 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(model.accepted_steps, 50)
         self.assertEqual(model.rejected_steps, 0)
 
+    def test_dt_0_01_growth_free_energy_increase_is_rejected_without_mutation(self):
+        state = FilamentState(
+            [[0.0, 0.0], [1.0, 0.4], [2.0, 0.4], [3.0, 0.0]],
+            [1.0, 1.0, 1.0],
+        )
+        model = OverdampedGrowingFilament(
+            state,
+            ModelParameters(
+                axial_stiffness=100.0,
+                bending_stiffness=1.0,
+                drag_density=1.0,
+                growth_rate=0.0,
+                reference_length=1.0,
+                dt=1.0e-2,
+                a_max=2.0,
+                fixed_left=True,
+                fixed_right=True,
+                max_retries=0,
+            ),
+        )
+        before = model.state.copy()
+        before_energy = model.energy()
+
+        with self.assertRaisesRegex(RuntimeError, "growth-free trial energy increased"):
+            model.step()
+
+        self.assertEqual(model.accepted_steps, 0)
+        self.assertEqual(model.rejected_steps, 1)
+        self.assertEqual(model.rejected_dts, [1.0e-2])
+        self.assertEqual(len(model.rejection_reasons), 1)
+        np.testing.assert_array_equal(model.state.positions, before.positions)
+        np.testing.assert_array_equal(model.state.rest_lengths, before.rest_lengths)
+        self.assertEqual(model.state.time, before.time)
+        self.assertEqual(model.state.step, before.step)
+        np.testing.assert_equal(model.energy(), before_energy)
+
     def test_small_step_reduces_energy_of_bent_fixed_chain(self):
         state = FilamentState(
             [[0.0, 0.0], [1.0, 0.4], [2.0, 0.4], [3.0, 0.0]],

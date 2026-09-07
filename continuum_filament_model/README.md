@@ -81,6 +81,18 @@ python continuum_filament_model/benchmarks/remesh_convergence.py
 曲率特異性により曲げエネルギー・節点力のメッシュ独立性を仮定せず、形状比較には
 `growing_filament.observables.arc_length_weighted_radius_of_gyration` を使います。
 
+Gate 2の時間積分・散逸ベンチマークは、次で実行できます。
+
+```bash
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/benchmarks/time_integration.py
+```
+
+3節点の固定メッシュ製造解について `dt=0.02, 0.01, 0.005` の一次収束誤差を出力し、
+`dt=0.01` と `dt=0.005` の4節点・成長なし診断について、エネルギー時系列、受理した
+`dt`、棄却理由を出力します。成長なしの試行はエネルギー非増加を受理条件としますが、
+成長ありでは成長がエネルギーを注入し得るため、単調減少を要求しません。
+
 ## 三角格子モデルとの関係
 
 `triangular_lattice/` は、新モデルのコードへ直接importしません。接続は観測量と無次元パラメータを介して行います。

@@ -51,11 +51,39 @@ class ModelParameters:
     dt_min: float = 1.0e-10
     max_retries: int = 12
     max_displacement_fraction: float = 0.25
+    # Relative scale for the growth-free energy acceptance test.  Growth can
+    # inject energy, so this condition is deliberately disabled when
+    # ``growth_rate`` is non-zero.
+    energy_tolerance: float = 1.0e-12
     fixed_left: bool = False
     fixed_right: bool = False
     reject_crossing: bool = True
 
     def validate(self) -> None:
+        numeric = {
+            "axial_stiffness": self.axial_stiffness,
+            "bending_stiffness": self.bending_stiffness,
+            "drag_density": self.drag_density,
+            "contact_stiffness": self.contact_stiffness,
+            "diameter": self.diameter,
+            "growth_rate": self.growth_rate,
+            "reference_length": self.reference_length,
+            "dt": self.dt,
+            "t_end": self.t_end,
+            "a_max": self.a_max,
+            "dt_min": self.dt_min,
+            "max_retries": self.max_retries,
+            "max_displacement_fraction": self.max_displacement_fraction,
+            "energy_tolerance": self.energy_tolerance,
+        }
+        for name, value in numeric.items():
+            try:
+                finite = bool(np.isfinite(value))
+            except (TypeError, ValueError):
+                finite = False
+            if not finite:
+                raise ModelError(f"{name} must be finite: {value!r}")
+
         positive = {
             "axial_stiffness": self.axial_stiffness,
             "bending_stiffness": self.bending_stiffness,
@@ -77,8 +105,12 @@ class ModelParameters:
             raise ModelError("growth_rate must be non-negative in this prototype")
         if self.max_retries < 0:
             raise ModelError("max_retries must be non-negative")
+        if int(self.max_retries) != self.max_retries:
+            raise ModelError("max_retries must be an integer")
         if not 0.0 < self.max_displacement_fraction <= 1.0:
             raise ModelError("max_displacement_fraction must be in (0, 1]")
+        if self.energy_tolerance < 0.0:
+            raise ModelError("energy_tolerance must be non-negative")
 
 
 @dataclass
@@ -149,9 +181,17 @@ def straight_state(n_nodes: int, spacing: float = 1.0) -> FilamentState:
 def grow_reference_lengths(rest_lengths: Array, growth_rate: float, dt: float) -> Array:
     """Apply local exponential reference-length growth for one time step."""
 
+    if not np.isfinite(growth_rate) or not np.isfinite(dt):
+        raise ModelError("growth_rate and dt must be finite")
     if growth_rate < 0.0 or dt < 0.0:
         raise ModelError("growth_rate and dt must be non-negative")
-    return np.asarray(rest_lengths, dtype=float) * np.exp(growth_rate * dt)
+    values = np.asarray(rest_lengths, dtype=float)
+    if not np.isfinite(values).all():
+        raise ModelError("rest_lengths contain non-finite values")
+    result = values * np.exp(growth_rate * dt)
+    if not np.isfinite(result).all():
+        raise ModelError("reference-length growth produced non-finite values")
+    return result
 
 
 def remesh(positions: Array, rest_lengths: Array, a_max: float) -> Tuple[Array, Array]:
@@ -167,6 +207,8 @@ def remesh(positions: Array, rest_lengths: Array, a_max: float) -> Tuple[Array, 
     a = np.asarray(rest_lengths, dtype=float).copy()
     if p.ndim != 2 or p.shape[1] != 2 or a.shape != (len(p) - 1,):
         raise ModelError("invalid remeshing shapes")
+    if not np.isfinite(p).all() or not np.isfinite(a).all():
+        raise ModelError("remeshing inputs contain non-finite values")
 
     # A segment can require several splits when a deliberately small a_max is
     # used. The loop is finite because every split halves the reference length.
@@ -308,6 +350,11 @@ class OverdampedGrowingFilament:
         self.right_anchor = self.state.positions[-1].copy()
         self.accepted_steps = 0
         self.rejected_steps = 0
+        # These small diagnostic histories make adaptive-step decisions
+        # inspectable without introducing a general event-log schema.
+        self.accepted_dts: list[float] = []
+        self.rejected_dts: list[float] = []
+        self.rejection_reasons: list[str] = []
 
     @classmethod
     def from_straight(
@@ -402,25 +449,45 @@ class OverdampedGrowingFilament:
             positions[-1] = self.right_anchor
             velocities[-1] = 0.0
 
+    def _trial_rejection_reason(self, positions: Array, dt: float,
+                                velocities: Array, rest_lengths: Array) -> Optional[str]:
+        if not np.isfinite(rest_lengths).all():
+            return "trial reference lengths are non-finite"
+        if not np.isfinite(positions).all() or not np.isfinite(velocities).all():
+            return "trial positions or velocities are non-finite"
+        local_scale = max(float(np.min(rest_lengths)), 1.0e-12)
+        max_displacement = float(np.max(np.linalg.norm(dt * velocities, axis=1)))
+        if max_displacement > self.parameters.max_displacement_fraction * local_scale:
+            return "trial displacement exceeds max_displacement_fraction"
+        if self.parameters.reject_crossing and has_nonlocal_intersection(positions):
+            return "trial contains a non-local segment intersection"
+        return None
+
     def _trial_is_valid(self, positions: Array, dt: float,
                         velocities: Array, rest_lengths: Array) -> bool:
-        if not np.isfinite(positions).all() or not np.isfinite(velocities).all():
-            return False
-        local_scale = max(float(np.min(rest_lengths)), 1.0e-12)
-        if float(np.max(np.linalg.norm(dt * velocities, axis=1))) > \
-                self.parameters.max_displacement_fraction * local_scale:
-            return False
-        if self.parameters.reject_crossing and has_nonlocal_intersection(positions):
-            return False
-        return True
+        """Keep the pre-Gate-2 boolean helper for callers of the prototype API."""
+
+        return self._trial_rejection_reason(
+            positions, dt, velocities, rest_lengths
+        ) is None
 
     def step(self, dt: Optional[float] = None) -> FilamentState:
-        """Advance one accepted step, halving ``dt`` after invalid trials."""
+        """Advance one accepted step, halving ``dt`` after invalid trials.
+
+        For a growth-free trial, explicit Euler is accepted only when its
+        total energy does not increase beyond ``energy_tolerance``.  Growth
+        changes the reference lengths and can inject energy, so this check is
+        intentionally not applied when ``growth_rate`` is non-zero.
+        """
 
         requested_dt = self.parameters.dt if dt is None else float(dt)
-        if requested_dt <= 0.0:
-            raise ModelError("dt must be positive")
+        if not np.isfinite(requested_dt) or requested_dt <= 0.0:
+            raise ModelError("dt must be finite and positive")
         trial_dt = requested_dt
+        previous_energy = self.energy()
+        if not np.isfinite(previous_energy):
+            raise ModelError("current energy is non-finite")
+        last_rejection_reason = "no trial was evaluated"
 
         for _ in range(self.parameters.max_retries + 1):
             grown = grow_reference_lengths(
@@ -439,7 +506,29 @@ class OverdampedGrowingFilament:
             trial_positions = positions + trial_dt * velocities
             self._apply_boundary_conditions(trial_positions, velocities)
 
-            if self._trial_is_valid(trial_positions, trial_dt, velocities, rest_lengths):
+            rejection_reason = self._trial_rejection_reason(
+                trial_positions, trial_dt, velocities, rest_lengths
+            )
+            trial_energy: Optional[float] = None
+            if rejection_reason is None:
+                try:
+                    trial_energy = self.energy(trial_positions, rest_lengths)
+                except ModelError as exc:
+                    rejection_reason = f"invalid trial energy: {exc}"
+                else:
+                    if not np.isfinite(trial_energy):
+                        rejection_reason = "trial energy is non-finite"
+                    elif self.parameters.growth_rate == 0.0:
+                        tolerance = self.parameters.energy_tolerance * max(
+                            1.0, abs(previous_energy)
+                        )
+                        if trial_energy > previous_energy + tolerance:
+                            rejection_reason = (
+                                "growth-free trial energy increased: "
+                                f"{previous_energy:.17g} -> {trial_energy:.17g}"
+                            )
+
+            if rejection_reason is None:
                 self.state = FilamentState(
                     trial_positions,
                     rest_lengths,
@@ -447,16 +536,21 @@ class OverdampedGrowingFilament:
                     step=self.state.step + 1,
                 )
                 self.accepted_steps += 1
+                self.accepted_dts.append(float(trial_dt))
                 return self.state.copy()
 
+            last_rejection_reason = rejection_reason
             self.rejected_steps += 1
+            self.rejected_dts.append(float(trial_dt))
+            self.rejection_reasons.append(rejection_reason)
             trial_dt *= 0.5
             if trial_dt < self.parameters.dt_min:
                 break
 
         raise RuntimeError(
             "failed to find an accepted step; "
-            f"requested_dt={requested_dt}, dt_min={self.parameters.dt_min}"
+            f"requested_dt={requested_dt}, dt_min={self.parameters.dt_min}, "
+            f"last_rejection_reason={last_rejection_reason}"
         )
 
     def run(self, t_end: Optional[float] = None) -> list[FilamentState]:
