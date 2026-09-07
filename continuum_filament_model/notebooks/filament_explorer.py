@@ -882,7 +882,10 @@ def _(
                         f"HTMLサイズ: `{animation_size_bytes:,}` bytes / 上限 `{MAX_ANIMATION_HTML_BYTES:,}`。\n\n"
                         f"初期・中間・最終 state index: `{first_index}`, `{middle_index}`, `{last_index}`。"
                     ),
-                    mo.Html(animation_html),
+                    # mo.Html keeps the controls but does not execute the
+                    # script-bearing FuncAnimation HTML; an iframe provides
+                    # the intended document boundary for that script.
+                    mo.iframe(animation_html, height="550px"),
                 ]
             )
         elif animation_error is not None:
