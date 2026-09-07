@@ -180,7 +180,7 @@ def remesh(positions: Array, rest_lengths: Array, a_max: float) -> Tuple[Array, 
         p = np.insert(p, i + 1, midpoint, axis=0)
         a[i] = old / 2.0
         a = np.insert(a, i + 1, old / 2.0)
-        i += 2
+        # Revisit the left child; either child may still exceed a_max.
     return p, a
 
 

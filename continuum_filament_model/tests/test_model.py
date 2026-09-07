@@ -47,6 +47,20 @@ class ModelTest(unittest.TestCase):
         self.assertAlmostEqual(float(np.sum(new_rest)), float(np.sum(rest)))
         np.testing.assert_allclose(new_positions[[0, -1]], positions[[0, -1]])
 
+    def test_remesh_recursively_splits_each_child(self):
+        positions = np.asarray([[0.0, 0.0], [8.0, 0.0], [9.0, 0.0]])
+        rest = np.asarray([8.0, 1.0])
+
+        new_positions, new_rest = remesh(positions, rest, a_max=1.0)
+
+        expected_positions = np.column_stack((np.arange(10, dtype=float),
+                                               np.zeros(10)))
+        self.assertEqual(len(new_rest), 9)
+        np.testing.assert_allclose(new_positions, expected_positions)
+        np.testing.assert_allclose(new_positions[[0, -1]], positions[[0, -1]])
+        self.assertAlmostEqual(float(np.sum(new_rest)), float(np.sum(rest)))
+        self.assertLessEqual(float(np.max(new_rest)), 1.0)
+
     def test_small_step_reduces_energy_of_bent_fixed_chain(self):
         state = FilamentState(
             [[0.0, 0.0], [1.0, 0.4], [2.0, 0.4], [3.0, 0.0]],
