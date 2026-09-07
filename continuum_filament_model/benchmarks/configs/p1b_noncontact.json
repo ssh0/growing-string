@@ -1,0 +1,33 @@
+{
+  "base": {
+    "length": 2.0,
+    "n_nodes": 9,
+    "axial_stiffness": 100.0,
+    "bending_stiffness": 0.1,
+    "drag_density": 1.0,
+    "growth_rate": 0.0,
+    "amplitude": 0.02,
+    "dt": 0.001,
+    "t_end": 0.2,
+    "a_max_factor": 2.0,
+    "contact_stiffness": 0.0,
+    "diameter": 0.0,
+    "fixed_left": true,
+    "fixed_right": true,
+    "reject_crossing": true
+  },
+  "cases": [
+    {"name": "growth_free_calibration", "overrides": {"growth_rate": 0.0, "t_end": 0.1}},
+    {"name": "slow_growth", "overrides": {"growth_rate": 0.01}},
+    {"name": "fast_growth", "overrides": {"growth_rate": 0.2}},
+    {"name": "low_EI", "overrides": {"bending_stiffness": 0.05, "growth_rate": 0.2}},
+    {"name": "high_EI", "overrides": {"bending_stiffness": 0.2, "growth_rate": 0.2}},
+    {"name": "small_perturbation", "overrides": {"amplitude": 0.01, "growth_rate": 0.2}},
+    {"name": "large_perturbation", "overrides": {"amplitude": 0.04, "growth_rate": 0.2}}
+  ],
+  "sensitivity": [
+    {"name": "dt_half", "overrides": {"dt_factor": 0.5, "growth_rate": 0.2}},
+    {"name": "spatial_refined", "overrides": {"n_nodes": 17, "growth_rate": 0.2}},
+    {"name": "amplitude_half", "overrides": {"amplitude": 0.01, "growth_rate": 0.2}}
+  ]
+}

@@ -105,6 +105,19 @@ python continuum_filament_model/benchmarks/time_integration.py
 `dt`、棄却理由を出力します。成長なしの試行はエネルギー非増加を受理条件としますが、
 成長ありでは成長がエネルギーを注入し得るため、単調減少を要求しません。
 
+## P1B：成長–緩和競合と座屈ベンチマーク
+
+非接触・両端固定・決定論的な `y(x)=A sin(pi*x/L)` 摂動を用いた小規模ベンチマークを、`benchmarks/buckling_benchmark.py` で実行できます。既存の `growing_filament` APIを呼び出し、成長・力・再メッシュの式を複製しません。`G_b = growth_rate * tau_b`（`tau_b = drag_density * L**4 / (bending_stiffness * pi**4)`）と `G_s`、`EI/(EA*L**2)` を保存し、`straight` / `buckled-single` / `unresolved` の機械的regimeとして整理します。これは相転移の主張ではありません。
+
+```bash
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/benchmarks/buckling_benchmark.py \
+  --config continuum_filament_model/benchmarks/configs/p1b_noncontact.json \
+  --output /tmp/growing-string-p1b
+```
+
+各ケースには実効設定、無次元量、Git revision、manifest、イベント、主要観測量のCSV/JSON、図を保存します。`contact_stiffness=0`、`diameter=0`、初期非交差を強制し、接触・折りたたみ・実験fit・三角格子比較は未実装です。詳細なfixture、分類規則、固定端反力proxyの限界、未解決事項は `notes/p1b_buckling_benchmark.md` を参照してください。
+
 ## 三角格子モデルとの関係
 
 `triangular_lattice/` は、新モデルのコードへ直接importしません。接続は観測量と無次元パラメータを介して行います。
