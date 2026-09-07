@@ -71,3 +71,6 @@ README.html
 *.snm
 
 *.xbb
+
+# P1B.2 per-run artifacts are temporary; only compact root summaries are tracked.
+continuum_filament_model/results/p1b2/*/
