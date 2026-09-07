@@ -4,11 +4,33 @@ This package is intentionally independent from the legacy implementations in
 ``growing_natural_length_model/`` and ``triangular_lattice/``.
 """
 
+from .geometry import (
+    SegmentDistance,
+    SweptIntersection,
+    closest_nonlocal_segment_pair,
+    find_swept_nonlocal_intersection,
+    geometry_diagnostics,
+    has_nonlocal_intersection,
+    has_swept_nonlocal_intersection,
+    initial_geometry_diagnostic,
+    minimum_nonlocal_segment_distance,
+    nonlocal_segment_distances,
+    segment_closest_points,
+    segments_intersect,
+)
 from .model import (
     FilamentState,
     ModelParameters,
     OverdampedGrowingFilament,
     remesh,
+)
+from .reproducibility import (
+    build_manifest,
+    canonical_input_hash,
+    canonical_state_hash,
+    compare_reproducibility,
+    load_manifest,
+    save_manifest,
 )
 
 __all__ = [
@@ -16,4 +38,22 @@ __all__ = [
     "ModelParameters",
     "OverdampedGrowingFilament",
     "remesh",
+    "SegmentDistance",
+    "SweptIntersection",
+    "closest_nonlocal_segment_pair",
+    "find_swept_nonlocal_intersection",
+    "geometry_diagnostics",
+    "has_nonlocal_intersection",
+    "has_swept_nonlocal_intersection",
+    "initial_geometry_diagnostic",
+    "minimum_nonlocal_segment_distance",
+    "nonlocal_segment_distances",
+    "segment_closest_points",
+    "segments_intersect",
+    "build_manifest",
+    "canonical_input_hash",
+    "canonical_state_hash",
+    "compare_reproducibility",
+    "load_manifest",
+    "save_manifest",
 ]

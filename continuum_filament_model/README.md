@@ -36,7 +36,8 @@
 - 伸長エネルギーと離散曲げエネルギー
 - 基板ドラッグ
 - ノード間の軟接触ペナルティ
-- 非隣接線分の交差検出とステップ棄却
+- 非隣接線分の最近接距離・最近接点・交差の幾何診断
+- 線形試行中の swept crossing 検出とステップ棄却
 - 局所参照長の指数成長
 - 参照長が長くなった場合の中点再メッシュ
 
@@ -45,6 +46,7 @@
 - 実験に対応した成長分布（全体成長か先端成長か）
 - フィラメントの径、断面積、線密度の変化
 - 接着・摩擦・ヒステリシスを含む接触則
+- 線分接触の反発力（線分距離は現在は診断専用）
 - 異方的な基板抵抗
 - 実験画像からの中心線抽出・同定
 - 妥当な物理単位への較正
@@ -68,6 +70,16 @@ python -m unittest discover -s continuum_filament_model/tests -v
 ```
 
 テストが通ることは、物理モデルが実験を再現することを意味しません。数値ベンチマークと実験比較は `notes/validation_plan.md` に従って別々に確認します。
+
+Gate 3 の幾何診断・イベント・再現性回帰を含むテストは、同じテストコマンドで実行します。
+各 `OverdampedGrowingFilament` は、初期形状診断、各試行の要求/試行/受理 `dt`、状態・エネルギー要約、
+理由別の棄却（`crossing_rejection`、`nonfinite`、`displacement_exceeded` など）を `events` に記録します。
+`run_manifest()` または `growing_filament.reproducibility.build_manifest()` は、Git revision、Python/NumPy、
+入力hash、初期状態hash、canonical終状態hash、イベント列、受理/棄却数をJSON互換形式で返します。
+`save_trajectory()` は、軌跡とともにこのmanifest/event列を保存できます。
+
+線分の最近接距離・最近接点は `growing_filament.geometry` の診断APIで計算します。
+これらは節点反発の力則とは分離されており、線分反発・摩擦・接着を意味しません。
 
 再メッシュの小規模ベンチマークは、次で実行できます。
 
