@@ -69,6 +69,18 @@ python -m unittest discover -s continuum_filament_model/tests -v
 
 テストが通ることは、物理モデルが実験を再現することを意味しません。数値ベンチマークと実験比較は `notes/validation_plan.md` に従って別々に確認します。
 
+再メッシュの小規模ベンチマークは、次で実行できます。
+
+```bash
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/benchmarks/remesh_convergence.py
+```
+
+このベンチマークは、解析的な滑らかな合成形状を `a_max` ごとに弧長サンプルする
+解像度試験と、固定条件の短い成長 run を含みます。角点を含む同一折れ線では
+曲率特異性により曲げエネルギー・節点力のメッシュ独立性を仮定せず、形状比較には
+`growing_filament.observables.arc_length_weighted_radius_of_gyration` を使います。
+
 ## 三角格子モデルとの関係
 
 `triangular_lattice/` は、新モデルのコードへ直接importしません。接続は観測量と無次元パラメータを介して行います。

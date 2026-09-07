@@ -288,12 +288,14 @@ class ModelTest(unittest.TestCase):
             [[0.0, 0.0], [1.0, 1.0], [0.0, 2.0], [-1.0, 1.1]],
             dtype=float,
         )
-        rest_lengths = np.asarray([np.sqrt(2.0), np.sqrt(2.0), 2.0])
+        # This fixture is tuned for the local-tangent bending discretization:
+        # the trial crosses while staying within the displacement limiter.
+        rest_lengths = np.asarray([np.sqrt(2.0), np.sqrt(2.0), 1.465])
         params = ModelParameters(
             axial_stiffness=1.0,
-            bending_stiffness=1.0,
+            bending_stiffness=10.0,
             drag_density=1.0,
-            dt=0.32,
+            dt=0.2,
             a_max=10.0,
             max_displacement_fraction=1.0,
             max_retries=0,
