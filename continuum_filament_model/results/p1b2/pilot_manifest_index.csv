@@ -1,4 +1,0 @@
-run_id,section,cell,case,trial,seed,manifest,initial_state_hash,canonical_state_hash
-pilot/pilot_straight,pilot,,pilot_straight,0,,pilot/pilot_straight/manifest.json,ea7207d631cae1d184013789347dc1413d6a2c4f9f0d7d71b26d9e7f9f6213ba,
-pilot/pilot_boundary,pilot,,pilot_boundary,0,,pilot/pilot_boundary/manifest.json,ea7207d631cae1d184013789347dc1413d6a2c4f9f0d7d71b26d9e7f9f6213ba,
-pilot/pilot_buckled,pilot,,pilot_buckled,0,,pilot/pilot_buckled/manifest.json,ea7207d631cae1d184013789347dc1413d6a2c4f9f0d7d71b26d9e7f9f6213ba,
