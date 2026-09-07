@@ -84,6 +84,14 @@ class SegmentDistance:
     def closest_parameter_j(self) -> float:
         return self.parameter_j
 
+    @property
+    def closest_points(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        return self.point_i, self.point_j
+
+    @property
+    def parameters(self) -> tuple[float, float]:
+        return self.parameter_i, self.parameter_j
+
     def as_contact(
         self,
         diameter: float,
@@ -99,8 +107,7 @@ class SegmentDistance:
         adopt the new contract without changing their data flow.
         """
 
-        if not np.isfinite(diameter) or diameter < 0.0:
-            raise ValueError("diameter must be finite and non-negative")
+        diameter = _validate_diameter(diameter)
         gap = float(self.distance - diameter)
         penetration = max(0.0, float(-gap))
         if normal_status is None:
@@ -109,6 +116,10 @@ class SegmentDistance:
                 if self.distance > _GEOMETRY_EPS
                 else NormalStatus.UNDEFINED_ZERO_DISTANCE
             )
+        else:
+            normal_status = NormalStatus(normal_status)
+        if self.distance <= _GEOMETRY_EPS and normal_status is NormalStatus.DEFINED:
+            raise ValueError("zero-distance geometry cannot have a defined normal")
         normal: Optional[tuple[float, float]] = None
         if normal_status is NormalStatus.DEFINED:
             delta = np.asarray(self.point_i) - np.asarray(self.point_j)
@@ -132,7 +143,7 @@ class SegmentDistance:
             point_j=self.point_j,
             parameter_i=float(self.parameter_i),
             parameter_j=float(self.parameter_j),
-            diameter=float(diameter),
+            diameter=diameter,
             feature=feature,
             normal=normal,
             normal_status=normal_status,
@@ -196,6 +207,22 @@ class SegmentContactGeometry:
         return self.parameter_j
 
     @property
+    def closest_points(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        return self.point_i, self.point_j
+
+    @property
+    def parameters(self) -> tuple[float, float]:
+        return self.parameter_i, self.parameter_j
+
+    @property
+    def normal_vector(self) -> Optional[tuple[float, float]]:
+        return self.normal
+
+    @property
+    def feature_type(self) -> SegmentFeature:
+        return self.feature
+
+    @property
     def is_contact(self) -> bool:
         """Whether the inclusive zero-gap contact threshold is met."""
 
@@ -224,10 +251,12 @@ class SegmentContactGeometry:
             "point_j": list(self.point_j),
             "closest_point_i": list(self.point_i),
             "closest_point_j": list(self.point_j),
+            "closest_points": [list(self.point_i), list(self.point_j)],
             "parameter_i": float(self.parameter_i),
             "parameter_j": float(self.parameter_j),
             "closest_parameter_i": float(self.parameter_i),
             "closest_parameter_j": float(self.parameter_j),
+            "parameters": [float(self.parameter_i), float(self.parameter_j)],
             "feature": feature,
             "feature_type": feature,
             "normal": None if self.normal is None else list(self.normal),
@@ -239,8 +268,9 @@ class SegmentContactGeometry:
         }
 
 
-# Short noun alias for callers that prefer ``SegmentContact`` in annotations.
+# Short noun aliases for callers that prefer concise annotations.
 SegmentContact = SegmentContactGeometry
+FeatureType = SegmentFeature
 
 
 @dataclass(frozen=True)

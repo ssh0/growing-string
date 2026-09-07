@@ -6,6 +6,7 @@ This package is intentionally independent from the legacy implementations in
 
 from .geometry import (
     ContactDiagnosticType,
+    FeatureType,
     NormalStatus,
     SegmentContact,
     SegmentContactGeometry,
@@ -52,6 +53,7 @@ __all__ = [
     "OverdampedGrowingFilament",
     "remesh",
     "ContactDiagnosticType",
+    "FeatureType",
     "NormalStatus",
     "SegmentContact",
     "SegmentContactGeometry",
