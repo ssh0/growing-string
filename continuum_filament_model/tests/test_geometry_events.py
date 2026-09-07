@@ -53,6 +53,8 @@ class GeometryEventsTest(unittest.TestCase):
         contact_events = [event for event in model.events if event["reason"] == "contact"]
         self.assertEqual(len(contact_events), 1)
         self.assertIn("contact_pairs", contact_events[0])
+        self.assertEqual(contact_events[0]["diagnostic_event_type"], "finite_radius_gap_contact")
+        self.assertEqual(contact_events[0]["centerline_intersections"], [])
 
     def test_initial_crossing_is_rejected_even_when_trial_crossing_switch_is_disabled(self):
         crossing = FilamentState(
@@ -69,6 +71,8 @@ class GeometryEventsTest(unittest.TestCase):
             )
         self.assertIsNotNone(context.exception.event)
         self.assertEqual(context.exception.event["reason"], "initial_crossing")
+        self.assertEqual(context.exception.event["diagnostic_event_type"], "centerline_intersection")
+        self.assertEqual(len(context.exception.event["centerline_intersections"]), 1)
         self.assertFalse(context.exception.event["accepted"])
 
     def test_swept_crossing_detects_intermediate_counterexample(self):

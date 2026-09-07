@@ -291,6 +291,9 @@ def _state_summary(
                 "closest_nonlocal_pair": None,
                 "intersection_pairs": [],
                 "contact_pairs": [],
+                "segment_contacts": [],
+                "finite_radius_contacts": [],
+                "centerline_intersections": [],
                 "node_contact_pairs": [],
                 "reference_length": None,
                 "contour_length": None,
@@ -406,6 +409,7 @@ class OverdampedGrowingFilament:
             event = {
                 "schema_version": EVENT_SCHEMA_VERSION,
                 "event_type": "initialization",
+                "diagnostic_event_type": "centerline_intersection",
                 "reason": "initial_crossing",
                 "accepted": False,
                 "requested_dt": None,
@@ -426,6 +430,7 @@ class OverdampedGrowingFilament:
                 "energy_trial": None,
                 "energy_after": None,
                 "geometry": initial_geometry,
+                "centerline_intersections": initial_geometry["centerline_intersections"],
                 "detail": f"initial non-local segment intersection for pairs {pairs}",
             }
             raise ModelError(
@@ -484,6 +489,11 @@ class OverdampedGrowingFilament:
             self._append_event(
                 {
                     "event_type": "geometry_diagnostic",
+                    "diagnostic_event_type": (
+                        "finite_radius_gap_contact"
+                        if initial_geometry["finite_radius_contacts"]
+                        else "node_contact"
+                    ),
                     "reason": "contact",
                     "accepted": True,
                     "requested_dt": None,
@@ -508,6 +518,9 @@ class OverdampedGrowingFilament:
                     "energy_trial": None,
                     "energy_after": float(self.energy()),
                     "contact_pairs": initial_geometry["contact_pairs"],
+                    "segment_contacts": initial_geometry["segment_contacts"],
+                    "finite_radius_contacts": initial_geometry["finite_radius_contacts"],
+                    "centerline_intersections": initial_geometry["centerline_intersections"],
                     "node_contact_pairs": initial_node_contact_pairs,
                     "detail": "contact diagnostic only; node contact force and segment geometry are recorded separately",
                 }
@@ -787,6 +800,19 @@ class OverdampedGrowingFilament:
                     if self._last_swept_intersection is not None
                     else None
                 ),
+                "segment_contacts": trial_summary.get("segment_contacts", []),
+                "finite_radius_contacts": trial_summary.get("finite_radius_contacts", []),
+                "centerline_intersections": trial_summary.get("centerline_intersections", []),
+                "diagnostic_event_type": (
+                    "centerline_intersection"
+                    if self._last_swept_intersection is not None
+                    or trial_summary.get("centerline_intersections", [])
+                    else (
+                        "finite_radius_gap_contact"
+                        if trial_summary.get("finite_radius_contacts", [])
+                        else None
+                    )
+                ),
                 "detail": rejection_reason,
             }
 
@@ -811,6 +837,15 @@ class OverdampedGrowingFilament:
                     self._append_event(
                         {
                             "event_type": "geometry_diagnostic",
+                            "diagnostic_event_type": (
+                                "centerline_intersection"
+                                if trial_summary.get("centerline_intersections", [])
+                                else (
+                                    "finite_radius_gap_contact"
+                                    if trial_summary.get("finite_radius_contacts", [])
+                                    else "node_contact"
+                                )
+                            ),
                             "reason": "contact",
                             "accepted": True,
                             "requested_dt": float(requested_dt),
@@ -827,6 +862,9 @@ class OverdampedGrowingFilament:
                             "energy_trial": trial_energy,
                             "energy_after": trial_energy,
                             "contact_pairs": contact_pairs,
+                            "segment_contacts": trial_summary.get("segment_contacts", []),
+                            "finite_radius_contacts": trial_summary.get("finite_radius_contacts", []),
+                            "centerline_intersections": trial_summary.get("centerline_intersections", []),
                             "node_contact_pairs": node_contact_pairs,
                             "detail": "contact diagnostic only; node contact force and segment geometry are recorded separately",
                         }
@@ -844,6 +882,15 @@ class OverdampedGrowingFilament:
                 self._append_event(
                     {
                         "event_type": "geometry_diagnostic",
+                        "diagnostic_event_type": (
+                            "centerline_intersection"
+                            if trial_summary.get("centerline_intersections", [])
+                            else (
+                                "finite_radius_gap_contact"
+                                if trial_summary.get("finite_radius_contacts", [])
+                                else "node_contact"
+                            )
+                        ),
                         "reason": "contact",
                         "accepted": None,
                         "requested_dt": float(requested_dt),
@@ -860,6 +907,9 @@ class OverdampedGrowingFilament:
                         "energy_trial": trial_energy,
                         "energy_after": float(previous_energy),
                         "contact_pairs": contact_pairs,
+                        "segment_contacts": trial_summary.get("segment_contacts", []),
+                        "finite_radius_contacts": trial_summary.get("finite_radius_contacts", []),
+                        "centerline_intersections": trial_summary.get("centerline_intersections", []),
                         "node_contact_pairs": node_contact_pairs,
                         "detail": "contact diagnostic only; node contact force and segment geometry are recorded separately",
                     }
