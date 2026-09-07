@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "continuum-filament-synthetic-raw-like-1",
+  "title": "Continuum filament raw-like synthetic observation bundle",
+  "description": "Machine-readable contract for bounded synthetic observations. The runner stores these files only in a temporary output directory; compact summaries retain hashes and status.",
+  "type": "object",
+  "required": ["centerline_csv", "events_json", "metadata_json", "manifest_json"],
+  "properties": {
+    "centerline_csv": {
+      "type": "object",
+      "required_columns": ["time", "frame", "filament_id", "point_id", "x", "y", "quality", "width", "missing", "flags"],
+      "column_units": {"time": "metadata.frame_interval unit", "x": "metadata.units.coordinate", "y": "metadata.units.coordinate", "width": "metadata.units.width"},
+      "row_rules": [
+        "time is non-decreasing in serialized row order",
+        "point_id is unique within a frame and filament_id",
+        "non-missing x and y are finite",
+        "missing=true rows may carry null x/y/width and must not be silently interpolated",
+        "quality is numeric and its definition is recorded in metadata"
+      ]
+    },
+    "events_json": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["schema_version", "event_type", "detail"],
+        "properties": {
+          "event_type": {"type": "string", "enum": ["frame_drop", "missing_centerline", "point_order_error", "pixel_scale_mismatch", "localization_noise", "blur", "width_variation", "detected_width_variation", "detected_frame_drop", "detected_missing_points", "detected_point_order_error", "detected_pixel_scale_mismatch", "detected_blur"]},
+          "frame": {"type": ["integer", "null"]},
+          "affected_points": {"type": "array", "items": {"type": "integer"}},
+          "detail": {"type": "string"}
+        }
+      }
+    },
+    "metadata_json": {
+      "type": "object",
+      "required": ["schema_version", "data_contract", "image_id", "frame_interval", "expected_frames", "pixel_size_m_per_px", "units", "missing_data_policy", "truth_parameters", "initial_shape", "noise_config", "fixture", "seed"],
+      "properties": {
+        "data_contract": {"const": "continuum-filament-experiment-data-contract-1"},
+        "frame_interval": {"type": "number", "exclusiveMinimum": 0},
+        "expected_frames": {"type": "array", "items": {"type": "integer"}},
+        "pixel_size_m_per_px": {"type": "number", "exclusiveMinimum": 0},
+        "analysis_pixel_size_m_per_px": {"type": "number", "exclusiveMinimum": 0},
+        "units": {"type": "object", "required": ["time", "coordinate", "width"]},
+        "excluded_frames": {"type": "array", "items": {"type": "integer"}},
+        "truth_parameters": {"type": "object", "required": ["g", "EI", "EA", "drag", "diameter"]},
+        "initial_shape": {"type": "object", "required": ["kind", "parameters", "initial_time"]},
+        "noise_config": {"type": "object"},
+        "seed": {"type": "integer"}
+      }
+    },
+    "manifest_json": {
+      "type": "object",
+      "required": ["manifest_schema_version", "raw_synthetic_hash", "analysis_result_hash", "analysis_revision", "truth_config", "noise_config", "identified_quantities", "unidentifiable"],
+      "properties": {
+        "raw_synthetic_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "analysis_result_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "analysis_revision": {"type": "string"},
+        "identified_quantities": {"type": "object", "description": "Only g, EI/drag, and the width-derived diameter proxy are estimated when the fixture supports them."},
+        "unidentifiable": {"type": "object", "required": ["EA", "EI", "drag", "true_reaction", "contact_law"]}
+      }
+    }
+  }
+}

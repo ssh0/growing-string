@@ -1,0 +1,75 @@
+{
+  "schema_version": "continuum-filament-synthetic-recovery-config-1",
+  "base": {
+    "length": 2.0,
+    "n_points": 33,
+    "n_frames": 9,
+    "frame_interval": 0.1,
+    "pixel_size_m_per_px": 0.01,
+    "quality_threshold": 0.5,
+    "min_points": 7,
+    "resample_points": 31
+  },
+  "truth": {
+    "g": 0.12,
+    "EI": 0.18,
+    "EA": 100.0,
+    "drag": 1.0,
+    "diameter": 0.08,
+    "length": 2.0
+  },
+  "fixtures": [
+    {"name": "straight", "description": "stationary straight centerline"},
+    {"name": "sinusoidal_buckling", "amplitude": 0.12, "description": "known first-mode exponential relaxation"},
+    {"name": "arc", "radius": 3.0, "angle": 1.0, "description": "stationary circular arc"},
+    {"name": "growth", "description": "straight centerline with L(t)=L0 exp(g t)"}
+  ],
+  "seeds": [7, 19, 31],
+  "scenarios": [
+    {
+      "name": "clean_zero_noise",
+      "fixtures": ["straight", "sinusoidal_buckling", "arc", "growth"],
+      "noise": {}
+    },
+    {
+      "name": "localization_noise",
+      "fixtures": ["straight", "sinusoidal_buckling", "arc", "growth"],
+      "noise": {"localization_std_px": 0.15, "width_noise_px": 0.3}
+    },
+    {
+      "name": "blur",
+      "fixtures": ["sinusoidal_buckling", "arc"],
+      "noise": {"blur_alpha": 0.35}
+    },
+    {
+      "name": "frame_drop",
+      "fixtures": ["sinusoidal_buckling", "growth"],
+      "noise": {"frame_drop": [4]}
+    },
+    {
+      "name": "missing_points",
+      "fixtures": ["sinusoidal_buckling", "growth"],
+      "noise": {"missing_points": {"3": [12, 13, 14, 15, 16, 17, 18, 19]}}
+    },
+    {
+      "name": "point_order_error",
+      "fixtures": ["sinusoidal_buckling"],
+      "noise": {"point_order_error_frame": 3}
+    },
+    {
+      "name": "pixel_scale_mismatch",
+      "fixtures": ["sinusoidal_buckling", "growth"],
+      "noise": {"scale_error": 0.08}
+    },
+    {
+      "name": "width_variation",
+      "fixtures": ["straight", "arc"],
+      "noise": {"width_variation_fraction": 0.25, "width_noise_px": 0.15}
+    }
+  ],
+  "acceptance": {
+    "growth_relative_error": 0.03,
+    "EI_over_drag_relative_error": 0.05,
+    "diameter_relative_error": 0.03
+  }
+}
