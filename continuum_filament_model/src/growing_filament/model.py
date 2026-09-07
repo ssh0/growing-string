@@ -21,11 +21,35 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
+from .geometry import (
+    SegmentDistance,
+    SweptIntersection,
+    find_swept_nonlocal_intersection,
+    geometry_diagnostics,
+    has_nonlocal_intersection,
+    has_swept_nonlocal_intersection,
+    initial_geometry_diagnostic,
+    minimum_nonlocal_segment_distance,
+    nonlocal_intersection_pairs,
+    nonlocal_segment_distances,
+    segment_closest_points,
+    segments_intersect,
+)
+
 Array = np.ndarray
 
 
 class ModelError(ValueError):
-    """Raised when a state or model parameter violates an invariant."""
+    """Raised when a state or model parameter violates an invariant.
+
+    Geometry-validation failures may expose a JSON-compatible ``event``
+    attribute so callers can retain the rejected initial-condition record even
+    though no simulator instance is created.
+    """
+
+    def __init__(self, message: str, event: Optional[dict[str, object]] = None):
+        super().__init__(message)
+        self.event = event
 
 
 @dataclass(frozen=True)
@@ -226,58 +250,84 @@ def remesh(positions: Array, rest_lengths: Array, a_max: float) -> Tuple[Array, 
     return p, a
 
 
-def _cross2(a: Array, b: Array) -> float:
-    return float(a[0] * b[1] - a[1] * b[0])
+EVENT_SCHEMA_VERSION = "continuum-filament-events-1"
 
 
-def _on_segment(a: Array, b: Array, p: Array, eps: float = 1.0e-12) -> bool:
-    return (
-        min(a[0], b[0]) - eps <= p[0] <= max(a[0], b[0]) + eps
-        and min(a[1], b[1]) - eps <= p[1] <= max(a[1], b[1]) + eps
-    )
+def _node_contact_pairs(positions: Array, diameter: float) -> list[list[int]]:
+    if diameter <= 0.0:
+        return []
+    pairs: list[list[int]] = []
+    for i in range(len(positions)):
+        for j in range(i + 2, len(positions)):
+            if float(np.linalg.norm(positions[i] - positions[j])) <= diameter + 1.0e-12:
+                pairs.append([i, j])
+    return pairs
 
 
-def segments_intersect(a: Array, b: Array, c: Array, d: Array,
-                       eps: float = 1.0e-12) -> bool:
-    """Return whether two closed 2D segments intersect."""
+def _state_summary(
+    positions: Array,
+    rest_lengths: Array,
+    diameter: float = 0.0,
+    max_displacement: Optional[float] = None,
+) -> Dict[str, object]:
+    """Return a JSON-friendly state and finite-radius diagnostic summary."""
 
-    ab = b - a
-    ac = c - a
-    ad = d - a
-    cd = d - c
-    ca = a - c
-    cb = b - c
-    o1 = _cross2(ab, ac)
-    o2 = _cross2(ab, ad)
-    o3 = _cross2(cd, ca)
-    o4 = _cross2(cd, cb)
-
-    if abs(o1) <= eps and _on_segment(a, b, c, eps):
-        return True
-    if abs(o2) <= eps and _on_segment(a, b, d, eps):
-        return True
-    if abs(o3) <= eps and _on_segment(c, d, a, eps):
-        return True
-    if abs(o4) <= eps and _on_segment(c, d, b, eps):
-        return True
-    return (o1 > 0.0) != (o2 > 0.0) and (o3 > 0.0) != (o4 > 0.0)
-
-
-def has_nonlocal_intersection(positions: Array) -> bool:
-    """Detect intersections between non-adjacent open-chain segments."""
-
-    n_segments = len(positions) - 1
-    for i in range(n_segments):
-        for j in range(i + 2, n_segments):
-            # Segments sharing a node are local neighbors and are excluded.
-            if j == i + 1:
-                continue
-            if segments_intersect(
-                positions[i], positions[i + 1],
-                positions[j], positions[j + 1],
-            ):
-                return True
-    return False
+    p = np.asarray(positions, dtype=float)
+    a = np.asarray(rest_lengths, dtype=float)
+    finite = bool(np.isfinite(p).all() and np.isfinite(a).all())
+    summary: Dict[str, object] = {
+        "finite": finite,
+        "n_nodes": int(len(p)) if p.ndim >= 1 else 0,
+        "n_segments": int(len(a)) if a.ndim >= 1 else 0,
+        "max_displacement": (
+            None if max_displacement is None else float(max_displacement)
+        ),
+    }
+    if not finite or p.ndim != 2 or p.shape[1] != 2 or len(a) != len(p) - 1:
+        summary.update(
+            {
+                "min_segment_length": None,
+                "min_nonlocal_distance": None,
+                "closest_nonlocal_pair": None,
+                "intersection_pairs": [],
+                "contact_pairs": [],
+                "node_contact_pairs": [],
+                "reference_length": None,
+                "contour_length": None,
+            }
+        )
+        return summary
+    lengths = np.linalg.norm(np.diff(p, axis=0), axis=1)
+    min_segment_length = float(np.min(lengths)) if len(lengths) else None
+    try:
+        geometry = geometry_diagnostics(p, contact_distance=diameter)
+        min_nonlocal_distance = geometry["min_nonlocal_distance"]
+        if not np.isfinite(float(min_nonlocal_distance)):
+            min_nonlocal_distance = None
+        summary.update(
+            {
+                **geometry,
+                "node_contact_pairs": _node_contact_pairs(p, diameter),
+                "min_segment_length": min_segment_length,
+                "min_nonlocal_distance": min_nonlocal_distance,
+                "reference_length": float(np.sum(a)),
+                "contour_length": float(np.sum(lengths)),
+            }
+        )
+    except (ValueError, FloatingPointError):
+        summary.update(
+            {
+                "min_segment_length": min_segment_length,
+                "min_nonlocal_distance": None,
+                "closest_nonlocal_pair": None,
+                "intersection_pairs": [],
+                "contact_pairs": [],
+                "node_contact_pairs": [],
+                "reference_length": float(np.sum(a)),
+                "contour_length": float(np.sum(lengths)),
+            }
+        )
+    return summary
 
 
 def _node_weights(rest_lengths: Array) -> Array:
@@ -344,17 +394,136 @@ class OverdampedGrowingFilament:
     def __init__(self, state: FilamentState, parameters: ModelParameters):
         parameters.validate()
         state.validate()
+        initial_geometry = initial_geometry_diagnostic(
+            state.positions,
+            contact_distance=parameters.diameter,
+        )
+        # Initial topology is a hard invariant.  ``reject_crossing=False`` is
+        # retained for force/energy benchmarks, but it must not be used to
+        # admit an already self-intersecting filament.
+        if not bool(initial_geometry["valid"]):
+            pairs = initial_geometry["intersection_pairs"]
+            event = {
+                "schema_version": EVENT_SCHEMA_VERSION,
+                "event_type": "initialization",
+                "reason": "initial_crossing",
+                "accepted": False,
+                "requested_dt": None,
+                "trial_dt": None,
+                "accepted_dt": None,
+                "time_before": float(state.time),
+                "time_after": float(state.time),
+                "step_before": int(state.step),
+                "step_after": int(state.step),
+                "state_before": None,
+                "state_trial": _state_summary(
+                    state.positions,
+                    state.rest_lengths,
+                    parameters.diameter,
+                ),
+                "state_after": None,
+                "energy_before": None,
+                "energy_trial": None,
+                "energy_after": None,
+                "geometry": initial_geometry,
+                "detail": f"initial non-local segment intersection for pairs {pairs}",
+            }
+            raise ModelError(
+                "initial_crossing: initial non-local segment intersection "
+                f"detected for pairs {pairs}",
+                event=event,
+            )
         self.parameters = parameters
         self.state = state.copy()
         self.left_anchor = self.state.positions[0].copy()
         self.right_anchor = self.state.positions[-1].copy()
+        self.initial_state = self.state.copy()
+        self.initial_geometry = initial_geometry
         self.accepted_steps = 0
         self.rejected_steps = 0
-        # These small diagnostic histories make adaptive-step decisions
-        # inspectable without introducing a general event-log schema.
         self.accepted_dts: list[float] = []
         self.rejected_dts: list[float] = []
         self.rejection_reasons: list[str] = []
+        self.events: list[dict[str, object]] = []
+        self._last_swept_intersection: Optional[SweptIntersection] = None
+        self._append_event(
+            {
+                "event_type": "initialization",
+                "reason": "initial_geometry_valid",
+                "accepted": True,
+                "requested_dt": None,
+                "trial_dt": None,
+                "accepted_dt": None,
+                "time_before": None,
+                "time_after": float(self.state.time),
+                "step_before": None,
+                "step_after": int(self.state.step),
+                "state_before": None,
+                "state_trial": _state_summary(
+                    self.state.positions,
+                    self.state.rest_lengths,
+                    self.parameters.diameter,
+                ),
+                "state_after": _state_summary(
+                    self.state.positions,
+                    self.state.rest_lengths,
+                    self.parameters.diameter,
+                ),
+                "energy_before": None,
+                "energy_trial": float(self.energy()),
+                "energy_after": float(self.energy()),
+                "energy_components": self.energy_components(),
+                "detail": "initial geometry is finite and non-intersecting",
+            }
+        )
+        initial_node_contact_pairs = _node_contact_pairs(
+            self.state.positions,
+            self.parameters.diameter,
+        )
+        if initial_geometry["contact_pairs"] or initial_node_contact_pairs:
+            self._append_event(
+                {
+                    "event_type": "geometry_diagnostic",
+                    "reason": "contact",
+                    "accepted": True,
+                    "requested_dt": None,
+                    "trial_dt": None,
+                    "accepted_dt": None,
+                    "time_before": float(self.state.time),
+                    "time_after": float(self.state.time),
+                    "step_before": int(self.state.step),
+                    "step_after": int(self.state.step),
+                    "state_before": _state_summary(
+                        self.state.positions,
+                        self.state.rest_lengths,
+                        self.parameters.diameter,
+                    ),
+                    "state_trial": None,
+                    "state_after": _state_summary(
+                        self.state.positions,
+                        self.state.rest_lengths,
+                        self.parameters.diameter,
+                    ),
+                    "energy_before": float(self.energy()),
+                    "energy_trial": None,
+                    "energy_after": float(self.energy()),
+                    "contact_pairs": initial_geometry["contact_pairs"],
+                    "node_contact_pairs": initial_node_contact_pairs,
+                    "detail": "contact diagnostic only; node contact force and segment geometry are recorded separately",
+                }
+            )
+
+    def _append_event(self, event: dict[str, object]) -> None:
+        event = dict(event)
+        event.setdefault("schema_version", EVENT_SCHEMA_VERSION)
+        event["event_index"] = len(self.events)
+        self.events.append(event)
+
+    @property
+    def event_log(self) -> list[dict[str, object]]:
+        """Return a copy of the structured attempt and geometry event log."""
+
+        return [dict(event) for event in self.events]
 
     @classmethod
     def from_straight(
@@ -449,8 +618,15 @@ class OverdampedGrowingFilament:
             positions[-1] = self.right_anchor
             velocities[-1] = 0.0
 
-    def _trial_rejection_reason(self, positions: Array, dt: float,
-                                velocities: Array, rest_lengths: Array) -> Optional[str]:
+    def _trial_rejection_reason(
+        self,
+        positions: Array,
+        dt: float,
+        velocities: Array,
+        rest_lengths: Array,
+        start_positions: Optional[Array] = None,
+    ) -> Optional[str]:
+        self._last_swept_intersection = None
         if not np.isfinite(rest_lengths).all():
             return "trial reference lengths are non-finite"
         if not np.isfinite(positions).all() or not np.isfinite(velocities).all():
@@ -459,9 +635,34 @@ class OverdampedGrowingFilament:
         max_displacement = float(np.max(np.linalg.norm(dt * velocities, axis=1)))
         if max_displacement > self.parameters.max_displacement_fraction * local_scale:
             return "trial displacement exceeds max_displacement_fraction"
-        if self.parameters.reject_crossing and has_nonlocal_intersection(positions):
-            return "trial contains a non-local segment intersection"
+        if self.parameters.reject_crossing:
+            if start_positions is not None and np.shape(start_positions) == np.shape(positions):
+                self._last_swept_intersection = find_swept_nonlocal_intersection(
+                    start_positions,
+                    positions,
+                )
+                if self._last_swept_intersection is not None:
+                    return (
+                        "trial swept non-local segment crossing at normalized time "
+                        f"{self._last_swept_intersection.normalized_time:.17g}"
+                    )
+            if has_nonlocal_intersection(positions):
+                return "trial contains a non-local segment intersection"
         return None
+
+    @staticmethod
+    def _event_reason(rejection_reason: Optional[str]) -> str:
+        if rejection_reason is None:
+            return "accepted"
+        if "non-finite" in rejection_reason:
+            return "nonfinite"
+        if "displacement exceeds" in rejection_reason:
+            return "displacement_exceeded"
+        if "crossing" in rejection_reason or "intersection" in rejection_reason:
+            return "crossing_rejection"
+        if "energy increased" in rejection_reason:
+            return "energy_increased"
+        return "invalid_trial"
 
     def _trial_is_valid(self, positions: Array, dt: float,
                         velocities: Array, rest_lengths: Array) -> bool:
@@ -472,7 +673,7 @@ class OverdampedGrowingFilament:
         ) is None
 
     def step(self, dt: Optional[float] = None) -> FilamentState:
-        """Advance one accepted step, halving ``dt`` after invalid trials.
+        """Advance one accepted step and record every trial as a structured event.
 
         For a growth-free trial, explicit Euler is accepted only when its
         total energy does not increase beyond ``energy_tolerance``.  Growth
@@ -484,7 +685,9 @@ class OverdampedGrowingFilament:
         if not np.isfinite(requested_dt) or requested_dt <= 0.0:
             raise ModelError("dt must be finite and positive")
         trial_dt = requested_dt
+        previous_state = self.state.copy()
         previous_energy = self.energy()
+        previous_components = self.energy_components()
         if not np.isfinite(previous_energy):
             raise ModelError("current energy is non-finite")
         last_rejection_reason = "no trial was evaluated"
@@ -503,17 +706,36 @@ class OverdampedGrowingFilament:
             forces = self.forces(positions, rest_lengths)
             drag = self.parameters.drag_density * _node_weights(rest_lengths)
             velocities = forces / drag[:, None]
-            trial_positions = positions + trial_dt * velocities
+            trial_displacement = trial_dt * velocities
+            trial_positions = positions + trial_displacement
             self._apply_boundary_conditions(trial_positions, velocities)
+            actual_displacement = trial_positions - positions
+            max_displacement = (
+                float(np.max(np.linalg.norm(actual_displacement, axis=1)))
+                if np.isfinite(actual_displacement).all()
+                else None
+            )
+            trial_summary = _state_summary(
+                trial_positions,
+                rest_lengths,
+                self.parameters.diameter,
+                max_displacement=max_displacement,
+            )
 
             rejection_reason = self._trial_rejection_reason(
-                trial_positions, trial_dt, velocities, rest_lengths
+                trial_positions,
+                trial_dt,
+                velocities,
+                rest_lengths,
+                start_positions=positions,
             )
             trial_energy: Optional[float] = None
+            trial_components: Optional[Dict[str, float]] = None
             if rejection_reason is None:
                 try:
-                    trial_energy = self.energy(trial_positions, rest_lengths)
-                except ModelError as exc:
+                    trial_components = self.energy_components(trial_positions, rest_lengths)
+                    trial_energy = float(sum(trial_components.values()))
+                except (ModelError, ValueError, FloatingPointError) as exc:
                     rejection_reason = f"invalid trial energy: {exc}"
                 else:
                     if not np.isfinite(trial_energy):
@@ -528,6 +750,46 @@ class OverdampedGrowingFilament:
                                 f"{previous_energy:.17g} -> {trial_energy:.17g}"
                             )
 
+            event_base: dict[str, object] = {
+                "event_type": "step_attempt",
+                "reason": self._event_reason(rejection_reason),
+                "accepted": rejection_reason is None,
+                "requested_dt": float(requested_dt),
+                "trial_dt": float(trial_dt),
+                "accepted_dt": float(trial_dt) if rejection_reason is None else None,
+                "time_before": float(previous_state.time),
+                "time_after": (
+                    float(previous_state.time + trial_dt)
+                    if rejection_reason is None
+                    else float(previous_state.time)
+                ),
+                "step_before": int(previous_state.step),
+                "step_after": (
+                    int(previous_state.step + 1)
+                    if rejection_reason is None
+                    else int(previous_state.step)
+                ),
+                "state_before": _state_summary(
+                    previous_state.positions,
+                    previous_state.rest_lengths,
+                    self.parameters.diameter,
+                ),
+                "state_trial": trial_summary,
+                "state_after": None,
+                "energy_before": float(previous_energy),
+                "energy_trial": trial_energy,
+                "energy_after": None,
+                "energy_components_before": previous_components,
+                "energy_components_trial": trial_components,
+                "max_displacement": max_displacement,
+                "swept_crossing": (
+                    self._last_swept_intersection.as_dict()
+                    if self._last_swept_intersection is not None
+                    else None
+                ),
+                "detail": rejection_reason,
+            }
+
             if rejection_reason is None:
                 self.state = FilamentState(
                     trial_positions,
@@ -535,10 +797,73 @@ class OverdampedGrowingFilament:
                     time=self.state.time + trial_dt,
                     step=self.state.step + 1,
                 )
+                event_base["state_after"] = _state_summary(
+                    self.state.positions,
+                    self.state.rest_lengths,
+                    self.parameters.diameter,
+                    max_displacement=max_displacement,
+                )
+                event_base["energy_after"] = trial_energy
+                self._append_event(event_base)
+                contact_pairs = trial_summary.get("contact_pairs", [])
+                node_contact_pairs = trial_summary.get("node_contact_pairs", [])
+                if contact_pairs or node_contact_pairs:
+                    self._append_event(
+                        {
+                            "event_type": "geometry_diagnostic",
+                            "reason": "contact",
+                            "accepted": True,
+                            "requested_dt": float(requested_dt),
+                            "trial_dt": float(trial_dt),
+                            "accepted_dt": float(trial_dt),
+                            "time_before": float(previous_state.time),
+                            "time_after": float(self.state.time),
+                            "step_before": int(previous_state.step),
+                            "step_after": int(self.state.step),
+                            "state_before": event_base["state_before"],
+                            "state_trial": trial_summary,
+                            "state_after": event_base["state_after"],
+                            "energy_before": float(previous_energy),
+                            "energy_trial": trial_energy,
+                            "energy_after": trial_energy,
+                            "contact_pairs": contact_pairs,
+                            "node_contact_pairs": node_contact_pairs,
+                            "detail": "contact diagnostic only; node contact force and segment geometry are recorded separately",
+                        }
+                    )
                 self.accepted_steps += 1
                 self.accepted_dts.append(float(trial_dt))
                 return self.state.copy()
 
+            event_base["state_after"] = event_base["state_before"]
+            event_base["energy_after"] = float(previous_energy)
+            self._append_event(event_base)
+            contact_pairs = trial_summary.get("contact_pairs", [])
+            node_contact_pairs = trial_summary.get("node_contact_pairs", [])
+            if contact_pairs or node_contact_pairs:
+                self._append_event(
+                    {
+                        "event_type": "geometry_diagnostic",
+                        "reason": "contact",
+                        "accepted": None,
+                        "requested_dt": float(requested_dt),
+                        "trial_dt": float(trial_dt),
+                        "accepted_dt": None,
+                        "time_before": float(previous_state.time),
+                        "time_after": float(previous_state.time),
+                        "step_before": int(previous_state.step),
+                        "step_after": int(previous_state.step),
+                        "state_before": event_base["state_before"],
+                        "state_trial": trial_summary,
+                        "state_after": event_base["state_after"],
+                        "energy_before": float(previous_energy),
+                        "energy_trial": trial_energy,
+                        "energy_after": float(previous_energy),
+                        "contact_pairs": contact_pairs,
+                        "node_contact_pairs": node_contact_pairs,
+                        "detail": "contact diagnostic only; node contact force and segment geometry are recorded separately",
+                    }
+                )
             last_rejection_reason = rejection_reason
             self.rejected_steps += 1
             self.rejected_dts.append(float(trial_dt))
@@ -551,6 +876,24 @@ class OverdampedGrowingFilament:
             "failed to find an accepted step; "
             f"requested_dt={requested_dt}, dt_min={self.parameters.dt_min}, "
             f"last_rejection_reason={last_rejection_reason}"
+        )
+
+    def run_manifest(
+        self,
+        metadata: Optional[Dict[str, object]] = None,
+        input_data: object = None,
+    ) -> dict[str, object]:
+        """Return a canonical manifest for the current deterministic run."""
+
+        from .reproducibility import build_manifest
+
+        return build_manifest(
+            self.parameters,
+            self.initial_state,
+            final_state=self.state,
+            events=self.events,
+            metadata=metadata,
+            input_data=input_data,
         )
 
     def run(self, t_end: Optional[float] = None) -> list[FilamentState]:
