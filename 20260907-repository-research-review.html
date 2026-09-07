@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>成長するひも状オブジェクト研究リポジトリ — 調査結果レビュー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu+Sans:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&family=Ubuntu+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./design-system/document.css">
+<script src="./design-system/math-copy.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script>document.addEventListener("DOMContentLoaded", () => hljs.highlightAll());</script>
+<style>
+  .mb-status { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+  .mb-figure-frame svg { display: block; width: 100%; height: auto; }
+  .mb-card ul { margin-bottom: 0; }
+  .mb-small { font-size: 13px; color: var(--mb-muted); }
+  @media print { .mb-status { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="mb-page">
+
+<header class="mb-header">
+  <div>
+    <h1>成長するひも状オブジェクト研究リポジトリ<br>調査結果レビュー</h1>
+    <p class="mb-meta-line">2026-09-07 / review summary / source: AGENTS.md</p>
+  </div>
+</header>
+
+<p class="mb-lede">
+このページは、リポジトリ全体を俯瞰して整理した内容を、ブラウザで確認するためのレビュー用要約です。
+確定した作業者向けインストラクションは <a href="./AGENTS.md">AGENTS.md</a> を参照してください。
+</p>
+
+<div class="mb-status" aria-label="レビュー対象の状態">
+  <span class="mb-chip">文書構成</span>
+  <span class="mb-chip">モデル構成</span>
+  <span class="mb-chip">解析結果</span>
+  <span class="mb-chip">実行上の注意</span>
+  <span class="mb-chip">未確認事項</span>
+</div>
+
+<div class="mb-wrap">
+<div class="mb-main">
+
+<nav class="mb-toc" aria-label="目次">
+  <ol>
+    <li><a href="#overview">まず全体像</a></li>
+    <li><a href="#documents">どこに文書があるか</a></li>
+    <li><a href="#models">モデルとコードの対応</a></li>
+    <li><a href="#results">解析結果と生成物</a></li>
+    <li><a href="#cautions">レビュー時に注意する点</a></li>
+    <li><a href="#next">次の作業で確認すること</a></li>
+  </ol>
+</nav>
+
+<div class="mb-summary">
+  <ul>
+    <li>このリポジトリは、コード・研究原稿・発表資料・大量のシミュレーション結果を一体で保存した研究資産です。</li>
+    <li>研究文書の中心は <code>source/main.tex</code> と、そこから取り込まれる3つの章ファイルです。</li>
+    <li>実装は、連続平面上の2つのモデルと、三角格子上の成長・統計解析・派生モデルに大別できます。</li>
+    <li>実行環境、依存関係、生成コマンド、結果の再現性は、リポジトリ内だけでは確定できません。</li>
+  </ul>
+</div>
+
+<h2 id="overview">1. まず全体像</h2>
+
+<p>
+研究資料と実装は、次のような関係で配置されています。矢印は「内容を参照する関係」を表し、
+生成コマンドやデータの正本性を意味しません。
+</p>
+
+<figure class="mb-figure">
+  <div class="mb-figure-frame">
+    <svg viewBox="0 0 780 250" role="img" aria-labelledby="map-title map-desc">
+      <title id="map-title">リポジトリの主要領域</title>
+      <desc id="map-desc">研究文書、モデル実装、解析、保存済み結果の関係を示す図</desc>
+      <g fill="none" stroke="#111110" stroke-width="2">
+        <rect x="20" y="30" width="210" height="70" rx="12" fill="#FFFFFF"/>
+        <rect x="285" y="30" width="210" height="70" rx="12" fill="#FFFFFF"/>
+        <rect x="550" y="30" width="210" height="70" rx="12" fill="#FFFFFF"/>
+        <rect x="152" y="150" width="210" height="70" rx="12" fill="#FFFFFF"/>
+        <rect x="418" y="150" width="210" height="70" rx="12" fill="#FFFFFF"/>
+        <line x1="230" y1="65" x2="285" y2="65"/>
+        <line x1="495" y1="65" x2="550" y2="65"/>
+        <line x1="390" y1="100" x2="390" y2="150"/>
+        <line x1="257" y1="150" x2="190" y2="100"/>
+        <line x1="523" y1="150" x2="655" y2="100"/>
+        <path d="M277 60 L285 65 L277 70 Z" fill="#111110" stroke="none"/>
+        <path d="M542 60 L550 65 L542 70 Z" fill="#111110" stroke="none"/>
+        <path d="M385 142 L390 150 L395 142 Z" fill="#111110" stroke="none"/>
+        <path d="M197 105 L190 100 L192 109 Z" fill="#111110" stroke="none"/>
+        <path d="M648 105 L655 100 L653 109 Z" fill="#111110" stroke="none"/>
+      </g>
+      <g font-family="Ubuntu Sans, Noto Sans JP, sans-serif" font-size="17" fill="#111110" text-anchor="middle">
+        <text x="125" y="59">研究文書</text>
+        <text x="125" y="82">source/・doc/</text>
+        <text x="390" y="59">連続平面モデル</text>
+        <text x="390" y="82">2つの初期モデル</text>
+        <text x="655" y="59">三角格子モデル</text>
+        <text x="655" y="82">成長・派生・解析</text>
+        <text x="257" y="179">Notebook・技術メモ</text>
+        <text x="257" y="202">triangular_lattice/doc/</text>
+        <text x="523" y="179">結果・生成物</text>
+        <text x="523" y="202">results/data・img・video</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption>fig.1　調査対象の主要領域。各領域の詳細は以下の節に分けている。</figcaption>
+</figure>
+
+<div class="mb-grid-2">
+  <div class="mb-card">
+    <div class="mb-card-label">読む順番</div>
+    <ol>
+      <li><a href="./README.md">README.md</a> と2つのTODO</li>
+      <li><a href="./source/main.tex">source/main.tex</a> と章ファイル</li>
+      <li>対象モデルのREADME・実装</li>
+      <li>実行コードと <code>triangular_lattice/results/</code></li>
+    </ol>
+  </div>
+  <div class="mb-card">
+    <div class="mb-card-label">この調査での前提</div>
+    <p>
+      2016〜2017年頃の研究資産として読みます。現在の環境で実行できること、PDFが最新であること、
+      結果が再現可能であることは、ファイルの存在だけでは判断しません。
+    </p>
+  </div>
+</div>
+
+<h2 id="documents">2. どこに文書があるか</h2>
+
+<p>
+文書は一つのディレクトリに集約されていません。研究内容、発表資料、技術メモ、APIドキュメント、
+Notebook、結果付属のメモがそれぞれ別の場所にあります。
+</p>
+
+<table>
+  <tr><th class="mb-rowlabel">場所</th><th>役割</th><th>レビュー時の見方</th></tr>
+  <tr>
+    <td class="mb-rowlabel"><a href="./source/">source/</a></td>
+    <td>研究報告の原稿。<code>main.tex</code> が3章を取り込む。</td>
+    <td>モデルの背景・数式・研究上の問題設定を確認する入口。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel"><a href="./doc/">doc/</a></td>
+    <td>中間発表、参考文献、PDF、旧APIドキュメント。</td>
+    <td>研究の時系列や発表時点の説明を確認する。生成物の最新性は未確認。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel"><a href="./img/">img/</a></td>
+    <td>論文・発表資料向けの格子図、モデル図、画面例など。</td>
+    <td>原稿から参照される図版。READMEの画像パスには不一致がある。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel"><a href="./triangular_lattice/doc/">triangular_lattice/doc/</a></td>
+    <td>モジュール別PDF APIドキュメントと内部判定の技術メモ。</td>
+    <td>過去のAPI参照・設計意図。現行コードの正本とは限らない。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel"><a href="./triangular_lattice/">Notebook・コード</a></td>
+    <td>成長、die-cutting、距離、Vicsekモデルの実験・解析。</td>
+    <td>結果ファイルの相対パスとKernel環境を確認してから読む・実行する。</td>
+  </tr>
+</table>
+
+<h3>研究報告の章構成</h3>
+
+<div class="mb-grid-2">
+  <div class="mb-card">
+    <div class="mb-card-title">連続平面モデル</div>
+    <p><code>source/01_growing_natural_length_model.tex</code></p>
+    <ul>
+      <li>質点・ばね・曲げ弾性</li>
+      <li>自然長の増大と線分分割</li>
+      <li>Euler法・4次Runge–Kutta法</li>
+    </ul>
+  </div>
+  <div class="mb-card">
+    <div class="mb-card-title">定長モデル</div>
+    <p><code>source/02_constant_length_model.tex</code></p>
+    <ul>
+      <li>自然長・ばね定数を一定にする試み</li>
+      <li>点追加と斥力ポテンシャル</li>
+      <li>結果は要確認として記載</li>
+    </ul>
+  </div>
+  <div class="mb-card">
+    <div class="mb-card-title">三角格子モデル</div>
+    <p><code>source/03_triangular_lattice.tex</code></p>
+    <ul>
+      <li>6方向の単位ベクトル</li>
+      <li>自己回避ランダムウォーク</li>
+      <li>deadlockと配置規則</li>
+    </ul>
+  </div>
+  <div class="mb-card">
+    <div class="mb-card-title">別系統の草稿</div>
+    <p><code>source/main.md</code></p>
+    <ul>
+      <li>Markdown形式の研究草稿</li>
+      <li>LaTeXとの同期関係は不明</li>
+      <li>内容は途中で終わる</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="models">3. モデルとコードの対応</h2>
+
+<p>
+実装は大きく、連続平面上の2つのモデルと、三角格子上のモデル群に分かれます。
+三角格子側は、基本モデル、統計解析、派生モデル、結果可視化が同じディレクトリツリーにあります。
+</p>
+
+<table>
+  <tr><th class="mb-rowlabel">領域</th><th>中心ファイル</th><th>扱う内容</th></tr>
+  <tr>
+    <td class="mb-rowlabel">自然長成長</td>
+    <td><code>growing_natural_length_model/proto.py</code><br><code>points.py</code> / <code>runner.py</code></td>
+    <td>実数座標の質点列、自然長更新、線分分割、アニメーション。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel">定長モデル</td>
+    <td><code>constant_length_model/constant_length.py</code><br><code>mystring.py</code> / <code>runner.py</code></td>
+    <td>自然長・ばね定数を固定し、点を追加するモデル。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel">格子の基盤</td>
+    <td><code>triangular.py</code><br><code>strings.py</code> / <code>base.py</code></td>
+    <td>三角格子、近傍、ひもの表現、シミュレーション基底。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel">成長モデル</td>
+    <td><code>growing_string.py</code><br><code>growing_string_run.py</code></td>
+    <td>未占有近傍を曲げの重み <code>beta</code> で選択して成長。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel">統計解析</td>
+    <td><code>radius*</code>、<code>mass*</code>、<code>distances*</code><br><code>box_counting*</code>、<code>fractal_dim*</code></td>
+    <td>半径、質量、距離、tortuosity、box counting、フラクタル次元など。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel">派生モデル</td>
+    <td><code>moving_string/</code>、<code>random_lattice/</code><br><code>eden/</code>、<code>vicsek/</code></td>
+    <td>移動ひも、ランダム格子、Edenモデル、Vicsekモデル。</td>
+  </tr>
+</table>
+
+<h3>代表的な実行・解析入口</h3>
+
+<pre><code class="language-plaintext">growing_natural_length_model/proto.py
+constant_length_model/constant_length.py
+triangular_lattice/growing_string_run.py
+triangular_lattice/growing_string_inside_run.py
+triangular_lattice/box_counting_run.py
+triangular_lattice/radius_run.py
+triangular_lattice/mass_in_r_run.py
+triangular_lattice/diecutting/diecutting_hexagonal_run.py</code></pre>
+
+<p class="mb-small">
+上記は確認できた代表例です。全ての <code>__main__</code> を網羅する一覧ではなく、現在の環境での実行成功も検証していません。
+</p>
+
+<h2 id="results">4. 解析結果と生成物</h2>
+
+<p>
+結果は <code>triangular_lattice/results/</code> に保存されています。保存済みファイルは研究資産としてGit管理されているため、
+一時ファイルのように扱わないことが重要です。
+</p>
+
+<div class="mb-grid-3">
+  <div class="mb-card">
+    <div class="mb-card-title">data/</div>
+    <p><code>npz</code>、<code>json</code>、<code>csv</code> など。box counting、radius、distance、mass、die-cutting等。</p>
+  </div>
+  <div class="mb-card">
+    <div class="mb-card-title">img/</div>
+    <p><code>png</code>、<code>pdf</code>、<code>eps</code>、HTMLなど。解析図、フレーム、内部構造の可視化。</p>
+  </div>
+  <div class="mb-card">
+    <div class="mb-card-title">video/</div>
+    <p><code>mp4</code>。成長モデル、内部構造、random lattice、Vicsekモデルなどの動画。</p>
+  </div>
+</div>
+
+<table>
+  <tr><th class="mb-rowlabel">保存処理</th><th>確認できる役割</th><th>注意</th></tr>
+  <tr>
+    <td class="mb-rowlabel"><code>save_data.py</code></td>
+    <td>タイムスタンプを付けて <code>.npz</code> を保存。</td>
+    <td>全スクリプトが共通利用するわけではない。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel"><code>save_meta.py</code></td>
+    <td>設定などをJSONとして保存。</td>
+    <td>結果ファイルの完全なスキーマは未確認。</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel">Notebook・HTML</td>
+    <td>相対パスで既存データを読み、可視化・フィッティング。</td>
+    <td>作業ディレクトリと入力ファイルの存在を確認する。</td>
+  </tr>
+</table>
+
+<h2 id="cautions">5. レビュー時に注意する点</h2>
+
+<div class="mb-summary">
+  <p><strong>最重要の注意：</strong>現状のファイル構成やコードから、実行環境・再現性・結果の科学的妥当性を断定しない。</p>
+  <ul>
+    <li>ルートREADMEの <code>python proto.py</code> は、ルート直下の現状の配置と一致しない。</li>
+    <li>READMEの <code>img/screen_001.png</code> に対し、確認できる同名ファイルは <code>img/screen_001.pdf</code>。</li>
+    <li>Python 2系の構文・APIとPython 3向けの記述が混在する。</li>
+    <li>依存関係マニフェスト、標準テスト、lint、CI設定は確認できない。</li>
+    <li>結果出力は相対パスが多く、実行する場所によって入力・出力先が変わり得る。</li>
+    <li>内部領域判定の技術メモには、<code>i=0</code> をまたぐ場合の既知の問題が記載されている。</li>
+  </ul>
+</div>
+
+<h3>作業前後のチェック</h3>
+
+<div class="mb-grid-2">
+  <div class="mb-card">
+    <div class="mb-card-label">実行前</div>
+    <ul>
+      <li>対象スクリプトの引数と既定値を確認する。</li>
+      <li>カレントディレクトリとimport解決を確認する。</li>
+      <li>入力結果と出力先を確認する。</li>
+      <li>既存結果の上書き・大量生成・動画生成の有無を確認する。</li>
+    </ul>
+  </div>
+  <div class="mb-card">
+    <div class="mb-card-label">変更後</div>
+    <ul>
+      <li>差分と変更範囲を確認する。</li>
+      <li>記載したパス・リンクの存在を確認する。</li>
+      <li>実施した検証と未実施事項を分けて記録する。</li>
+      <li>未検証のビルド・シミュレーションを成功扱いしない。</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="next">6. 次の作業で確認すること</h2>
+
+<p>
+今回の俯瞰調査では、構造と文書の所在を整理しました。次に実行や改修を行う場合は、対象を絞って以下を確認します。
+</p>
+
+<table>
+  <tr><th class="mb-rowlabel">確認対象</th><th>確認内容</th><th>現状</th></tr>
+  <tr>
+    <td class="mb-rowlabel">環境</td>
+    <td>Python、NumPy、SciPy、Matplotlib等のバージョンとGUI・FFmpeg依存。</td>
+    <td>未確認</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel">文書生成</td>
+    <td>LaTeX、HTML、API PDF、Notebookの正式な生成手順。</td>
+    <td>未確認</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel">正本性</td>
+    <td><code>source/main.tex</code>、<code>source/main.md</code>、PDFの関係。</td>
+    <td>同期関係は未確認</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel">再現性</td>
+    <td>結果ファイルのスキーマ、乱数seed、生成パラメータ、再実行方法。</td>
+    <td>未確認</td>
+  </tr>
+  <tr>
+    <td class="mb-rowlabel">科学的評価</td>
+    <td>モデルの妥当性、結果の解釈、実験・先行研究との対応。</td>
+    <td>この調査の対象外</td>
+  </tr>
+</table>
+
+<div class="mb-card">
+  <div class="mb-card-label">レビューの結論</div>
+  <p>
+    まず読むべき中心資料は <a href="./source/main.tex">source/main.tex</a> と3つの章ファイルです。
+    実装を追う場合は、連続平面モデルか三角格子モデルかを先に決め、三角格子側では
+    <code>triangular.py</code> → <code>strings.py</code> → <code>growing_string.py</code> → 各解析スクリプトの順に確認すると全体を追いやすくなります。
+    既存成果物を扱うときは、実行コードと <a href="./triangular_lattice/results/">results/</a> を必ず組み合わせて確認してください。
+  </p>
+</div>
+
+</div><!-- /.mb-main -->
+
+<aside class="mb-glossary">
+  <h2>用語リスト</h2>
+  <table>
+    <tr><th>用語</th><th>このページでの意味</th></tr>
+    <tr><td class="mb-rowlabel">連続平面モデル</td><td>実数座標上の質点・ばね・曲げ弾性を扱うモデル。</td></tr>
+    <tr><td class="mb-rowlabel">三角格子モデル</td><td>6近傍を持つ三角格子上でひもを成長・解析するモデル群。</td></tr>
+    <tr><td class="mb-rowlabel">実行入口</td><td>シミュレーションや解析を起動する代表的なPythonファイル。</td></tr>
+    <tr><td class="mb-rowlabel">生成物</td><td>PDF、HTML、画像、動画、保存済み数値データなど。</td></tr>
+    <tr><td class="mb-rowlabel">正本</td><td>変更元として扱うべき資料。現時点で一部は未確定。</td></tr>
+    <tr><td class="mb-rowlabel">deadlock</td><td>自己回避的な配置で、次の点を置けなくなる状態。</td></tr>
+  </table>
+
+  <h2>関連ファイル</h2>
+  <ul>
+    <li><a href="./AGENTS.md">AGENTS.md</a></li>
+    <li><a href="./README.md">README.md</a></li>
+    <li><a href="./source/main.tex">source/main.tex</a></li>
+    <li><a href="./source/main.md">source/main.md</a></li>
+    <li><a href="./TODO.txt">TODO.txt</a></li>
+    <li><a href="./triangular_lattice/TODO.txt">triangular_lattice/TODO.txt</a></li>
+    <li><a href="./triangular_lattice/doc/how_to_detect_inside_of_the_string.md">内部判定メモ</a></li>
+  </ul>
+</aside>
+
+</div><!-- /.mb-wrap -->
+
+<footer class="mb-footer">Repository research review · generated as a local HTML artifact · no simulation or document build was run</footer>
+
+</div>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
