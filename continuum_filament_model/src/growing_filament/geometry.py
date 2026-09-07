@@ -9,6 +9,7 @@ adding segment repulsion, friction, or adhesion.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional
 
 import numpy as np
@@ -17,9 +18,47 @@ Array = np.ndarray
 _GEOMETRY_EPS = 1.0e-12
 
 
+class SegmentFeature(str, Enum):
+    """Feature pair attaining the segment-to-segment minimum.
+
+    The names describe the closest-point parameters, not a force law.  A
+    collinear overlap has a non-unique set of closest points and is therefore
+    reported explicitly instead of being silently classified as an arbitrary
+    endpoint/interior pair.  ``parallel_overlap`` has the analogous meaning
+    for parallel, distinct centerlines with overlapping projections.
+    """
+
+    ENDPOINT_ENDPOINT = "endpoint_endpoint"
+    ENDPOINT_INTERIOR = "endpoint_interior"
+    INTERIOR_ENDPOINT = "interior_endpoint"
+    INTERIOR_INTERIOR = "interior_interior"
+    COLLINEAR_OVERLAP = "collinear_overlap"
+    PARALLEL_OVERLAP = "parallel_overlap"
+
+
+class NormalStatus(str, Enum):
+    """Whether a unique separation normal is available."""
+
+    DEFINED = "defined"
+    UNDEFINED_ZERO_DISTANCE = "undefined_zero_distance"
+
+
+class ContactDiagnosticType(str, Enum):
+    """Mutually exclusive diagnostic classification for one segment pair."""
+
+    NO_CONTACT = "no_contact"
+    FINITE_RADIUS_GAP_CONTACT = "finite_radius_gap_contact"
+    CENTERLINE_INTERSECTION = "centerline_intersection"
+
+
 @dataclass(frozen=True)
 class SegmentDistance:
-    """Closest-point result for one non-local segment pair."""
+    """Closest-point result for one non-local segment pair.
+
+    This is the historical centerline-only API.  Use
+    :func:`segment_contact_geometry` when a finite diameter, gap, penetration,
+    feature, or normal status is required.
+    """
 
     segment_i: int
     segment_j: int
@@ -28,6 +67,89 @@ class SegmentDistance:
     point_j: tuple[float, float]
     parameter_i: float
     parameter_j: float
+
+    @property
+    def closest_point_i(self) -> tuple[float, float]:
+        return self.point_i
+
+    @property
+    def closest_point_j(self) -> tuple[float, float]:
+        return self.point_j
+
+    @property
+    def closest_parameter_i(self) -> float:
+        return self.parameter_i
+
+    @property
+    def closest_parameter_j(self) -> float:
+        return self.parameter_j
+
+    @property
+    def closest_points(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        return self.point_i, self.point_j
+
+    @property
+    def parameters(self) -> tuple[float, float]:
+        return self.parameter_i, self.parameter_j
+
+    def as_contact(
+        self,
+        diameter: float,
+        *,
+        feature: SegmentFeature = SegmentFeature.INTERIOR_INTERIOR,
+        normal_status: Optional[NormalStatus] = None,
+    ) -> "SegmentContactGeometry":
+        """Promote a centerline result to the finite-radius contract.
+
+        Prefer :func:`segment_contact_geometry` when the feature and normal
+        status must be inferred from the original endpoints.  This adapter is
+        provided so existing callers that cache ``SegmentDistance`` values can
+        adopt the new contract without changing their data flow.
+        """
+
+        diameter = _validate_diameter(diameter)
+        gap = float(self.distance - diameter)
+        penetration = max(0.0, float(-gap))
+        if normal_status is None:
+            normal_status = (
+                NormalStatus.DEFINED
+                if self.distance > _GEOMETRY_EPS
+                else NormalStatus.UNDEFINED_ZERO_DISTANCE
+            )
+        else:
+            normal_status = NormalStatus(normal_status)
+        if self.distance <= _GEOMETRY_EPS and normal_status is NormalStatus.DEFINED:
+            raise ValueError("zero-distance geometry cannot have a defined normal")
+        normal: Optional[tuple[float, float]] = None
+        if normal_status is NormalStatus.DEFINED:
+            delta = np.asarray(self.point_i) - np.asarray(self.point_j)
+            normal = (float(delta[0] / self.distance), float(delta[1] / self.distance))
+        diagnostic_type = (
+            ContactDiagnosticType.CENTERLINE_INTERSECTION
+            if self.distance <= _GEOMETRY_EPS
+            else (
+                ContactDiagnosticType.FINITE_RADIUS_GAP_CONTACT
+                if gap <= 0.0
+                else ContactDiagnosticType.NO_CONTACT
+            )
+        )
+        return SegmentContactGeometry(
+            segment_i=self.segment_i,
+            segment_j=self.segment_j,
+            distance=float(self.distance),
+            gap=gap,
+            penetration=penetration,
+            point_i=self.point_i,
+            point_j=self.point_j,
+            parameter_i=float(self.parameter_i),
+            parameter_j=float(self.parameter_j),
+            diameter=diameter,
+            feature=feature,
+            normal=normal,
+            normal_status=normal_status,
+            centerline_intersection=(diagnostic_type is ContactDiagnosticType.CENTERLINE_INTERSECTION),
+            diagnostic_type=diagnostic_type,
+        )
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -39,6 +161,130 @@ class SegmentDistance:
             "parameter_i": self.parameter_i,
             "parameter_j": self.parameter_j,
         }
+
+
+@dataclass(frozen=True)
+class SegmentContactGeometry:
+    """Method-independent finite-radius geometry for one segment pair.
+
+    ``diameter`` is the exclusion diameter used by the contract, so
+    ``gap = distance - diameter`` and ``penetration = max(0, -gap)``.  A
+    normal is returned only for strictly positive separation.  At zero
+    distance (crossing or overlap), ``normal`` is ``None`` and
+    ``normal_status`` records that no arbitrary direction was selected.
+    """
+
+    segment_i: int
+    segment_j: int
+    distance: float
+    gap: float
+    penetration: float
+    point_i: tuple[float, float]
+    point_j: tuple[float, float]
+    parameter_i: float
+    parameter_j: float
+    diameter: float
+    feature: SegmentFeature
+    normal: Optional[tuple[float, float]]
+    normal_status: NormalStatus
+    centerline_intersection: bool
+    diagnostic_type: ContactDiagnosticType
+
+    @property
+    def closest_point_i(self) -> tuple[float, float]:
+        return self.point_i
+
+    @property
+    def closest_point_j(self) -> tuple[float, float]:
+        return self.point_j
+
+    @property
+    def closest_parameter_i(self) -> float:
+        return self.parameter_i
+
+    @property
+    def closest_parameter_j(self) -> float:
+        return self.parameter_j
+
+    @property
+    def closest_points(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        return self.point_i, self.point_j
+
+    @property
+    def parameters(self) -> tuple[float, float]:
+        return self.parameter_i, self.parameter_j
+
+    @property
+    def normal_vector(self) -> Optional[tuple[float, float]]:
+        return self.normal
+
+    @property
+    def feature_type(self) -> SegmentFeature:
+        return self.feature
+
+    @property
+    def is_contact(self) -> bool:
+        """Whether the inclusive zero-gap contact threshold is met."""
+
+        return self.gap <= 0.0
+
+    @property
+    def is_finite_radius_contact(self) -> bool:
+        return self.diagnostic_type is ContactDiagnosticType.FINITE_RADIUS_GAP_CONTACT
+
+    @property
+    def centerline_crossing(self) -> bool:
+        return self.centerline_intersection
+
+    def as_dict(self) -> dict[str, object]:
+        feature = self.feature.value
+        normal_status = self.normal_status.value
+        diagnostic_type = self.diagnostic_type.value
+        return {
+            "segment_i": self.segment_i,
+            "segment_j": self.segment_j,
+            "distance": float(self.distance),
+            "gap": float(self.gap),
+            "penetration": float(self.penetration),
+            "diameter": float(self.diameter),
+            "point_i": list(self.point_i),
+            "point_j": list(self.point_j),
+            "closest_point_i": list(self.point_i),
+            "closest_point_j": list(self.point_j),
+            "closest_points": [list(self.point_i), list(self.point_j)],
+            "parameter_i": float(self.parameter_i),
+            "parameter_j": float(self.parameter_j),
+            "closest_parameter_i": float(self.parameter_i),
+            "closest_parameter_j": float(self.parameter_j),
+            "parameters": [float(self.parameter_i), float(self.parameter_j)],
+            "feature": feature,
+            "feature_type": feature,
+            "normal": None if self.normal is None else list(self.normal),
+            "normal_status": normal_status,
+            "centerline_intersection": bool(self.centerline_intersection),
+            "centerline_crossing": bool(self.centerline_intersection),
+            "diagnostic_type": diagnostic_type,
+            "is_contact": bool(self.is_contact),
+        }
+
+
+# Short noun aliases for callers that prefer concise annotations.
+SegmentContact = SegmentContactGeometry
+FeatureType = SegmentFeature
+
+
+def _distance_from_contact(value: SegmentContactGeometry) -> SegmentDistance:
+    """Preserve the historical closest-pair dict shape for diagnostics."""
+
+    return SegmentDistance(
+        segment_i=value.segment_i,
+        segment_j=value.segment_j,
+        distance=value.distance,
+        point_i=value.point_i,
+        point_j=value.point_j,
+        parameter_i=value.parameter_i,
+        parameter_j=value.parameter_j,
+    )
 
 
 @dataclass(frozen=True)
@@ -111,6 +357,11 @@ def segments_intersect(
     return (o1 > 0.0) != (o2 > 0.0) and (o3 > 0.0) != (o4 > 0.0)
 
 
+# Name the topological predicate explicitly for contact consumers.  The
+# historical ``segments_intersect`` spelling remains the implementation API.
+centerline_intersection = segments_intersect
+
+
 def segment_closest_points(
     a: Array,
     b: Array,
@@ -180,6 +431,268 @@ def segment_closest_points(
     return distance, point_i, point_j, float(parameter_i), float(parameter_j)
 
 
+def _validate_diameter(diameter: float) -> float:
+    try:
+        value = float(diameter)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("diameter must be finite and non-negative") from exc
+    if not np.isfinite(value) or value < 0.0:
+        raise ValueError("diameter must be finite and non-negative")
+    return value
+
+
+def _is_collinear(a: Array, b: Array, c: Array, d: Array, eps: float) -> bool:
+    u = b - a
+    v = d - c
+    w = c - a
+    uu = float(np.linalg.norm(u))
+    vv = float(np.linalg.norm(v))
+    return (
+        abs(_cross2(u, v)) <= eps * max(uu * vv, 1.0)
+        and abs(_cross2(u, w)) <= eps * max(uu * float(np.linalg.norm(w)), 1.0)
+    )
+
+
+def _projected_interval_on_first(
+    a: Array,
+    b: Array,
+    c: Array,
+    d: Array,
+) -> tuple[float, float]:
+    u = b - a
+    uu = float(np.dot(u, u))
+    values = (float(np.dot(c - a, u) / uu), float(np.dot(d - a, u) / uu))
+    return min(values), max(values)
+
+
+def _collinear_overlap_parameters(
+    a: Array,
+    b: Array,
+    c: Array,
+    d: Array,
+    eps: float,
+) -> Optional[tuple[float, float]]:
+    """Return deterministic midpoint parameters for a positive collinear overlap."""
+
+    if not _is_collinear(a, b, c, d, eps):
+        return None
+    first_low, first_high = _projected_interval_on_first(a, b, c, d)
+    overlap_low = max(0.0, first_low)
+    overlap_high = min(1.0, first_high)
+    if overlap_high - overlap_low <= eps:
+        return None
+    parameter_i = 0.5 * (overlap_low + overlap_high)
+    v = d - c
+    vv = float(np.dot(v, v))
+    point = a + parameter_i * (b - a)
+    parameter_j = float(np.clip(np.dot(point - c, v) / vv, 0.0, 1.0))
+    return float(parameter_i), parameter_j
+
+
+def _parallel_overlap_parameters(
+    a: Array,
+    b: Array,
+    c: Array,
+    d: Array,
+    eps: float,
+) -> Optional[tuple[float, float]]:
+    """Return parameters for an exact/near-exact parallel projection overlap."""
+
+    u = b - a
+    v = d - c
+    uu = float(np.dot(u, u))
+    vv = float(np.dot(v, v))
+    if abs(_cross2(u, v)) > eps * max(np.sqrt(uu * vv), 1.0):
+        return None
+    first_low, first_high = _projected_interval_on_first(a, b, c, d)
+    overlap_low = max(0.0, first_low)
+    overlap_high = min(1.0, first_high)
+    if overlap_high - overlap_low <= eps:
+        return None
+    parameter_i = 0.5 * (overlap_low + overlap_high)
+    point = a + parameter_i * u
+    parameter_j = float(np.clip(np.dot(point - c, v) / vv, 0.0, 1.0))
+    return float(parameter_i), parameter_j
+
+
+def _parameter_is_endpoint(parameter: float, eps: float) -> bool:
+    return parameter <= eps or parameter >= 1.0 - eps
+
+
+def _feature_for_parameters(
+    parameter_i: float,
+    parameter_j: float,
+    *,
+    collinear_overlap: bool,
+    parallel_overlap: bool,
+    eps: float,
+) -> SegmentFeature:
+    if collinear_overlap:
+        return SegmentFeature.COLLINEAR_OVERLAP
+    if parallel_overlap:
+        return SegmentFeature.PARALLEL_OVERLAP
+    i_endpoint = _parameter_is_endpoint(parameter_i, eps)
+    j_endpoint = _parameter_is_endpoint(parameter_j, eps)
+    if i_endpoint and j_endpoint:
+        return SegmentFeature.ENDPOINT_ENDPOINT
+    if i_endpoint:
+        return SegmentFeature.ENDPOINT_INTERIOR
+    if j_endpoint:
+        return SegmentFeature.INTERIOR_ENDPOINT
+    return SegmentFeature.INTERIOR_INTERIOR
+
+
+def segment_contact_geometry(
+    a: Array,
+    b: Array,
+    c: Array,
+    d: Array,
+    diameter: float,
+    *,
+    segment_i: int = 0,
+    segment_j: int = 1,
+    eps: float = _GEOMETRY_EPS,
+) -> SegmentContactGeometry:
+    """Return the finite-radius geometry contract for one segment pair.
+
+    The centerline calculation is independent of any contact response.  The
+    returned normal points from the closest point on segment ``j`` to the
+    closest point on segment ``i``.  When the centerline distance is zero, the
+    direction is not unique for crossing/overlapping segments, so ``normal``
+    is ``None`` and ``normal_status`` is ``undefined_zero_distance``.
+    """
+
+    if not isinstance(segment_i, (int, np.integer)) or not isinstance(segment_j, (int, np.integer)):
+        raise ValueError("segment indices must be integers")
+    if segment_i < 0 or segment_j < 0:
+        raise ValueError("segment indices must be non-negative")
+    diameter_value = _validate_diameter(diameter)
+    a, b, c, d = (np.asarray(value, dtype=float) for value in (a, b, c, d))
+    # The historical helper performs the complete shape/finite/degeneracy
+    # validation and remains the numerical source of the closest pair.
+    distance, point_i, point_j, parameter_i, parameter_j = segment_closest_points(
+        a, b, c, d, eps=eps
+    )
+
+    collinear_overlap_parameters = _collinear_overlap_parameters(a, b, c, d, eps)
+    parallel_overlap_parameters = _parallel_overlap_parameters(a, b, c, d, eps)
+    if collinear_overlap_parameters is not None:
+        parameter_i, parameter_j = collinear_overlap_parameters
+        point_i = a + parameter_i * (b - a)
+        point_j = c + parameter_j * (d - c)
+        distance = float(np.linalg.norm(point_i - point_j))
+    elif parallel_overlap_parameters is not None:
+        # For parallel distinct centerlines there is a continuum of
+        # minimizers.  Midpoint projection makes the diagnostic deterministic
+        # without implying a preferred force application point.
+        parameter_i, parameter_j = parallel_overlap_parameters
+        point_i = a + parameter_i * (b - a)
+        point_j = c + parameter_j * (d - c)
+        distance = float(np.linalg.norm(point_i - point_j))
+
+    collinear_overlap = collinear_overlap_parameters is not None
+    parallel_overlap = (
+        parallel_overlap_parameters is not None and not collinear_overlap
+    )
+    feature = _feature_for_parameters(
+        parameter_i,
+        parameter_j,
+        collinear_overlap=collinear_overlap,
+        parallel_overlap=parallel_overlap,
+        eps=eps,
+    )
+    centerline_intersection = segments_intersect(a, b, c, d, eps=eps)
+    gap = float(distance - diameter_value)
+    penetration = max(0.0, float(diameter_value - distance))
+    if distance <= eps:
+        normal_status = NormalStatus.UNDEFINED_ZERO_DISTANCE
+        normal = None
+    else:
+        normal_status = NormalStatus.DEFINED
+        delta = point_i - point_j
+        normal = (
+            float(delta[0] / distance),
+            float(delta[1] / distance),
+        )
+    if centerline_intersection:
+        diagnostic_type = ContactDiagnosticType.CENTERLINE_INTERSECTION
+    elif gap <= 0.0:
+        diagnostic_type = ContactDiagnosticType.FINITE_RADIUS_GAP_CONTACT
+    else:
+        diagnostic_type = ContactDiagnosticType.NO_CONTACT
+    return SegmentContactGeometry(
+        segment_i=int(segment_i),
+        segment_j=int(segment_j),
+        distance=float(distance),
+        gap=gap,
+        penetration=penetration,
+        point_i=(float(point_i[0]), float(point_i[1])),
+        point_j=(float(point_j[0]), float(point_j[1])),
+        parameter_i=float(parameter_i),
+        parameter_j=float(parameter_j),
+        diameter=diameter_value,
+        feature=feature,
+        normal=normal,
+        normal_status=normal_status,
+        centerline_intersection=centerline_intersection,
+        diagnostic_type=diagnostic_type,
+    )
+
+
+# Explicit aliases keep the contract discoverable for callers that use either
+# ``contact`` or ``geometry`` in their naming conventions.
+segment_segment_contact_geometry = segment_contact_geometry
+segment_contact = segment_contact_geometry
+
+
+def nonlocal_segment_contacts(
+    positions: Array,
+    diameter: float,
+    *,
+    eps: float = _GEOMETRY_EPS,
+) -> tuple[SegmentContactGeometry, ...]:
+    """Return finite-radius geometry for all non-adjacent segment pairs.
+
+    Segment indices are zero-based indices into this exact ``positions``
+    snapshot.  Adjacent pairs (``j == i + 1``) are excluded, while pairs
+    separated by at least one segment (``j >= i + 2``) are included, matching
+    :func:`nonlocal_segment_distances` and the existing crossing contract.
+    """
+
+    values = _validate_positions(positions)
+    _validate_diameter(diameter)
+    result: list[SegmentContactGeometry] = []
+    for i in range(len(values) - 1):
+        for j in range(i + 2, len(values) - 1):
+            result.append(
+                segment_contact_geometry(
+                    values[i],
+                    values[i + 1],
+                    values[j],
+                    values[j + 1],
+                    diameter,
+                    segment_i=i,
+                    segment_j=j,
+                    eps=eps,
+                )
+            )
+    return tuple(result)
+
+
+nonlocal_segment_contact_geometry = nonlocal_segment_contacts
+finite_radius_segment_contacts = nonlocal_segment_contacts
+
+
+def closest_nonlocal_segment_contact(
+    positions: Array,
+    diameter: float,
+    *,
+    eps: float = _GEOMETRY_EPS,
+) -> Optional[SegmentContactGeometry]:
+    contacts = nonlocal_segment_contacts(positions, diameter, eps=eps)
+    return min(contacts, key=lambda value: value.distance) if contacts else None
+
+
 def nonlocal_segment_distances(positions: Array) -> tuple[SegmentDistance, ...]:
     """Return closest-point diagnostics for all non-adjacent segment pairs."""
 
@@ -235,6 +748,8 @@ def has_nonlocal_intersection(positions: Array) -> bool:
 def initial_geometry_diagnostic(
     positions: Array,
     contact_distance: float = 0.0,
+    *,
+    include_all_segment_contacts: bool = True,
 ) -> dict[str, object]:
     """Summarize initial finite-radius geometry without applying a force law."""
 
@@ -242,24 +757,50 @@ def initial_geometry_diagnostic(
     if not np.isfinite(contact_distance) or contact_distance < 0.0:
         raise ValueError("contact_distance must be finite and non-negative")
     segment_lengths = np.linalg.norm(np.diff(values, axis=0), axis=1)
-    distances = nonlocal_segment_distances(values)
-    closest = min(distances, key=lambda value: value.distance) if distances else None
-    intersections = nonlocal_intersection_pairs(values)
-    contacts = tuple(
+    contacts = nonlocal_segment_contacts(values, contact_distance)
+    closest_contact = min(contacts, key=lambda value: value.distance) if contacts else None
+    closest = _distance_from_contact(closest_contact) if closest_contact else None
+    intersections = tuple(
         (value.segment_i, value.segment_j)
-        for value in distances
-        if contact_distance > 0.0 and value.distance <= contact_distance + _GEOMETRY_EPS
+        for value in contacts
+        if value.centerline_intersection
+    )
+    # Keep the historical ``contact_pairs`` semantics (positive diameter and
+    # inclusive threshold), while exposing explicit classifications for new
+    # contact consumers.  A centerline intersection takes precedence over a
+    # finite-radius gap contact in ``diagnostic_type``.
+    contact_pairs = tuple(
+        (value.segment_i, value.segment_j)
+        for value in contacts
+        if contact_distance > 0.0 and value.is_contact
+    )
+    finite_radius_contacts = tuple(
+        value for value in contacts if value.is_finite_radius_contact
+    )
+    centerline_contacts = tuple(
+        value for value in contacts if value.centerline_intersection
+    )
+    serialized_contacts = (
+        contacts
+        if include_all_segment_contacts
+        else tuple(
+            value for value in contacts
+            if value.is_contact or value.centerline_intersection
+        )
     )
     return {
         "valid": not bool(intersections),
         "reason": "initial_crossing" if intersections else (
-            "contact" if contacts else "initial_geometry_valid"
+            "contact" if contact_pairs else "initial_geometry_valid"
         ),
         "min_segment_length": float(np.min(segment_lengths)),
         "min_nonlocal_distance": float(closest.distance) if closest else float("inf"),
         "closest_nonlocal_pair": closest.as_dict() if closest else None,
         "intersection_pairs": [list(pair) for pair in intersections],
-        "contact_pairs": [list(pair) for pair in contacts],
+        "contact_pairs": [list(pair) for pair in contact_pairs],
+        "segment_contacts": [value.as_dict() for value in serialized_contacts],
+        "finite_radius_contacts": [value.as_dict() for value in finite_radius_contacts],
+        "centerline_intersections": [value.as_dict() for value in centerline_contacts],
     }
 
 
@@ -427,17 +968,26 @@ def has_swept_nonlocal_intersection(start_positions: Array, end_positions: Array
 def geometry_diagnostics(
     positions: Array,
     contact_distance: float = 0.0,
+    *,
+    include_all_segment_contacts: bool = True,
 ) -> dict[str, object]:
     """Return JSON-friendly finite-radius geometry measurements."""
 
     values = _validate_positions(positions)
-    initial = initial_geometry_diagnostic(values, contact_distance=contact_distance)
+    initial = initial_geometry_diagnostic(
+        values,
+        contact_distance=contact_distance,
+        include_all_segment_contacts=include_all_segment_contacts,
+    )
     return {
         "min_segment_length": initial["min_segment_length"],
         "min_nonlocal_distance": initial["min_nonlocal_distance"],
         "closest_nonlocal_pair": initial["closest_nonlocal_pair"],
         "intersection_pairs": initial["intersection_pairs"],
         "contact_pairs": initial["contact_pairs"],
+        "segment_contacts": initial["segment_contacts"],
+        "finite_radius_contacts": initial["finite_radius_contacts"],
+        "centerline_intersections": initial["centerline_intersections"],
     }
 
 
