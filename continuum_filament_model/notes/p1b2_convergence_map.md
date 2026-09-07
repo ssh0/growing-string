@@ -21,7 +21,7 @@ python continuum_filament_model/benchmarks/p1b2_experiments.py \
   --output "$TMP_DIR"
 ```
 
-実行したrevisionは一時出力の `experiment_summary.json` と各manifestの `git_revision` に保存した。実験は87 run（pilot 3、収束18、grid 54、サイズ比較12）、所要約135.8秒、一時出力約3.4 MBで、trajectoryとrunごとのplotは保存しないcompact policyである。出力上限は120 MB、計画run数上限は100である。per-run artifactはこの一時ディレクトリにだけ保存し、Gitへ追加しない。
+最終コードrevision `6eb930f902989107b2b3718d26e821524abb44b2` 上で再実行した。実験は87 run（pilot 3、収束18、grid 54、サイズ比較12）、所要155.07596366699727秒、一時出力3,406,517 bytesで、trajectoryとrunごとのplotは保存しないcompact policyである。出力上限は120,000,000 bytes（120 MB）、計画run数上限は100である。per-run artifactはこの一時ディレクトリにだけ保存し、Gitへ追加しない。`compact_manifest.json` にはsource/execution revision、config SHA-256、seed set、run数、出力上限、主要summary SHA-256、各compactファイルのSHA-256を保存した。
 
 全runで `contact_stiffness=0`、`diameter=0`、両端固定、初期非交差、決定論的Euler積分・既存再メッシュを使用した。seed付きtrialは `numpy.default_rng(seed)` の標準正規乱数を内部節点へ加え、標本標準偏差で規格化して `amplitude * noise_fraction`（既定5%）を振幅とした。乱数化したのは初期imperfectionだけであり、確率的力学則や実験ノイズモデルではない。
 
@@ -30,6 +30,8 @@ python continuum_filament_model/benchmarks/p1b2_experiments.py \
 - 同一seed・同一設定の初期状態hash、終状態hash、主要結果、compact event summaryは一致した（pilot 3点および `G_b=0.19, chi=0.00025, seed=303` の再実行比較）。異なるseedは一致を要求せず、trial統計として扱う。
 
 各runの `summary.json` に分類、開始時刻、最大変位、第一モード分率、曲率、エネルギー、reject件数・理由、実効設定を保存し、`manifest.json` に入力hash、初期状態hash、canonical終状態hash、trial識別子、compact event summaryを保存した。compact eventは全時刻の状態を保存せず、初期化、受理/棄却数、棄却理由別件数を保存する。時系列指標のサンプルは各runの `metrics.csv` に最大64行、全行を使った分類結果はsummaryに保存した。これらのper-runファイルは一時出力にのみ残し、commitしない。commit済みの `results/p1b2/compact_summary.json` に主要集計を、`compact_manifest.json` にrun数、条件、seed一覧、compactファイルのSHA-256を記録した。
+
+provenanceの固定値は、config SHA-256 `834d5beed66d0407a16c5efe32dac3332b3be690cf67b3b92d038ed8d680dec9`、seed set `[101, 202, 303, 404, 505]`、主要summary（`compact_summary.json`）SHA-256 `f1cd28441b9f0c684977254293ed66759fbf24c364879325c2be67a7f001f5dd` である。旧compact結果のsource revision `d105884595cd72cf8a11d87c9cc6e325240458fc` と比較し、pilot・収束status・gridの判定・未解決領域は一致した。差分はsource/execution revision、実行時間・一時出力サイズなどのprovenanceメタデータであり、結果のstatusを都合よく置換していない。
 
 ## 固定した分類・収束許容値
 
@@ -67,7 +69,7 @@ pilotの役割名は事後に分類を置き換えるためのものではなく
 | boundary-near | straight 5、buckled-single 1 | —（開始有無が不一致） | 1.0021 | **numerically-unresolved** |
 | buckled-single | straight 3、buckled-single 2、unresolved 1 | 0.1505 | 0.6783 | **numerically-unresolved** |
 
-したがって、straight代表点のこの範囲では分類と指標が許容値内で安定した。一方、境界近傍と座屈代表点は空間解像度・`dt`により分類または指標が変わる。特に `n_nodes=7, dt=0.001` 付近を、座屈の確定結果として扱わない。これは「数値的に座屈が存在しない」という意味ではなく、この設定・判定規則で解像できていないという意味である。
+したがって、straight代表点だけはこの範囲で分類と指標が許容値内に収束した。一方、境界近傍と座屈代表点は空間解像度・`dt`により分類または指標が変わるため、`numerically-unresolved` のまま維持した。特に `n_nodes=7, dt=0.001` 付近を、座屈の確定結果として扱わない。これは「数値的に座屈が存在しない」という意味ではなく、この設定・判定規則で解像できていないという意味である。
 
 ## 3×3 `G_b × chi` map
 

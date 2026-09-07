@@ -132,7 +132,7 @@ python continuum_filament_model/benchmarks/p1b2_experiments.py \
   --output "$TMP_DIR"
 ```
 
-per-runのconfig、metrics、events、manifest、summaryは再現性確認用に一時出力へ保存します。これらをGit管理下へコピー・commitしません。commitするのは、実験結果を要約した `results/p1b2/` 直下のcompact CSV/JSON/PNGと `compact_manifest.json` だけです。compact manifestにはrun数、条件、seed一覧、各compactファイルのSHA-256を記録しています。
+per-runのconfig、metrics、events、manifest、summaryは再現性確認用に一時出力へ保存します。これらをGit管理下へコピー・commitしません。commitするのは、実験結果を要約した `results/p1b2/` 直下のcompact CSV/JSON/PNGと `compact_manifest.json` だけです。compact manifestにはsource/execution revision、configのSHA-256、seed一覧、run数、出力上限、主要summaryのSHA-256、各compactファイルのSHA-256を記録しています。
 
 `--mode pilot`、`--mode convergence`、`--mode grid` で段階実行もできます。既定設定は、(1) straight / 境界近傍 / buckled-single のpilot、(2) 各代表点の3空間解像度×2刻み幅（半減を含む）、(3) 最低3×3の `G_b × chi` grid、各cellの決定論的fixture＋5 seed trial、(4) `L=2.0` と `L=1.5` の小規模比較を実行します。`G_b=g tau_b`、`chi=EI/(EA L^2)` の軸値から `EI` と `g` を計算し、実効値も各manifestへ保存します。
 
@@ -164,6 +164,10 @@ results/p1b2/
 ```
 
 既定configの実行計画は87 run、per-run trajectory・plotなし、総出力上限120 MBです。実際の実行時間と一時出力バイト数は `experiment_summary.json` に記録します。per-run manifestにはGit revision、実効設定、`seed`、trial番号、初期状態hash、終状態hash、イベント列を含みますが、commit対象ではありません。同一seed・同一設定では一時出力上で設定・初期状態hash・主要結果の一致を検査できますが、異なるseedは一致させずtrial分布として扱います。完全一致の範囲は同じPython/NumPy/Git環境に限定されます。
+
+今回のcompact結果は、最終コードrevision `6eb930f902989107b2b3718d26e821524abb44b2` 上で87 runを再実行して生成しました。config SHA-256は `834d5beed66d0407a16c5efe32dac3332b3be690cf67b3b92d038ed8d680dec9`、seed setは `[101, 202, 303, 404, 505]`、一時出力の実測値は3,406,517 bytes、主要summary（`compact_summary.json`）のSHA-256は `f1cd28441b9f0c684977254293ed66759fbf24c364879325c2be67a7f001f5dd` です。旧revision `d105884595cd72cf8a11d87c9cc6e325240458fc` と比較して、分類・収束status・未解決領域に変更はなく、差分はprovenanceと実行メタデータに限定されます。
+
+結果の限定は明確です。数値収束が確認できたのはstraight代表点だけで、boundary近傍とbuckled代表点は `numerically-unresolved` のままです。この小規模・非接触suiteから臨界値、臨界曲線、普遍性、実験適合、接触・有限径の結論は導きません。
 
 この追加実験が扱わないものは、接触・有限径・折りたたみ、実験fit、三角格子比較、普遍性、臨界指数です。境界域や解像度依存が残る場合は、未解決として報告します。
 
