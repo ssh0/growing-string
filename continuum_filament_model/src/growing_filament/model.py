@@ -249,6 +249,53 @@ def _node_weights(rest_lengths: Array) -> Array:
     return weights
 
 
+def _bending_energy_and_forces(
+    positions: Array,
+    rest_lengths: Array,
+    bending_stiffness: float,
+) -> Tuple[float, Array]:
+    """Return local-arc-length bending energy and its conservative force.
+
+    ``t_i`` is the unit tangent of geometric segment ``i`` and ``h_i`` is
+    the reference-length dual cell around interior node ``i``.  The bending
+    energy is ``EI / 2 * sum(|t_i - t_{i-1}|^2 / h_i)``.  Keeping the dual
+    cell in reference coordinates makes growth and the bending discretization
+    use the same local material measure, while the unit tangent keeps a
+    straight, stretched segment free of spurious bending energy.
+    """
+
+    forces = np.zeros_like(positions)
+    if len(positions) < 3:
+        return 0.0, forces
+
+    edges = np.diff(positions, axis=0)
+    geometric_lengths = np.linalg.norm(edges, axis=1)
+    if np.any(geometric_lengths <= 1.0e-12):
+        raise ModelError("zero-length geometric segment")
+    tangents = edges / geometric_lengths[:, None]
+    local_reference_lengths = 0.5 * (rest_lengths[:-1] + rest_lengths[1:])
+    tangent_jumps = tangents[1:] - tangents[:-1]
+    coefficients = bending_stiffness / local_reference_lengths
+    bending = 0.5 * float(
+        np.sum(coefficients * np.sum(tangent_jumps * tangent_jumps, axis=1))
+    )
+
+    identity = np.eye(positions.shape[1])
+    for i, (jump, coefficient) in enumerate(
+        zip(tangent_jumps, coefficients), start=1
+    ):
+        previous_tangent = tangents[i - 1]
+        next_tangent = tangents[i]
+        previous_projection = identity - np.outer(previous_tangent, previous_tangent)
+        next_projection = identity - np.outer(next_tangent, next_tangent)
+        previous_gradient = previous_projection @ jump / geometric_lengths[i - 1]
+        next_gradient = next_projection @ jump / geometric_lengths[i]
+        forces[i - 1] -= coefficient * previous_gradient
+        forces[i] += coefficient * (previous_gradient + next_gradient)
+        forces[i + 1] -= coefficient * next_gradient
+    return bending, forces
+
+
 class OverdampedGrowingFilament:
     """Energy-based overdamped simulator for a single open filament."""
 
@@ -288,11 +335,11 @@ class OverdampedGrowingFilament:
             (lengths - a) ** 2 / a
         )
 
-        bending = 0.0
-        if len(p) >= 3:
-            q = p[:-2] - 2.0 * p[1:-1] + p[2:]
-            coefficient = self.parameters.bending_stiffness / self.parameters.reference_length ** 3
-            bending = 0.5 * coefficient * float(np.sum(q * q))
+        bending, _ = _bending_energy_and_forces(
+            p,
+            a,
+            self.parameters.bending_stiffness,
+        )
 
         contact = 0.0
         if self.parameters.contact_stiffness > 0.0 and self.parameters.diameter > 0.0:
@@ -328,13 +375,12 @@ class OverdampedGrowingFilament:
             forces[i] += force_vector
             forces[i + 1] -= force_vector
 
-        if len(p) >= 3:
-            q = p[:-2] - 2.0 * p[1:-1] + p[2:]
-            coefficient = self.parameters.bending_stiffness / self.parameters.reference_length ** 3
-            for i, value in enumerate(q, start=1):
-                forces[i - 1] -= coefficient * value
-                forces[i] += 2.0 * coefficient * value
-                forces[i + 1] -= coefficient * value
+        _, bending_forces = _bending_energy_and_forces(
+            p,
+            a,
+            self.parameters.bending_stiffness,
+        )
+        forces += bending_forces
 
         if self.parameters.contact_stiffness > 0.0 and self.parameters.diameter > 0.0:
             for i in range(len(p)):
