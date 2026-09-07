@@ -405,6 +405,11 @@ def generate_raw_run(
         "centerline_extraction_revision": ANALYSIS_REVISION,
         "missing_data_policy": "missing rows are retained with missing=true and null coordinates",
         "excluded_frames": sorted(frame_drops),
+        "initial_shape": {
+            "kind": fixture,
+            "parameters": _jsonable(fixture_config),
+            "initial_time": 0.0,
+        },
         "truth_parameters": {
             "g": float(truth["g"]),
             "EI": float(truth["EI"]),

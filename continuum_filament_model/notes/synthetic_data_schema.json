@@ -33,7 +33,7 @@
     },
     "metadata_json": {
       "type": "object",
-      "required": ["schema_version", "data_contract", "image_id", "frame_interval", "expected_frames", "pixel_size_m_per_px", "units", "missing_data_policy", "truth_parameters", "noise_config", "fixture", "seed"],
+      "required": ["schema_version", "data_contract", "image_id", "frame_interval", "expected_frames", "pixel_size_m_per_px", "units", "missing_data_policy", "truth_parameters", "initial_shape", "noise_config", "fixture", "seed"],
       "properties": {
         "data_contract": {"const": "continuum-filament-experiment-data-contract-1"},
         "frame_interval": {"type": "number", "exclusiveMinimum": 0},
@@ -43,6 +43,7 @@
         "units": {"type": "object", "required": ["time", "coordinate", "width"]},
         "excluded_frames": {"type": "array", "items": {"type": "integer"}},
         "truth_parameters": {"type": "object", "required": ["g", "EI", "EA", "drag", "diameter"]},
+        "initial_shape": {"type": "object", "required": ["kind", "parameters", "initial_time"]},
         "noise_config": {"type": "object"},
         "seed": {"type": "integer"}
       }
