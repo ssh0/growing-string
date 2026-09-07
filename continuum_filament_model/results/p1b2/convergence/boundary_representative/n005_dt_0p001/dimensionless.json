@@ -1,0 +1,1 @@
+{"G_b":0.2463835741124241,"G_s":0.006,"bending_to_stretching":0.00025,"chi":0.00025,"contact_stiffness":0.0,"definition":"tau_b=zeta*L^4/(EI*pi^4), first sine bending mode; tau_s=zeta*L^2/EA; chi=EI/(EA*L^2)","diameter_over_L":0.0,"dt_over_tau_b":0.0006088068189625151,"length_scale":2.0,"mesh_ratio_initial_dx_over_L":0.25,"tau_b":1.642557160749494,"tau_s":0.04}

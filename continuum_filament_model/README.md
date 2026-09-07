@@ -118,6 +118,53 @@ python continuum_filament_model/benchmarks/buckling_benchmark.py \
 
 各ケースには実効設定、無次元量、Git revision、manifest、イベント、主要観測量のCSV/JSON、図を保存します。既定suiteには決定論的比較に加え、3 seedのslow/fast/high-EI trialを含め、`trial_summary.json` と問い別の `question_comparison.csv/json/png` に代表値・標準偏差を出力します。`contact_stiffness=0`、`diameter=0`、初期非交差を強制し、接触・折りたたみ・実験fit・三角格子比較は未実装です。詳細なfixture、問いごとの比較結果、分類規則、固定端反力proxyの限界、未解決事項は `notes/p1b_buckling_benchmark.md` を参照してください。
 
+## P1B.2：収束・regime map・trial頑健性
+
+P1B.2は、P1Bの既存runner/APIを使った小規模な非接触追加実験です。コア物理式、接触モデル、時間積分器は変更しません。決定論的fixture（`seed=null, trial=0`）と、初期imperfectionだけを乱数化したseed付きtrialを別集計します。trialは確率的な力学則や実験ノイズモデルではありません。
+
+設定と実行入口は次のとおりです。
+
+```bash
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/benchmarks/p1b2_experiments.py \
+  --config continuum_filament_model/benchmarks/configs/p1b2_noncontact.json \
+  --output continuum_filament_model/results/p1b2
+```
+
+`--mode pilot`、`--mode convergence`、`--mode grid` で段階実行もできます。既定設定は、(1) straight / 境界近傍 / buckled-single のpilot、(2) 各代表点の3空間解像度×2刻み幅（半減を含む）、(3) 最低3×3の `G_b × chi` grid、各cellの決定論的fixture＋5 seed trial、(4) `L=2.0` と `L=1.5` の小規模比較を実行します。`G_b=g tau_b`、`chi=EI/(EA L^2)` の軸値から `EI` と `g` を計算し、実効値も各manifestへ保存します。
+
+分類は相転移・臨界曲線の主張ではありません。gridのtrial分類は次の4種類です。
+
+- `resolved-straight`: 5/5 trialが `straight`
+- `resolved-buckled`: 5/5 trialが `buckled-single`
+- `trial-mixed`: `straight` と `buckled-single` が混在し、`unresolved` がない
+- `numerically-unresolved`: 少なくとも1 trialが `unresolved`、失敗、または分母不足
+
+各cellのCSV/JSONには分母、分類件数・割合、座屈開始時刻・最大横変位・第一モード分率・曲率・エネルギーの中央値、IQR、平均、標準偏差、欠測数、未解決理由を保存します。決定論的fixtureの分類・開始時刻・最大変位は別列で保持し、trial統計へ混ぜません。
+
+収束判定の許容値は設定ファイルと `convergence_summary.json` に固定保存します。既定値は、全解像度・刻み幅で分類が一致し `unresolved` でないこと、座屈開始時刻の基準 run との差が相対10%以内、最大横変位の相対15%以内（長さの0.2%を下限）です。満たさない代表点は成功扱いにせず `numerically-unresolved` と記録します。
+
+成果物の構造は次のとおりです。大規模なtrajectoryとrunごとの図は保存せず、出力上限を設定しています。
+
+```text
+results/p1b2/
+├── effective_config.json
+├── experiment_summary.json
+├── manifest_index.csv/json
+├── pilot_summary.csv/json/png
+├── convergence_runs.csv
+├── convergence_summary.csv/json/png
+├── grid/<cell>/deterministic|trial_*/{config,metrics,events,manifest,summary}.json/csv
+├── regime_map.csv/json/png
+├── trial_summary.csv/json
+├── size_comparison.csv/json/png
+└── pilot|convergence|grid/.../manifest.json
+```
+
+既定configの実行計画は87 run、per-run trajectory・plotなし、総出力上限120 MBです。実際の実行時間と出力バイト数は `experiment_summary.json` に記録します。各runのmanifestにはGit revision、実効設定、`seed`、trial番号、初期状態hash、終状態hash、イベント列を含みます。同一seed・同一設定では設定・初期状態hash・主要結果の一致を検査できますが、異なるseedは一致させずtrial分布として扱います。完全一致の範囲は同じPython/NumPy/Git環境に限定されます。
+
+この追加実験が扱わないものは、接触・有限径・折りたたみ、実験fit、三角格子比較、普遍性、臨界指数です。境界域や解像度依存が残る場合は、未解決として報告します。
+
 ## 三角格子モデルとの関係
 
 `triangular_lattice/` は、新モデルのコードへ直接importしません。接続は観測量と無次元パラメータを介して行います。

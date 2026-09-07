@@ -374,18 +374,22 @@ def dimensionless_groups(config: Mapping[str, Any]) -> dict[str, float | str]:
     growth = float(config["growth_rate"])
     tau_b = zeta * length**4 / (ei * np.pi**4)
     tau_s = zeta * length**2 / ea
+    chi = float(ei / (ea * length**2))
     return {
         "length_scale": length,
         "tau_b": float(tau_b),
         "tau_s": float(tau_s),
         "G_b": float(growth * tau_b),
         "G_s": float(growth * tau_s),
-        "bending_to_stretching": float(ei / (ea * length**2)),
+        # ``chi`` is the P1B.2 map coordinate.  Keep the historical name as
+        # an alias so P1B.1 consumers remain compatible.
+        "chi": chi,
+        "bending_to_stretching": chi,
         "mesh_ratio_initial_dx_over_L": float((length / (int(config["n_nodes"]) - 1)) / length),
         "dt_over_tau_b": float(float(config["dt"]) / tau_b),
         "diameter_over_L": 0.0,
         "contact_stiffness": 0.0,
-        "definition": "tau_b=zeta*L^4/(EI*pi^4), first sine bending mode; tau_s=zeta*L^2/EA",
+        "definition": "tau_b=zeta*L^4/(EI*pi^4), first sine bending mode; tau_s=zeta*L^2/EA; chi=EI/(EA*L^2)",
     }
 
 
@@ -431,13 +435,82 @@ def _classification(
     }
 
 
+def _compact_event_log(events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Keep rejection diagnostics and a count summary without a trajectory.
+
+    Full events contain repeated geometry diagnostics for every accepted and
+    rejected attempt.  P1B.2 needs the rejection reasons and the manifest's
+    deterministic event fingerprint, not a second copy of every accepted
+    state.  Accepted-step counts are retained in the synthetic summary event
+    and are also written to the manifest from the simulator counters.
+    """
+
+    result: list[dict[str, Any]] = []
+    rejection_counts: Counter[str] = Counter()
+    accepted_steps = 0
+    rejected_steps = 0
+    for event in events:
+        event_type = event.get("event_type")
+        accepted = event.get("accepted")
+        if event_type == "step_attempt" and accepted is True:
+            accepted_steps += 1
+            continue
+        if event_type == "step_attempt" and accepted is False:
+            rejected_steps += 1
+            rejection_counts[str(event.get("reason"))] += 1
+            continue
+        if event_type != "initialization":
+            continue
+        compact: dict[str, Any] = {
+            key: event.get(key)
+            for key in (
+                "event_type",
+                "reason",
+                "accepted",
+                "time_before",
+                "time_after",
+                "step_before",
+                "step_after",
+                "energy_trial",
+                "energy_after",
+            )
+            if key in event
+        }
+        if event.get("detail") is not None:
+            compact["detail"] = str(event["detail"])[:240]
+        result.append(compact)
+    result.append({
+        "event_type": "step_attempt_summary",
+        "accepted_steps": accepted_steps,
+        "rejected_steps": rejected_steps,
+        "rejection_reason_counts": dict(sorted(rejection_counts.items())),
+    })
+    return result
+
+
+def _sample_metrics(rows: Sequence[Mapping[str, Any]], maximum: int | None) -> list[Mapping[str, Any]]:
+    """Downsample only the stored time-series CSV; classification uses all rows."""
+
+    if maximum is None or maximum <= 0 or len(rows) <= maximum:
+        return list(rows)
+    indices = set(np.linspace(0, len(rows) - 1, maximum, dtype=int).tolist())
+    peak_index = max(range(len(rows)), key=lambda index: float(rows[index]["max_transverse_displacement"]))
+    indices.add(peak_index)
+    return [rows[index] for index in sorted(indices)]
+
+
 def _write_metrics_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
     if not rows:
         path.write_text("\n", encoding="utf-8")
         return
     fieldnames = list(rows[0].keys())
     with path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fieldnames, extrasaction="ignore")
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=fieldnames,
+            extrasaction="ignore",
+            lineterminator="\n",
+        )
         writer.writeheader()
         writer.writerows(_jsonable(row) for row in rows)
 
@@ -476,7 +549,17 @@ def _plot_case(path: Path, rows: Sequence[Mapping[str, Any]], classification: Ma
     return "generated"
 
 
-def run_case(case: CaseSpec, base_config: Mapping[str, Any], output_root: Path, git_revision: str | None) -> dict[str, Any]:
+def run_case(
+    case: CaseSpec,
+    base_config: Mapping[str, Any],
+    output_root: Path,
+    git_revision: str | None,
+    *,
+    save_trajectory_file: bool = True,
+    write_plot: bool = True,
+    compact_events: bool = False,
+    metrics_max_rows: int | None = None,
+) -> dict[str, Any]:
     config = _effective_case(base_config, case)
     config["name"] = case.name
     config["a_max"] = (float(config["length"]) / (int(config["n_nodes"]) - 1)) * float(config["a_max_factor"])
@@ -522,6 +605,11 @@ def run_case(case: CaseSpec, base_config: Mapping[str, Any], output_root: Path, 
             "trial": int(case.trial),
             "seed": case.seed,
             "noise_fraction": float(config.get("trial_noise_fraction", 0.0)),
+            "distribution": config.get(
+                "trial_noise_distribution",
+                "numpy.default_rng(seed).normal(0, 1) on interior nodes, sample-standardized",
+            ),
+            "amplitude_scale": float(config.get("amplitude", 0.0)) * float(config.get("trial_noise_fraction", 0.0)),
         },
     }
     _write_json(case_dir / "config.json", effective)
@@ -544,7 +632,8 @@ def run_case(case: CaseSpec, base_config: Mapping[str, Any], output_root: Path, 
             rows = []
 
     if simulator is not None:
-        events = simulator.event_log
+        raw_events = simulator.event_log
+        events = _compact_event_log(raw_events) if compact_events else raw_events
         final_state = simulator.state
     else:
         events = []
@@ -576,6 +665,10 @@ def run_case(case: CaseSpec, base_config: Mapping[str, Any], output_root: Path, 
     manifest["seed"] = case.seed
     manifest["trial"] = int(case.trial)
     manifest["base_case"] = case.base_name or case.name
+    if compact_events and simulator is not None:
+        manifest["accepted_steps"] = int(simulator.accepted_steps)
+        manifest["rejected_steps"] = int(simulator.rejected_steps)
+        manifest["event_log_compaction"] = "rejection_attempts_plus_step_summary"
     classification = _classification(rows, config, failure_reason)
     rejection_counts = dict(Counter(str(event.get("reason")) for event in events if event.get("accepted") is False))
     summary = {
@@ -599,20 +692,30 @@ def run_case(case: CaseSpec, base_config: Mapping[str, Any], output_root: Path, 
         "final_observables": rows[-1] if rows else None,
         "peak_observables": max(rows, key=lambda row: row["max_transverse_displacement"]) if rows else None,
     }
-    _write_metrics_csv(case_dir / "metrics.csv", rows)
+    stored_rows = _sample_metrics(rows, metrics_max_rows)
+    _write_metrics_csv(case_dir / "metrics.csv", stored_rows)
     _write_json(case_dir / "events.json", events)
     _write_json(case_dir / "manifest.json", manifest)
     _write_json(case_dir / "summary.json", summary)
-    save_trajectory(
-        case_dir / "trajectory.npz",
-        trajectory,
-        params,
-        metadata=metadata,
-        events=events,
-        manifest=manifest,
-        input_data=effective,
+    if save_trajectory_file:
+        save_trajectory(
+            case_dir / "trajectory.npz",
+            trajectory,
+            params,
+            metadata=metadata,
+            events=events,
+            manifest=manifest,
+            input_data=effective,
+        )
+    summary["trajectory_saved"] = bool(save_trajectory_file)
+    summary["plot"] = (
+        _plot_case(case_dir / "overview.png", rows, classification, config)
+        if write_plot
+        else "skipped by compact experiment output policy"
     )
-    summary["plot"] = _plot_case(case_dir / "overview.png", rows, classification, config)
+    summary["events_compacted"] = bool(compact_events)
+    summary["metrics_rows_total"] = len(rows)
+    summary["metrics_rows_saved"] = len(stored_rows)
     _write_json(case_dir / "summary.json", summary)
     return summary
 
@@ -641,7 +744,12 @@ def write_suite_csv(path: Path, summaries: Sequence[Mapping[str, Any]]) -> None:
         "failure_reason",
     ]
     with path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=fields,
+            extrasaction="ignore",
+            lineterminator="\n",
+        )
         writer.writeheader()
         for summary in summaries:
             config = summary["effective_config"]
@@ -813,7 +921,12 @@ def write_question_comparison_csv(path: Path, rows: Sequence[Mapping[str, Any]])
         "peak_max_transverse_mean", "peak_max_transverse_std", "failure_count",
     ]
     with path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=fields,
+            extrasaction="ignore",
+            lineterminator="\n",
+        )
         writer.writeheader()
         writer.writerows(_jsonable(row) for row in rows)
 
