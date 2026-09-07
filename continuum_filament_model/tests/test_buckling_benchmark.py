@@ -8,6 +8,7 @@ from continuum_filament_model.benchmarks.buckling_benchmark import (
     dimensionless_groups,
     initial_perturbed_state,
     run_case,
+    trial_summary,
 )
 
 
@@ -29,6 +30,7 @@ class BucklingBenchmarkTests(unittest.TestCase):
             "fixed_left": True,
             "fixed_right": True,
             "reject_crossing": True,
+            "trial_noise_fraction": 0.05,
         }
 
     def test_fixture_and_dimensionless_groups_are_deterministic(self):
@@ -41,6 +43,11 @@ class BucklingBenchmarkTests(unittest.TestCase):
         self.assertAlmostEqual(groups["G_b"], 0.0)
         self.assertGreater(groups["tau_b"], 0.0)
         self.assertEqual(groups["diameter_over_L"], 0.0)
+        seeded_a = initial_perturbed_state(config, seed=11)
+        seeded_b = initial_perturbed_state(config, seed=11)
+        seeded_c = initial_perturbed_state(config, seed=22)
+        self.assertTrue((seeded_a.positions == seeded_b.positions).all())
+        self.assertFalse((seeded_a.positions == seeded_c.positions).all())
 
     def test_case_writes_manifest_metrics_and_noncontact_conditions(self):
         config = self._config()
@@ -63,6 +70,30 @@ class BucklingBenchmarkTests(unittest.TestCase):
             self.assertEqual(manifest["metadata"]["physical_conditions"]["diameter"], 0.0)
             self.assertGreaterEqual(manifest["event_count"], 1)
             self.assertIn(summary["classification"]["label"], {"straight", "buckled-single", "unresolved"})
+
+    def test_seed_and_trial_identity_are_saved_and_aggregated(self):
+        config = self._config()
+        with tempfile.TemporaryDirectory() as directory:
+            first = run_case(
+                CaseSpec("trial_01", {"trial_noise_fraction": 0.05}, seed=11, trial=1, base_name="fast_growth"),
+                config,
+                Path(directory),
+                git_revision="test-revision",
+            )
+            second = run_case(
+                CaseSpec("trial_02", {"trial_noise_fraction": 0.05}, seed=22, trial=2, base_name="fast_growth"),
+                config,
+                Path(directory),
+                git_revision="test-revision",
+            )
+            manifest = json.loads((Path(directory) / "trial_01" / "manifest.json").read_text())
+            self.assertEqual(manifest["seed"], 11)
+            self.assertEqual(manifest["trial"], 1)
+            self.assertEqual(manifest["base_case"], "fast_growth")
+            aggregate = trial_summary([first, second])
+            self.assertEqual(aggregate[0]["n_trials"], 2)
+            self.assertEqual(aggregate[0]["seeds"], [11, 22])
+            self.assertIn("onset_time_mean", aggregate[0])
 
 
 if __name__ == "__main__":

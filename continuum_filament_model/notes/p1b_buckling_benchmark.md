@@ -14,6 +14,8 @@ P1Bでは、成長率、伸長剛性 `EA`、曲げ剛性 `EI`、基板ドラッ�
 
 `benchmarks/buckling_benchmark.py` は `src/growing_filament` の `OverdampedGrowingFilament`、`ModelParameters`、既存の観測量、イベント、manifest APIを呼び出す。エネルギー、力、成長、再メッシュの式をbenchmark側で複製しない。
 
+決定論的fixtureとseed付きtrialは分けて扱う。決定論的fixtureは `seed=null, trial=0` で、同一設定の再実行一致を検査する。trialでは、同じ正弦摂動へ `numpy.random.default_rng(seed)` で生成した小さな節点初期imperfection（既定 `noise_fraction=0.05`）を加える。これは入力条件のばらつきを調べるための診断であり、確率的な力学則や実験ノイズモデルを追加したものではない。`seed`、`trial`、基準case、初期摂動方式は実効設定、manifest、summaryに保存する。
+
 初期形状は、端点間距離を `L` として、等間隔の節点に
 
 ```text
@@ -76,7 +78,7 @@ python continuum_filament_model/benchmarks/buckling_benchmark.py \
   --output /tmp/growing-string-p1b
 ```
 
-大規模sweepではなく、デフォルト設定は成長なし校正、遅い成長、速い成長、`EI`変更、摂動振幅変更の小規模ケースと、`dt`半減・空間解像度変更・振幅変更の感度ケースだけを含む。単一ケースは次で実行できる。
+大規模sweepではなく、デフォルト設定は成長なし校正、遅い成長、速い成長、`EI`変更、摂動振幅変更の小規模ケース、`dt`半減・空間解像度変更・振幅変更の感度ケース、slow/fast/high-EIの3 seed trialだけを含む。単一ケースは次で実行できる。
 
 ```bash
 PYTHONPATH=continuum_filament_model/src \
@@ -86,9 +88,22 @@ python continuum_filament_model/benchmarks/buckling_benchmark.py \
   --output /tmp/growing-string-p1b-fast
 ```
 
-`--growth-rate`、`--bending-stiffness`、`--dt`、`--amplitude`、`--n-nodes` はCLIからも上書きできる。各ケースの実効設定、`dimensionless.json`、`metrics.csv`、`events.json`、`manifest.json`、`trajectory.npz`、`summary.json`、`overview.png`を保存し、ルートにはケース比較の `summary.csv` と `suite.json`を保存する。manifestにはGit revision、Python/NumPy、入力hash、初期・終状態hash、イベント列、受理・棄却数を含める。
+`--growth-rate`、`--bending-stiffness`、`--dt`、`--amplitude`、`--n-nodes` はCLIからも上書きできる。`--no-trials` を指定するとseed付きtrialを省略し、決定論的caseと感度比較だけを実行する。各caseの実効設定、`dimensionless.json`、`metrics.csv`、`events.json`、`manifest.json`、`trajectory.npz`、`summary.json`、`overview.png`を保存し、ルートにはケース比較の `summary.csv`、seed集計の `trial_summary.json`、問い別比較の `question_comparison.csv/json/png`、`suite.json`を保存する。manifestにはGit revision、Python/NumPy、入力hash、初期・終状態hash、イベント列、受理・棄却数に加えて、`seed`、`trial`、基準caseを含める。
 
-同一設定を別の出力先へ2回実行し、`config.json`、`manifest.json`、`metrics.csv`、`summary.json`を比較する。数値環境が異なる場合はPython/NumPyとGit revisionを比較し、完全一致を仮定しない。
+同一設定を別の出力先へ2回実行し、`config.json`、`manifest.json`、`metrics.csv`、`summary.json`を比較する。決定論的caseは `seed=null, trial=0` の一致、seed付きtrialは同じseed・trialの一致を別々に確認する。異なるseedの結果は一致を要求せず、trial分布の代表値・標準偏差として集計する。数値環境が異なる場合はPython/NumPyとGit revisionを比較し、完全一致を仮定しない。
+
+## 問いごとの比較と、このfixtureで回答できる範囲
+
+設定ファイルの既定値を実行すると、決定論的caseの `summary.csv` に加えて、trial集計の `trial_summary.json` と問い別の `question_comparison.csv/json`、`question_comparison.png` が生成される。以下は同じ設定での3 seed（11, 22, 33）の実行例である。`±` はtrial間の標準偏差で、時系列フレーム間の標準偏差ではない。
+
+| 問い | 比較 | 結果例 | このfixtureでの結論 |
+|---|---|---|---|
+| 成長率・曲げ緩和競合 | `growth_free` → `slow_growth` → `fast_growth`、`G_b=0` → `0.01643` → `0.32851` | deterministic分類 `straight` → `straight` → `buckled-single`、fast onset `0.192125`; seeded fastは3/3が `buckled-single`、onset `0.18738±0.00250` | この範囲では `G_b`増加と座屈指標の増加が整合する。ただし3条件の記述比較であり、臨界値や因果を確定しない。 |
+| 曲げ剛性との競合 | `low_EI=0.05` と `high_EI=0.2`、同じ `g=0.2` | low `buckled-single`、onset `0.14825`; high `straight`。highのseeded trialは3/3が `straight` | `EI`を4倍にするとこのfixtureでは座屈を抑える方向が見える。dragの別条件や系サイズを変えた一般化は未回答。 |
+| 数値・初期条件への頑健性 | `dt_half`、`spatial_refined`、`amplitude_half` | dt半減は `buckled-single`、onset `0.186`; 振幅半減も `buckled-single`、onset `0.185`; 空間解像度変更は `straight` | 時間刻みと振幅の比較では定性的分類が保たれる一方、空間解像度では分類が変わる。したがって現時点で座屈相図のメッシュ独立性は未回答。 |
+| trial間のばらつき | slow / fast / high_EI、seed 11,22,33 | slowは3/3 `straight`、peak `0.02004±0.00028`; fastは3/3 `buckled-single`、peak `0.07627±0.00275`; highは3/3 `straight` | この小規模trialでは代表値とばらつきを報告できるが、seed数・摂動分布・試行時間は統計的結論に不足する。 |
+
+ここで「回答できた」とは、この固定fixture上の条件差を記述できたという意味である。実験の揺らぎ、接触、折りたたみ、別境界条件、より広い `G_b` 範囲、臨界挙動は回答していない。
 
 ## 結果の読み方と未解決事項
 

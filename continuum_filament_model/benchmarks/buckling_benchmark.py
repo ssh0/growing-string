@@ -60,15 +60,18 @@ from growing_filament.reproducibility import (  # noqa: E402
 from growing_filament.io import save_trajectory  # noqa: E402
 
 
-SCHEMA_VERSION = "continuum-filament-p1b-buckling-1"
+SCHEMA_VERSION = "continuum-filament-p1b-buckling-2"
 
 
 @dataclass(frozen=True)
 class CaseSpec:
-    """One deterministic benchmark case."""
+    """One benchmark case, optionally one seeded stochastic trial."""
 
     name: str
     overrides: dict[str, Any]
+    seed: int | None = None
+    trial: int = 0
+    base_name: str | None = None
 
 
 # These values are small enough for local validation while still separating
@@ -92,6 +95,9 @@ DEFAULT_BASE_CONFIG: dict[str, Any] = {
     "max_displacement_fraction": 0.25,
     "max_retries": 12,
     "dt_min": 1.0e-10,
+    # Seeded trials add a small initial imperfection around the deterministic
+    # sine fixture.  This is an input perturbation, not a new force law.
+    "trial_noise_fraction": 0.05,
 }
 
 DEFAULT_CASES: tuple[CaseSpec, ...] = (
@@ -109,6 +115,12 @@ DEFAULT_SENSITIVITY: tuple[CaseSpec, ...] = (
     CaseSpec("spatial_refined", {"n_nodes": 17, "growth_rate": 0.2, "t_end": 0.2}),
     CaseSpec("amplitude_half", {"amplitude": 0.01, "growth_rate": 0.2, "t_end": 0.2}),
 )
+
+DEFAULT_TRIAL_DESIGN: dict[str, Any] = {
+    "cases": ["slow_growth", "fast_growth", "high_EI"],
+    "seeds": [11, 22, 33],
+    "noise_fraction": 0.05,
+}
 
 
 class BenchmarkError(ValueError):
@@ -178,6 +190,9 @@ def validate_case_config(config: Mapping[str, Any]) -> None:
             raise BenchmarkError(f"{key} must be positive")
     if float(config["growth_rate"]) < 0.0:
         raise BenchmarkError("growth_rate must be non-negative")
+    noise_fraction = float(config.get("trial_noise_fraction", 0.0))
+    if not math.isfinite(noise_fraction) or not 0.0 <= noise_fraction <= 0.5:
+        raise BenchmarkError("trial_noise_fraction must be finite and in [0, 0.5]")
     if config.get("contact_stiffness", 0.0) != 0.0 or config.get("diameter", 0.0) != 0.0:
         raise BenchmarkError(
             "P1B non-contact benchmark requires contact_stiffness=0 and diameter=0"
@@ -202,13 +217,26 @@ def _effective_case(base: Mapping[str, Any], spec: CaseSpec) -> dict[str, Any]:
     config["fixed_left"] = True
     config["fixed_right"] = True
     config["reject_crossing"] = True
+    config["seed"] = spec.seed
+    config["trial"] = int(spec.trial)
+    config["base_name"] = spec.base_name or spec.name
+    config["initial_perturbation_mode"] = (
+        "sine_plus_seeded_node_noise" if spec.seed is not None else "deterministic_sine"
+    )
     validate_case_config(config)
     return config
 
 
-def load_suite_config(path: Path | None) -> tuple[dict[str, Any], list[CaseSpec], list[CaseSpec]]:
+def load_suite_config(path: Path | None) -> tuple[
+    dict[str, Any], list[CaseSpec], list[CaseSpec], dict[str, Any]
+]:
     if path is None:
-        return dict(DEFAULT_BASE_CONFIG), list(DEFAULT_CASES), list(DEFAULT_SENSITIVITY)
+        return (
+            dict(DEFAULT_BASE_CONFIG),
+            list(DEFAULT_CASES),
+            list(DEFAULT_SENSITIVITY),
+            dict(DEFAULT_TRIAL_DESIGN),
+        )
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, Mapping):
         raise BenchmarkError("config root must be a JSON object")
@@ -223,20 +251,41 @@ def load_suite_config(path: Path | None) -> tuple[dict[str, Any], list[CaseSpec]
         for item in values:
             if not isinstance(item, Mapping) or "name" not in item:
                 raise BenchmarkError(f"{key} entries require name and overrides")
-            specs.append(CaseSpec(str(item["name"]), dict(item.get("overrides", {}))))
+            specs.append(
+                CaseSpec(
+                    str(item["name"]),
+                    dict(item.get("overrides", {})),
+                    seed=(None if item.get("seed") is None else int(item["seed"])),
+                    trial=int(item.get("trial", 0)),
+                    base_name=(None if item.get("base_name") is None else str(item["base_name"])),
+                )
+            )
         return specs
 
-    return base, parse_specs("cases", DEFAULT_CASES), parse_specs("sensitivity", DEFAULT_SENSITIVITY)
+    trial_design = dict(DEFAULT_TRIAL_DESIGN)
+    trial_design.update(dict(raw.get("trial_design", {})))
+    return (
+        base,
+        parse_specs("cases", DEFAULT_CASES),
+        parse_specs("sensitivity", DEFAULT_SENSITIVITY),
+        trial_design,
+    )
 
 
-def initial_perturbed_state(config: Mapping[str, Any]) -> FilamentState:
-    """Create ``y(x)=A sin(pi*x/L)`` with an unstressed initial polyline."""
+def initial_perturbed_state(config: Mapping[str, Any], seed: int | None = None) -> FilamentState:
+    """Create a deterministic sine fixture or a seeded small imperfection."""
 
     length = float(config["length"])
     n_nodes = int(config["n_nodes"])
     amplitude = float(config["amplitude"])
     x = np.linspace(0.0, length, n_nodes)
     y = amplitude * np.sin(np.pi * x / length)
+    if seed is not None:
+        rng = np.random.default_rng(int(seed))
+        noise = rng.normal(size=n_nodes - 2)
+        scale = float(config.get("trial_noise_fraction", 0.0))
+        noise_scale = max(float(np.std(noise)), 1.0e-15)
+        y[1:-1] += amplitude * scale * noise / noise_scale
     positions = np.column_stack((x, y))
     rest_lengths = np.linalg.norm(np.diff(positions, axis=0), axis=1)
     return FilamentState(positions, rest_lengths)
@@ -449,7 +498,7 @@ def run_case(case: CaseSpec, base_config: Mapping[str, Any], output_root: Path, 
         fixed_right=True,
         reject_crossing=True,
     )
-    state = initial_perturbed_state(config)
+    state = initial_perturbed_state(config, seed=case.seed)
     anchors = np.asarray([state.positions[0], state.positions[-1]], dtype=float)
     case_dir = output_root / case.name
     case_dir.mkdir(parents=True, exist_ok=True)
@@ -461,8 +510,18 @@ def run_case(case: CaseSpec, base_config: Mapping[str, Any], output_root: Path, 
         "physical_conditions": {
             "contact_stiffness": 0.0,
             "diameter": 0.0,
-            "initial_geometry": "deterministic sine perturbation; non-crossing validated by library",
+            "initial_geometry": (
+                "deterministic sine perturbation; non-crossing validated by library"
+                if case.seed is None
+                else "sine perturbation plus seeded small node noise; non-crossing validated by library"
+            ),
             "boundary": "both endpoint positions fixed",
+        },
+        "trial_design": {
+            "base_case": case.base_name or case.name,
+            "trial": int(case.trial),
+            "seed": case.seed,
+            "noise_fraction": float(config.get("trial_noise_fraction", 0.0)),
         },
     }
     _write_json(case_dir / "config.json", effective)
@@ -497,6 +556,7 @@ def run_case(case: CaseSpec, base_config: Mapping[str, Any], output_root: Path, 
         "physical_conditions": effective["physical_conditions"],
         "dimensionless_groups": dimensionless_groups(config),
         "failure_reason": failure_reason,
+        "trial_design": effective["trial_design"],
         "fixed_endpoint_reaction_limit": (
             "Reported values are the negative of the library's unconstrained endpoint force. "
             "The API has no separate reaction solver; values are a diagnostic proxy, not a new force law."
@@ -511,11 +571,19 @@ def run_case(case: CaseSpec, base_config: Mapping[str, Any], output_root: Path, 
         input_data=effective,
         git_revision=git_revision,
     )
+    # Keep trial identity easy to query without discarding the generic
+    # manifest metadata used by the existing reproducibility API.
+    manifest["seed"] = case.seed
+    manifest["trial"] = int(case.trial)
+    manifest["base_case"] = case.base_name or case.name
     classification = _classification(rows, config, failure_reason)
     rejection_counts = dict(Counter(str(event.get("reason")) for event in events if event.get("accepted") is False))
     summary = {
         "schema_version": SCHEMA_VERSION,
         "case": case.name,
+        "base_case": case.base_name or case.name,
+        "trial": int(case.trial),
+        "seed": case.seed,
         "effective_config": config,
         "dimensionless_groups": dimensionless_groups(config),
         "classification": classification,
@@ -552,6 +620,9 @@ def run_case(case: CaseSpec, base_config: Mapping[str, Any], output_root: Path, 
 def write_suite_csv(path: Path, summaries: Sequence[Mapping[str, Any]]) -> None:
     fields = [
         "case",
+        "base_case",
+        "trial",
+        "seed",
         "label",
         "growth_rate",
         "bending_stiffness",
@@ -579,6 +650,9 @@ def write_suite_csv(path: Path, summaries: Sequence[Mapping[str, Any]]) -> None:
             writer.writerow(
                 {
                     "case": summary["case"],
+                    "base_case": summary.get("base_case", summary["case"]),
+                    "trial": summary.get("trial", 0),
+                    "seed": summary.get("seed"),
                     "label": classification.get("label"),
                     "growth_rate": config["growth_rate"],
                     "bending_stiffness": config["bending_stiffness"],
@@ -599,6 +673,224 @@ def write_suite_csv(path: Path, summaries: Sequence[Mapping[str, Any]]) -> None:
             )
 
 
+def _mean_std(values: Sequence[float]) -> tuple[float | None, float | None]:
+    if not values:
+        return None, None
+    array = np.asarray(values, dtype=float)
+    return float(np.mean(array)), float(np.std(array, ddof=1)) if len(array) > 1 else 0.0
+
+
+def trial_summary(summaries: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Aggregate seeded trials without mixing them with deterministic fixtures."""
+
+    grouped: dict[str, list[Mapping[str, Any]]] = {}
+    for summary in summaries:
+        if int(summary.get("trial", 0)) > 0:
+            grouped.setdefault(str(summary["base_case"]), []).append(summary)
+    results: list[dict[str, Any]] = []
+    for base_case, values in grouped.items():
+        labels = Counter(str(item["classification"].get("label")) for item in values)
+        onsets = [
+            float(item["classification"]["onset_time"])
+            for item in values
+            if item["classification"].get("onset_time") is not None
+        ]
+        peaks = [
+            float(item["classification"]["peak_max_transverse_displacement"])
+            for item in values
+            if item["classification"].get("peak_max_transverse_displacement") is not None
+        ]
+        onset_mean, onset_std = _mean_std(onsets)
+        peak_mean, peak_std = _mean_std(peaks)
+        representative = values[0]
+        results.append(
+            {
+                "base_case": base_case,
+                "n_trials": len(values),
+                "seeds": [item.get("seed") for item in values],
+                "label_counts": dict(sorted(labels.items())),
+                "onset_time_mean": onset_mean,
+                "onset_time_std": onset_std,
+                "peak_max_transverse_mean": peak_mean,
+                "peak_max_transverse_std": peak_std,
+                "G_b": representative["dimensionless_groups"]["G_b"],
+                "G_s": representative["dimensionless_groups"]["G_s"],
+                "bending_stiffness": representative["effective_config"]["bending_stiffness"],
+                "failure_count": sum(1 for item in values if item.get("failure_reason")),
+            }
+        )
+    return results
+
+
+def question_comparison_rows(
+    summaries: Sequence[Mapping[str, Any]],
+    trials: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Create machine-readable evidence tables for each research question."""
+
+    deterministic = {
+        str(item["case"]): item for item in summaries if int(item.get("trial", 0)) == 0
+    }
+    trial_by_case = {str(item["base_case"]): item for item in trials}
+    rows: list[dict[str, Any]] = []
+
+    def add_deterministic(question: str, comparison: str, names: Sequence[str]) -> None:
+        for name in names:
+            item = deterministic.get(name)
+            if item is None:
+                continue
+            classification = item["classification"]
+            rows.append(
+                {
+                    "question": question,
+                    "comparison": comparison,
+                    "case": name,
+                    "source": "deterministic_fixture",
+                    "label_or_counts": classification.get("label"),
+                    "G_b": item["dimensionless_groups"]["G_b"],
+                    "G_s": item["dimensionless_groups"]["G_s"],
+                    "bending_stiffness": item["effective_config"]["bending_stiffness"],
+                    "n_trials": 1,
+                    "onset_time_mean": classification.get("onset_time"),
+                    "onset_time_std": 0.0,
+                    "peak_max_transverse_mean": classification.get("peak_max_transverse_displacement"),
+                    "peak_max_transverse_std": 0.0,
+                    "failure_count": int(item.get("failure_reason") is not None),
+                }
+            )
+
+    def add_trial(question: str, comparison: str, names: Sequence[str]) -> None:
+        for name in names:
+            item = trial_by_case.get(name)
+            if item is None:
+                continue
+            rows.append(
+                {
+                    "question": question,
+                    "comparison": comparison,
+                    "case": name,
+                    "source": "seeded_trials",
+                    "label_or_counts": json.dumps(item["label_counts"], sort_keys=True),
+                    "G_b": item["G_b"],
+                    "G_s": item["G_s"],
+                    "bending_stiffness": item["bending_stiffness"],
+                    "n_trials": item["n_trials"],
+                    "onset_time_mean": item["onset_time_mean"],
+                    "onset_time_std": item["onset_time_std"],
+                    "peak_max_transverse_mean": item["peak_max_transverse_mean"],
+                    "peak_max_transverse_std": item["peak_max_transverse_std"],
+                    "failure_count": item["failure_count"],
+                }
+            )
+
+    add_deterministic(
+        "growth_rate_vs_bending_relaxation",
+        "G_b growth comparison",
+        ("growth_free_calibration", "slow_growth", "fast_growth"),
+    )
+    add_deterministic(
+        "rigidity_and_initial_amplitude",
+        "EI and deterministic perturbation comparison",
+        ("low_EI", "high_EI", "small_perturbation", "large_perturbation"),
+    )
+    add_deterministic(
+        "numerical_sensitivity",
+        "dt / spatial resolution / amplitude sensitivity",
+        ("dt_half", "spatial_refined", "amplitude_half"),
+    )
+    add_trial(
+        "seeded_variability",
+        "seeded initial-imperfection trial distribution",
+        tuple(trial_by_case),
+    )
+    return rows
+
+
+def write_question_comparison_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    fields = [
+        "question", "comparison", "case", "source", "label_or_counts", "G_b", "G_s",
+        "bending_stiffness", "n_trials", "onset_time_mean", "onset_time_std",
+        "peak_max_transverse_mean", "peak_max_transverse_std", "failure_count",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(_jsonable(row) for row in rows)
+
+
+def _plot_question_comparison(path: Path, rows: Sequence[Mapping[str, Any]]) -> str:
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception as exc:  # pragma: no cover - optional local dependency
+        return f"plot unavailable: {type(exc).__name__}: {exc}"
+    if not rows:
+        return "plot skipped: no comparison rows"
+    colors = {"straight": "tab:blue", "buckled-single": "tab:orange", "unresolved": "tab:red"}
+    deterministic = [row for row in rows if row["source"] == "deterministic_fixture"]
+    seeded = [row for row in rows if row["source"] == "seeded_trials"]
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8), constrained_layout=True)
+    for row in deterministic:
+        label = str(row["label_or_counts"])
+        axes[0, 0].scatter(row["G_b"], row["peak_max_transverse_mean"], color=colors.get(label, "black"), label=label)
+        axes[0, 1].scatter(row["bending_stiffness"], row["peak_max_transverse_mean"], color=colors.get(label, "black"), label=label)
+    for row in seeded:
+        axes[0, 0].errorbar(row["G_b"], row["peak_max_transverse_mean"], yerr=row["peak_max_transverse_std"], fmt="o", color="black", capsize=3)
+        axes[0, 1].errorbar(row["bending_stiffness"], row["peak_max_transverse_mean"], yerr=row["peak_max_transverse_std"], fmt="o", color="black", capsize=3)
+    axes[0, 0].set(xlabel="G_b", ylabel="peak max |y|", title="growth / bending relaxation")
+    axes[0, 1].set(xlabel="EI", ylabel="peak max |y|", title="rigidity comparison")
+    axes[0, 0].legend(loc="best", fontsize="small")
+    sensitivity = [row for row in rows if row["question"] == "numerical_sensitivity"]
+    if sensitivity:
+        labels = [str(row["case"]) for row in sensitivity]
+        values = [row["peak_max_transverse_mean"] for row in sensitivity]
+        axes[1, 0].bar(labels, values, color="tab:green")
+        axes[1, 0].tick_params(axis="x", rotation=30)
+    axes[1, 0].set(ylabel="peak max |y|", title="sensitivity indicators")
+    if seeded:
+        labels = [str(row["case"]) for row in seeded]
+        means = [row["onset_time_mean"] or 0.0 for row in seeded]
+        errors = [row["onset_time_std"] or 0.0 for row in seeded]
+        axes[1, 1].bar(labels, means, yerr=errors, color="tab:purple", capsize=3)
+        axes[1, 1].tick_params(axis="x", rotation=30)
+    axes[1, 1].set(ylabel="onset time mean ± std", title="seeded trial variability")
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return "generated"
+
+
+def _seeded_trial_cases(
+    cases: Sequence[CaseSpec], trial_design: Mapping[str, Any]
+) -> list[CaseSpec]:
+    by_name = {case.name: case for case in cases}
+    names = [str(name) for name in trial_design.get("cases", [])]
+    seeds = [int(seed) for seed in trial_design.get("seeds", [])]
+    noise_fraction = float(trial_design.get("noise_fraction", 0.05))
+    if len(set(seeds)) != len(seeds):
+        raise BenchmarkError("trial_design seeds must be unique")
+    if not 0.0 <= noise_fraction <= 0.5:
+        raise BenchmarkError("trial_design noise_fraction must be in [0, 0.5]")
+    result: list[CaseSpec] = []
+    for base_name in names:
+        if base_name not in by_name:
+            raise BenchmarkError(f"trial_design references unknown case: {base_name}")
+        base = by_name[base_name]
+        for trial, seed in enumerate(seeds, start=1):
+            overrides = dict(base.overrides)
+            overrides["trial_noise_fraction"] = noise_fraction
+            result.append(
+                CaseSpec(
+                    f"{base_name}_trial_{trial:02d}_seed_{seed}",
+                    overrides,
+                    seed=seed,
+                    trial=trial,
+                    base_name=base_name,
+                )
+            )
+    return result
+
+
 def run_suite(
     base_config: Mapping[str, Any],
     cases: Sequence[CaseSpec],
@@ -606,6 +898,8 @@ def run_suite(
     output: Path,
     selected_case: str | None = None,
     include_sensitivity: bool = True,
+    trial_design: Mapping[str, Any] | None = None,
+    include_trials: bool = True,
 ) -> dict[str, Any]:
     output.mkdir(parents=True, exist_ok=True)
     revision = detect_git_revision(Path.cwd())
@@ -614,8 +908,17 @@ def run_suite(
         raise BenchmarkError(f"unknown case: {selected_case}")
     if include_sensitivity and selected_case is None:
         selected = selected + list(sensitivities)
+    trial_design_value = dict(trial_design or {})
+    if include_trials and selected_case is None and trial_design_value:
+        selected = selected + _seeded_trial_cases(cases, trial_design_value)
     summaries = [run_case(case, base_config, output, revision) for case in selected]
     write_suite_csv(output / "summary.csv", summaries)
+    trials = trial_summary(summaries)
+    comparisons = question_comparison_rows(summaries, trials)
+    write_question_comparison_csv(output / "question_comparison.csv", comparisons)
+    comparison_plot = _plot_question_comparison(output / "question_comparison.png", comparisons)
+    _write_json(output / "trial_summary.json", trials)
+    _write_json(output / "question_comparison.json", comparisons)
     suite = {
         "schema_version": SCHEMA_VERSION,
         "benchmark": "P1B non-contact growth-relaxation buckling",
@@ -625,9 +928,14 @@ def run_suite(
         "initial_noncontact_required": True,
         "classification": "straight / buckled-single / unresolved mechanical regimes; no phase-transition claim",
         "tau_b_definition": "drag_density * length_scale^4 / (bending_stiffness * pi^4)",
+        "trial_design": trial_design_value,
         "cases": [summary["case"] for summary in summaries],
         "results": summaries,
+        "trial_summary": trials,
+        "question_comparison": comparisons,
+        "question_comparison_plot": comparison_plot,
         "unresolved_items": [
+            "seeded trials vary only the deterministic initial imperfection; they are not an experimental noise model",
             "segment contact force, adhesion, friction, and folding are not implemented",
             "experimental fitting and triangular-lattice comparison are out of scope",
             "fixed-end reactions are force diagnostics because the library has no reaction API",
@@ -644,6 +952,7 @@ def _cli() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True, help="output directory")
     parser.add_argument("--case", help="run one named case without sensitivities")
     parser.add_argument("--no-sensitivity", action="store_true", help="omit dt/space/amplitude sensitivity cases")
+    parser.add_argument("--no-trials", action="store_true", help="omit seeded trial cases")
     parser.add_argument("--growth-rate", type=float, help="override growth_rate for all selected cases")
     parser.add_argument("--bending-stiffness", type=float, help="override bending_stiffness for all selected cases")
     parser.add_argument("--dt", type=float, help="override dt for all selected cases")
@@ -655,7 +964,7 @@ def _cli() -> argparse.Namespace:
 def main() -> int:
     args = _cli()
     try:
-        base, cases, sensitivities = load_suite_config(args.config)
+        base, cases, sensitivities, trial_design = load_suite_config(args.config)
         cli_overrides = {
             key: value
             for key, value in {
@@ -675,6 +984,8 @@ def main() -> int:
             args.output,
             selected_case=args.case,
             include_sensitivity=not args.no_sensitivity,
+            trial_design=trial_design,
+            include_trials=not args.no_trials,
         )
     except (BenchmarkError, OSError, json.JSONDecodeError) as exc:
         print(f"benchmark configuration/output error: {exc}", file=sys.stderr)

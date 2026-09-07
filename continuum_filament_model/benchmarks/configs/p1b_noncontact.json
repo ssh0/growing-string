@@ -29,5 +29,10 @@
     {"name": "dt_half", "overrides": {"dt_factor": 0.5, "growth_rate": 0.2}},
     {"name": "spatial_refined", "overrides": {"n_nodes": 17, "growth_rate": 0.2}},
     {"name": "amplitude_half", "overrides": {"amplitude": 0.01, "growth_rate": 0.2}}
-  ]
+  ],
+  "trial_design": {
+    "cases": ["slow_growth", "fast_growth", "high_EI"],
+    "seeds": [11, 22, 33],
+    "noise_fraction": 0.05
+  }
 }

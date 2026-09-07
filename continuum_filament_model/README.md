@@ -116,7 +116,7 @@ python continuum_filament_model/benchmarks/buckling_benchmark.py \
   --output /tmp/growing-string-p1b
 ```
 
-各ケースには実効設定、無次元量、Git revision、manifest、イベント、主要観測量のCSV/JSON、図を保存します。`contact_stiffness=0`、`diameter=0`、初期非交差を強制し、接触・折りたたみ・実験fit・三角格子比較は未実装です。詳細なfixture、分類規則、固定端反力proxyの限界、未解決事項は `notes/p1b_buckling_benchmark.md` を参照してください。
+各ケースには実効設定、無次元量、Git revision、manifest、イベント、主要観測量のCSV/JSON、図を保存します。既定suiteには決定論的比較に加え、3 seedのslow/fast/high-EI trialを含め、`trial_summary.json` と問い別の `question_comparison.csv/json/png` に代表値・標準偏差を出力します。`contact_stiffness=0`、`diameter=0`、初期非交差を強制し、接触・折りたたみ・実験fit・三角格子比較は未実装です。詳細なfixture、問いごとの比較結果、分類規則、固定端反力proxyの限界、未解決事項は `notes/p1b_buckling_benchmark.md` を参照してください。
 
 ## 三角格子モデルとの関係
 
