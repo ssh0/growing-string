@@ -303,7 +303,11 @@ def _state_summary(
     lengths = np.linalg.norm(np.diff(p, axis=0), axis=1)
     min_segment_length = float(np.min(lengths)) if len(lengths) else None
     try:
-        geometry = geometry_diagnostics(p, contact_distance=diameter)
+        geometry = geometry_diagnostics(
+            p,
+            contact_distance=diameter,
+            include_all_segment_contacts=False,
+        )
         min_nonlocal_distance = geometry["min_nonlocal_distance"]
         if not np.isfinite(float(min_nonlocal_distance)):
             min_nonlocal_distance = None

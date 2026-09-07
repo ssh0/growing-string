@@ -734,6 +734,8 @@ def has_nonlocal_intersection(positions: Array) -> bool:
 def initial_geometry_diagnostic(
     positions: Array,
     contact_distance: float = 0.0,
+    *,
+    include_all_segment_contacts: bool = True,
 ) -> dict[str, object]:
     """Summarize initial finite-radius geometry without applying a force law."""
 
@@ -764,6 +766,14 @@ def initial_geometry_diagnostic(
     centerline_contacts = tuple(
         value for value in contacts if value.centerline_intersection
     )
+    serialized_contacts = (
+        contacts
+        if include_all_segment_contacts
+        else tuple(
+            value for value in contacts
+            if value.is_contact or value.centerline_intersection
+        )
+    )
     return {
         "valid": not bool(intersections),
         "reason": "initial_crossing" if intersections else (
@@ -774,7 +784,7 @@ def initial_geometry_diagnostic(
         "closest_nonlocal_pair": closest.as_dict() if closest else None,
         "intersection_pairs": [list(pair) for pair in intersections],
         "contact_pairs": [list(pair) for pair in contact_pairs],
-        "segment_contacts": [value.as_dict() for value in contacts],
+        "segment_contacts": [value.as_dict() for value in serialized_contacts],
         "finite_radius_contacts": [value.as_dict() for value in finite_radius_contacts],
         "centerline_intersections": [value.as_dict() for value in centerline_contacts],
     }
@@ -944,11 +954,17 @@ def has_swept_nonlocal_intersection(start_positions: Array, end_positions: Array
 def geometry_diagnostics(
     positions: Array,
     contact_distance: float = 0.0,
+    *,
+    include_all_segment_contacts: bool = True,
 ) -> dict[str, object]:
     """Return JSON-friendly finite-radius geometry measurements."""
 
     values = _validate_positions(positions)
-    initial = initial_geometry_diagnostic(values, contact_distance=contact_distance)
+    initial = initial_geometry_diagnostic(
+        values,
+        contact_distance=contact_distance,
+        include_all_segment_contacts=include_all_segment_contacts,
+    )
     return {
         "min_segment_length": initial["min_segment_length"],
         "min_nonlocal_distance": initial["min_nonlocal_distance"],
