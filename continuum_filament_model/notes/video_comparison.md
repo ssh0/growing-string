@@ -148,6 +148,12 @@ ffmpeg -hide_banner -encoders | grep 264
 出典資料がないため、サイズ（gray5 3.9 MB、原動画 13 MB）とSHA-256だけをmanifest/noteへ記録し、動画本体はGitへ
 含めていません。これは再配布許諾や実験データの公開を主張するものではありません。
 
+## 現在のpresentation-data成果物
+
+`benchmarks/video_presentation_export.py` は、抽出済み中心線を発表用に再構成する入口である。入力がある場合は、`video_presentation.json` に代表フレームの生の `x,y`、`length_timeseries`、弧長方向の `curvature_profile` を保存し、元の `centerline.csv` と `observation_summary.csv` のmanifestを保持する。入力がない場合は、`status=input_missing` と `raw_centerline_available=false` を保存するだけで、観測データを作らない。
+
+このworktreeには `img/gray5.mp4` が存在しないため、`results/presentation_data/video_gray5/` は `input_missing` である。これは抽出失敗と観測中心線の未同定を混同しないための明示的な状態であり、動画本体を提供できる環境で同じCLIを再実行する必要がある。既存の `results/video_comparison/gray5_manifest.json` は過去環境のcompact provenanceであり、現在のworktreeに生中心線が存在する根拠としては扱わない。
+
 ## 検証記録（実装時点）
 
 入力2本を一時ディレクトリへ、`local_median`、dark polarity、ROI `[280,150,420,320]`、

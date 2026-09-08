@@ -1,0 +1,7 @@
+case,role,label,time,step,n_nodes,active_contact_pairs,max_penetration,classification,failure_reason
+u_self_contact,U-shaped self-contact,t0,0.0,0,7,4,0.020461356844877043,self-contact,
+u_self_contact,U-shaped self-contact,t_mid,0.010000000000000002,10,7,4,0.02897955363621796,self-contact,
+u_self_contact,U-shaped self-contact,t_end,0.02,21,7,2,0.06790381522682865,self-contact,
+s_contact_folding,S-shaped contact/folding,t0,0.0,0,9,6,0.04322878372941369,folding-contact,
+s_contact_folding,S-shaped contact/folding,t_mid,0.009750000000000005,20,9,6,0.0597540401706004,folding-contact,
+s_contact_folding,S-shaped contact/folding,t_end,0.02,43,9,6,0.05160281437296482,folding-contact,

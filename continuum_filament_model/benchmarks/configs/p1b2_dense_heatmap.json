@@ -1,0 +1,34 @@
+{
+  "schema_version": "continuum-filament-dense-buckling-config-1",
+  "base": {
+    "length": 2.0,
+    "n_nodes": 7,
+    "axial_stiffness": 100.0,
+    "bending_stiffness": 0.1,
+    "drag_density": 1.0,
+    "growth_rate": 0.1,
+    "amplitude": 0.02,
+    "dt": 0.002,
+    "t_end": 0.2,
+    "a_max_factor": 2.0,
+    "contact_stiffness": 0.0,
+    "diameter": 0.0,
+    "fixed_left": true,
+    "fixed_right": true,
+    "reject_crossing": true,
+    "max_displacement_fraction": 0.25,
+    "max_retries": 12,
+    "dt_min": 1.0e-10,
+    "trial_noise_fraction": 0.0
+  },
+  "axes": {
+    "G_b": [0.08, 0.12, 0.16, 0.20, 0.24, 0.30, 0.38],
+    "chi": [0.00008, 0.000125, 0.00018, 0.00025, 0.00035, 0.0005, 0.0007, 0.001]
+  },
+  "snapshot_roles": ["straight", "single_buckling", "higher_mode", "boundary_near"],
+  "output_policy": {
+    "max_conditions": 80,
+    "max_output_bytes": 8000000,
+    "trajectory_storage": "in-memory only; t0/t_mid/t_end selected representatives are exported"
+  }
+}

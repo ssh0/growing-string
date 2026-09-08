@@ -49,7 +49,7 @@
 - 接着・摩擦・ヒステリシスを含む接触則
 - 摩擦・接着・履歴を含む高度な接触則と有限時間刻みでの非貫入保証
 - 異方的な基板抵抗
-- 実験画像からの中心線抽出・同定
+- 実験画像からの中心線抽出・同定（観測層として実装済み。入力動画の提供とlineage確認は別途必要）
 - 妥当な物理単位への較正
 
 ## 実行方法
@@ -218,6 +218,21 @@ python continuum_filament_model/video_compare.py extract \
 動画CLIの必須依存はPython >=3.10、NumPy >=1.23、ffmpeg/ffprobe >=4.4です。imageio、Pillow、scikit-image、SciPyはCLI pipelineではoptionalで、scikit-imageがない場合はNumPy fallbackを使います。marimo review page（`notebooks/video_comparison.py`）は`marimo >=0.23`と`matplotlib`を必須とし、`matplotlib.pyplot`をimportして描画します。したがってmarimo/matplotlibはCLIだけを使う場合に限りoptionalです。生成manifestの`runtime`にはmarimoとmatplotlibのversion（import不能時は`unavailable:<ExceptionName>`）を記録します。今回の検証時versionはmarimo 0.23.6、matplotlib 3.10.9です。
 
 詳細なschema、登録式、lineage/censor、依存version、output budget、限界、再実行コマンドは `notes/video_comparison.md` を参照してください。入力動画本体はライセンス・再配布条件を確認できないためGitへ含めず、`results/video_comparison/` にcompact run manifestだけを置きます。
+
+## 発表用の追加数値・観測データ
+
+中間発表向けの粗い3x3相図と未解決セルの物理的内訳を補うため、決定論的な `G_b × chi` 7x8（56条件）密度座屈マップを追加しました。既存solverを変更せず、`A_max/L`、第一モード分率、曲率RMS、onset時刻、受理Eulerの散逸エネルギー推定値、支配モードを測定します。`dominant_mode` と波形分類（高次モード波、局所座屈、mixed mode、no onset）を同じセルに保存し、代表4条件の `t0/t_mid/t_end` 座標だけを出力します。
+
+```bash
+PYTHONPATH="$PWD:$PWD/continuum_filament_model/src" \
+python continuum_filament_model/benchmarks/dense_buckling_heatmap.py \
+  --config continuum_filament_model/benchmarks/configs/p1b2_dense_heatmap.json \
+  --output continuum_filament_model/results/presentation_data/dense_buckling
+```
+
+有限径接触については、U字自己接触とS字接触・折りたたみの代表ケースを `t0/t_mid/t_end` で抽出し、接触点、最近接点、法線、貫入量、ペナルティ法線力を `results/presentation_data/contact_snapshots/` に保存します。全ステップ座標や動画は保存しません。
+
+実観察動画の抽出入口は `benchmarks/video_presentation_export.py` です。`img/gray5.mp4` が存在する環境では、既存のPIL/imageio/skimage互換パイプラインを使って生中心線CSV、代表中心線JSON、`L(t)`、曲率プロファイルを生成できます。`--model` と任意の `--registration` を追加すると、同じ出力先に既存の比較CSV/JSONも生成します。このworktreeには動画本体がないため、今回のcompact成果物は `status=input_missing` として記録し、観測中心線を推測・生成していません。動画を提供した場合は同じコマンドを再実行してください。
 
 ## 三角格子モデルとの関係
 
