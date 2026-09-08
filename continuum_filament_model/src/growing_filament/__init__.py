@@ -46,6 +46,23 @@ from .reproducibility import (
     load_manifest,
     save_manifest,
 )
+from .video_comparison import (
+    CenterlineCandidate,
+    ModelFrame,
+    RegistrationConfig,
+    SegmentationConfig,
+    VideoMetadata,
+    compare_with_model,
+    connected_components,
+    load_model_output,
+    polyline_metrics,
+    probe_video,
+    render_comparison,
+    run_pipeline,
+    segment_mask,
+    validate_centerline_csv,
+    validate_centerline_rows,
+)
 
 __all__ = [
     "FilamentState",
@@ -84,4 +101,19 @@ __all__ = [
     "compare_reproducibility",
     "load_manifest",
     "save_manifest",
+    "CenterlineCandidate",
+    "ModelFrame",
+    "RegistrationConfig",
+    "SegmentationConfig",
+    "VideoMetadata",
+    "compare_with_model",
+    "connected_components",
+    "load_model_output",
+    "polyline_metrics",
+    "probe_video",
+    "render_comparison",
+    "run_pipeline",
+    "segment_mask",
+    "validate_centerline_csv",
+    "validate_centerline_rows",
 ]
