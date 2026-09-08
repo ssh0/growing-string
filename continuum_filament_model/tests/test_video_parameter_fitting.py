@@ -60,7 +60,7 @@ class VideoParameterFittingTests(unittest.TestCase):
                     handle.write(f"0,{point_id},{x},{y}\n")
                     handle.write(f"0.2,{point_id},{x},{y}\n")
             return path
-        metadata = {"parameters": {"axial_stiffness": 100.0, "bending_stiffness": 0.4, "reference_length": 2.0, "diameter": 0.08}}
+        metadata = {"parameters": {"axial_stiffness": 100.0, "bending_stiffness": 0.4, "reference_length": 1.0, "diameter": 0.08}}
         np.savez_compressed(
             path,
             positions=np.concatenate([points, points]),
@@ -82,6 +82,8 @@ class VideoParameterFittingTests(unittest.TestCase):
             second = fitting.fit_observation(centerline, config={"coordinate_scale": 1.0})
             self.assertEqual(first["growth"], second["growth"])
             self.assertEqual(first["growth"]["selected_model"], "exponential")
+            self.assertEqual(first["growth"]["selection_criterion"], "normalized_rmse")
+            self.assertEqual(first["growth"]["growth_rate_ci_method"], "Huber_IRLS_weighted_covariance_1.96_standard_errors")
             self.assertAlmostEqual(first["growth"]["growth_rate"], 0.15, places=10)
             self.assertEqual(len(first["growth"]["growth_rate_ci95"]), 2)
             self.assertEqual(first["population"]["eligible_rows"], 6)
@@ -156,11 +158,13 @@ class VideoParameterFittingTests(unittest.TestCase):
             report = fitting.fit_observation(
                 centerline,
                 model_paths=[model],
-                config={"pixel_per_model_unit": 1.0},
+                config={"pixel_per_model_unit": 1.0, "width_unit": "pixel"},
             )
             self.assertAlmostEqual(report["identification"]["chi"]["estimate"], 0.001)
             self.assertEqual(report["identification"]["chi"]["status"], "conditional_on_selected_model_trajectory")
-            self.assertAlmostEqual(report["identification"]["diameter_proxy"]["model_minus_observed"], 0.0)
+            comparison = report["identification"]["diameter_proxy"]["model_comparison"]
+            self.assertEqual(comparison["status"], "computed")
+            self.assertAlmostEqual(comparison["model_minus_observed"], 0.0)
 
     def test_manifest_resolution_uses_data_root_and_detects_hash(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -175,8 +179,81 @@ class VideoParameterFittingTests(unittest.TestCase):
             }), encoding="utf-8")
             loaded = fitting.load_observation(manifest, data_root=extraction)
             self.assertEqual(loaded["source"]["status"], "resolved")
-            self.assertTrue(loaded["source"]["integrity"]["match"])
+            self.assertTrue(loaded["source"]["integrity"]["hash_match"])
+            self.assertEqual(loaded["source"]["artifact_integrity"]["centerline"]["status"], "verified")
             self.assertEqual(loaded["population"]["population_rows"], 3)
+
+    def test_declared_centerline_and_companion_hash_mismatch_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            extraction = root / "extraction"
+            extraction.mkdir()
+            centerline = self._write_centerline(extraction, [2.0, 2.1, 2.2])
+            summary = extraction / "observation_summary.csv"
+            summary.write_text("frame,time,filament_id,censor\n0,0,filament-0000,0\n", encoding="utf-8")
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({
+                "input": {"logical_id": "gray5.mp4"},
+                "full_period_run": {"artifacts": {
+                    "centerline": {"path": "centerline.csv", "bytes": centerline.stat().st_size, "sha256": "wrong"},
+                    "observation_summary": {"path": "observation_summary.csv", "bytes": summary.stat().st_size, "sha256": "wrong-summary"},
+                }},
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "integrity_mismatch"):
+                fitting.load_observation(manifest, data_root=extraction)
+
+            manifest.write_text(json.dumps({
+                "input": {"logical_id": "gray5.mp4"},
+                "full_period_run": {"artifacts": {
+                    "centerline": {"path": "centerline.csv", "bytes": centerline.stat().st_size, "sha256": fitting.sha256_file(centerline)},
+                    "observation_summary": {"path": "observation_summary.csv", "bytes": summary.stat().st_size, "sha256": "wrong-summary"},
+                }},
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "integrity_mismatch: observation_summary"):
+                fitting.load_observation(manifest, data_root=extraction)
+
+    def test_leading_unknown_frame_is_retained_in_selected_population(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            extraction = root / "extraction"
+            extraction.mkdir()
+            centerline = extraction / "centerline.csv"
+            with centerline.open("w", encoding="utf-8") as handle:
+                handle.write("time,filament_id,point_id,x,y,quality,frame,quality_flags,censor\n")
+                for point_id, x in enumerate((0.0, 1.0, 2.0)):
+                    handle.write(f"1,filament-0000,{point_id},{x},0,1,1,ok,0\n")
+            (extraction / "lineage.csv").write_text(
+                "frame,time,filament_id,status,censor,details\n1,1,filament-0000,matched,0,\n",
+                encoding="utf-8",
+            )
+            (extraction / "metadata.json").write_text(json.dumps({
+                "video": {"fps": 1.0}, "run": {"frame_range": {"first": 0, "last": 1, "stride": 1}},
+            }), encoding="utf-8")
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({
+                "input": {"logical_id": "gray5.mp4"},
+                "selected_filament_id": "filament-0000",
+                "full_period_run": {"artifacts": {"centerline": {"path": "centerline.csv"}}},
+            }), encoding="utf-8")
+            loaded = fitting.load_observation(manifest, data_root=extraction)
+            records = loaded["records"]
+            self.assertEqual(loaded["population"]["population_rows"], 2)
+            self.assertEqual(records[0]["filament_id"], "unknown")
+            self.assertFalse(records[0]["eligible"])
+            self.assertEqual(records[0]["exclusion_reason"], "missing_observation_lineage")
+
+    def test_diameter_model_comparison_requires_declared_common_units(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            centerline = self._write_centerline(root, [2.0, 2.0, 2.0], widths=[0.08, 0.08, 0.08])
+            report = fitting.fit_observation(
+                centerline,
+                model_paths=[self._write_model(root, with_parameters=True)],
+                config={"pixel_per_model_unit": 1.0},
+            )
+            comparison = report["identification"]["diameter_proxy"]["model_comparison"]
+            self.assertEqual(comparison["status"], "not_computed_unit_mismatch")
+            self.assertIsNone(comparison["model_minus_observed"])
 
     def test_run_suite_writes_compact_summary_and_reproducibility_manifest(self):
         with tempfile.TemporaryDirectory() as temporary:

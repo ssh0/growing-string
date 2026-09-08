@@ -280,17 +280,59 @@ def resolve_observation_source(source: str | Path, data_root: str | Path | None 
             if candidate.is_file():
                 companion[name] = candidate.resolve()
                 break
-    integrity: dict[str, Any] = {
-        "declared_sha256": (artifact_entry or {}).get("sha256"),
-        "declared_bytes": (artifact_entry or {}).get("bytes"),
-        "observed_sha256": sha256_file(artifact_file) if artifact_file else None,
-        "observed_bytes": artifact_file.stat().st_size if artifact_file else None,
-    }
-    integrity["match"] = (
-        artifact_file is not None
-        and (integrity["declared_sha256"] is None or integrity["declared_sha256"] == integrity["observed_sha256"])
-        and (integrity["declared_bytes"] is None or int(integrity["declared_bytes"]) == integrity["observed_bytes"])
-    ) if artifact_file is not None else None
+    # Verify every artifact that the extraction manifest declares before any
+    # measurement is made.  A missing centerline remains a normal
+    # ``centerline_not_found`` result because compact manifests intentionally
+    # omit the uncommitted extraction directory; once a centerline is found,
+    # a missing or mismatching declared companion is an input-integrity error.
+    artifact_paths: dict[str, Path | None] = {"centerline": artifact_file}
+    artifact_paths.update({name: Path(path) for name, path in companion.items()})
+    artifact_integrity: dict[str, dict[str, Any]] = {}
+    integrity_error: str | None = None
+    for name in ("centerline", "observation_summary", "lineage", "events", "metadata"):
+        entry = _artifact_entry(manifest, name)
+        path = artifact_paths.get(name)
+        if entry is None:
+            artifact_integrity[name] = {"status": "not_declared"}
+            continue
+        if path is None:
+            artifact_integrity[name] = {
+                "status": "missing_declared_artifact",
+                "declared_sha256": entry.get("sha256"),
+                "declared_bytes": entry.get("bytes"),
+            }
+            if artifact_file is not None:
+                integrity_error = f"integrity_mismatch: declared {name} artifact is not available"
+            continue
+        observed_sha256 = sha256_file(path)
+        observed_bytes = path.stat().st_size
+        declared_bytes = _int(entry.get("bytes"))
+        hash_match = entry.get("sha256") in (None, observed_sha256)
+        bytes_match = (
+            (entry.get("bytes") in (None, "") and declared_bytes is None)
+            or declared_bytes == observed_bytes
+        )
+        artifact_integrity[name] = {
+            "status": "verified" if hash_match and bytes_match else "integrity_mismatch",
+            "path": str(path),
+            "declared_sha256": entry.get("sha256"),
+            "declared_bytes": entry.get("bytes"),
+            "observed_sha256": observed_sha256,
+            "observed_bytes": observed_bytes,
+            "hash_match": bool(hash_match),
+            "bytes_match": bool(bytes_match),
+        }
+        if not hash_match or not bytes_match:
+            integrity_error = (
+                f"integrity_mismatch: {name} artifact declared "
+                f"sha256={entry.get('sha256')!r}, bytes={entry.get('bytes')!r}; "
+                f"observed sha256={observed_sha256!r}, bytes={observed_bytes!r}"
+            )
+    if integrity_error is not None:
+        raise VideoParameterFittingError(integrity_error)
+    integrity = artifact_integrity["centerline"]
+    if "hash_match" in integrity:
+        integrity["match"] = bool(integrity.get("hash_match") and integrity.get("bytes_match"))
     logical_id = str(
         manifest.get("input", {}).get("logical_id")
         or manifest.get("observation_logical_id")
@@ -313,6 +355,7 @@ def resolve_observation_source(source: str | Path, data_root: str | Path | None 
         "companion_paths": {name: str(path) for name, path in companion.items()},
         "declared_centerline": _jsonable(artifact_entry or {}),
         "integrity": integrity,
+        "artifact_integrity": artifact_integrity,
         "selected_filament_id": str(selected) if selected else None,
         "status": "resolved" if artifact_file else "centerline_not_found",
     }
@@ -327,6 +370,39 @@ def _metadata_value(source: Mapping[str, Any], key: str, default: Any = None) ->
 
 def _flags(value: Any) -> list[str]:
     return [part for part in str(value or "").split(";") if part and part != "ok"]
+
+
+def _processed_frame_times(source: Mapping[str, Any]) -> dict[int, float]:
+    """Return the processed frame population, including frames with no rows."""
+
+    manifest = source.get("manifest", {})
+    metadata: Mapping[str, Any] = {}
+    metadata_path = source.get("companion_paths", {}).get("metadata")
+    if metadata_path:
+        try:
+            value = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
+            if isinstance(value, Mapping):
+                metadata = value
+        except (OSError, json.JSONDecodeError):
+            metadata = {}
+    run = metadata.get("run", {}) if isinstance(metadata.get("run", {}), Mapping) else {}
+    if not run:
+        full_run = manifest.get("full_period_run", {})
+        run = full_run.get("run", {}) if isinstance(full_run, Mapping) else {}
+    frame_range = run.get("frame_range", {}) if isinstance(run, Mapping) else {}
+    if not isinstance(frame_range, Mapping):
+        frame_range = {}
+    first = _int(frame_range.get("first"))
+    last = _int(frame_range.get("last"))
+    stride = _int(frame_range.get("stride"), 1)
+    if first is None or last is None or stride is None or stride <= 0 or last < first:
+        return {}
+    video = metadata.get("video", {}) if isinstance(metadata.get("video", {}), Mapping) else {}
+    if not video:
+        video = manifest.get("input", {}).get("ffprobe", {}) if isinstance(manifest.get("input", {}), Mapping) else {}
+    fps = _float(video.get("fps"), 1.0) if isinstance(video, Mapping) else 1.0
+    fps = max(float(fps or 1.0), 1.0e-12)
+    return {frame: frame / fps for frame in range(first, last + 1, stride)}
 
 
 def _choose_filament(centerline: Sequence[Mapping[str, Any]], summary: Sequence[Mapping[str, Any]], source: Mapping[str, Any], requested: str | None) -> str | None:
@@ -351,7 +427,17 @@ def _observation_rows(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     centerline_path = source.get("centerline_path")
     if not centerline_path:
-        return [], {"status": "centerline_not_found", "selected_filament_id": filament_id}
+        return [], {
+            "status": "centerline_not_found",
+            "selected_filament_id": filament_id,
+            "centerline_rows": 0,
+            "summary_rows": 0,
+            "lineage_rows": 0,
+            "population_rows": 0,
+            "eligible_rows": 0,
+            "censored_rows": 0,
+            "excluded_reason_counts": {},
+        }
     centerline = _read_csv(Path(centerline_path))
     companions = source.get("companion_paths", {})
     summary = _read_csv(Path(companions["observation_summary"])) if "observation_summary" in companions else []
@@ -384,31 +470,49 @@ def _observation_rows(
     summary_by_key: dict[tuple[int, str], Mapping[str, Any]] = {}
     for row in summary:
         current = str(row.get("filament_id", ""))
-        if chosen is None or current == chosen:
+        keep = chosen is None or current == chosen or current in {"", "unknown"}
+        if keep:
             frame = _int(row.get("frame"))
             if frame is not None:
                 summary_by_key[(frame, current)] = row
     lineage_by_key: dict[tuple[int, str], Mapping[str, Any]] = {}
     for row in lineage:
         current = str(row.get("filament_id", ""))
-        if chosen is None or current == chosen:
+        # ``unknown``/``missing_unknown`` rows are deliberately retained even
+        # after a selected lineage has been chosen.  They represent the
+        # leading or disconnected missing-frame population.
+        keep = chosen is None or current == chosen or current in {"", "unknown"}
+        if keep:
             frame = _int(row.get("frame"))
             if frame is not None:
                 lineage_by_key[(frame, current)] = row
     keys = set(grouped) | set(summary_by_key) | set(lineage_by_key)
+    unknown_times = _processed_frame_times(source)
+    virtual_unknown: dict[int, float] = {}
+    if chosen is not None:
+        for frame, time_s in unknown_times.items():
+            if (frame, chosen) not in keys and (frame, "unknown") not in keys:
+                virtual_unknown[frame] = time_s
+        keys.update((frame, "unknown") for frame in virtual_unknown)
     records: list[dict[str, Any]] = []
     for frame, current in sorted(keys):
         points_rows = sorted(grouped.get((frame, current), []), key=lambda row: int(row["point_id"]))
         summary_row = summary_by_key.get((frame, current), {})
         lineage_row = lineage_by_key.get((frame, current), {})
-        time_s = _float(summary_row.get("time"), _float(lineage_row.get("time"), points_rows[0]["time"] if points_rows else float(frame)))
+        time_s = _float(
+            summary_row.get("time"),
+            _float(
+                lineage_row.get("time"),
+                points_rows[0]["time"] if points_rows else virtual_unknown.get(frame, float(frame)),
+            ),
+        )
         points = np.asarray([[row["x"], row["y"]] for row in points_rows], dtype=float)
         quality_values = [float(row["quality"]) for row in points_rows if row["quality"] is not None]
         quality = _float(summary_row.get("quality"), float(np.mean(quality_values)) if quality_values else None)
         flags = set(_flags(summary_row.get("quality_flags", "")))
         for row in points_rows:
             flags.update(row["flags"])
-        status = str(lineage_row.get("status", "observed"))
+        status = str(lineage_row.get("status", "missing_unknown" if current == "unknown" else "observed"))
         if status not in {"observed", "matched", "initial_lineage"}:
             flags.add(status)
         censored = _truthy(summary_row.get("censor", False)) or _truthy(lineage_row.get("censor", False)) or any(row["censor"] for row in points_rows)
@@ -586,6 +690,8 @@ def _huber_fit(x: Sequence[float], y: Sequence[float], delta: float = 1.345) -> 
         "residual_sse": rss,
         "rmse": float(math.sqrt(rss / len(x_array))),
         "aic": aic,
+        "confidence_level": 0.95,
+        "ci_method": "Huber_IRLS_weighted_covariance_1.96_standard_errors",
         "predicted": (design @ beta).tolist(),
         "residuals": residual.tolist(),
         "x": x_array.tolist(),
@@ -608,18 +714,31 @@ def _growth_fit(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "growth_rate": None,
         "growth_rate_ci95": None,
         "initial_length": None,
+        "selection_criterion": "normalized_rmse",
+        "selection_scores": None,
+        "growth_rate_ci_method": None,
         "residuals": [],
     }
     if exponential.get("status") != "ok" and linear.get("status") != "ok":
         return result
     if exponential.get("status") == "ok" and linear.get("status") == "ok":
         # Compare normalized residuals because the response transforms have
-        # different units.  AIC remains in each model's native likelihood.
+        # different units.  The criterion is deliberately explicit and is
+        # persisted in the result; AIC values remain available in each fit's
+        # native response units but are not compared across transforms.
         exp_score = float(exponential["rmse"])
         lin_score = float(linear["rmse"]) / max(float(np.median(lengths)), 1.0e-12)
+        selection_scores = {
+            "exponential_log_length_rmse": exp_score,
+            "linear_length_rmse_over_median_length": lin_score,
+        }
         selected = "exponential" if exp_score <= lin_score else "linear"
+    elif exponential.get("status") == "ok":
+        selected = "exponential"
+        selection_scores = {"exponential_log_length_rmse": float(exponential["rmse"]), "linear_length_rmse_over_median_length": None}
     else:
-        selected = "exponential" if exponential.get("status") == "ok" else "linear"
+        selected = "linear"
+        selection_scores = {"exponential_log_length_rmse": None, "linear_length_rmse_over_median_length": float(linear["rmse"]) / max(float(np.median(lengths)), 1.0e-12)}
     if selected == "exponential":
         fit = exponential
         result.update({
@@ -628,6 +747,8 @@ def _growth_fit(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "growth_rate": fit["slope"],
             "growth_rate_ci95": fit["slope_ci95"],
             "initial_length": math.exp(float(fit["intercept"])),
+            "selection_scores": selection_scores,
+            "growth_rate_ci_method": fit["ci_method"],
         })
         result["initial_length_ci95"] = [math.exp(float(fit["intercept_ci95"][0])), math.exp(float(fit["intercept_ci95"][1]))]
         prediction = np.exp(np.asarray(fit["predicted"], dtype=float))
@@ -653,6 +774,8 @@ def _growth_fit(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "growth_rate_ci95": growth_ci,
             "initial_length": intercept,
             "initial_length_ci95": fit["intercept_ci95"],
+            "selection_scores": selection_scores,
+            "growth_rate_ci_method": "delta_method_from_huber_irls_covariance",
         })
         result["residuals"] = [
             {"frame": int(row["frame"]), "time": float(row["time"]), "length": float(row["length"]), "predicted_length": float(pred), "residual": float(row["length"] - pred), "selected_model": selected}
@@ -661,16 +784,17 @@ def _growth_fit(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _diameter_fit(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def _diameter_fit(records: Sequence[Mapping[str, Any]], unit: str = "unknown") -> dict[str, Any]:
     values = np.asarray([float(row["width"]) for row in records if row.get("eligible") and row.get("width") is not None], dtype=float)
     if len(values) == 0:
-        return {"status": "unidentifiable_no_width_field", "n": 0, "diameter_proxy": None, "ci95": None}
+        return {"status": "unidentifiable_no_width_field", "n": 0, "diameter_proxy": None, "ci95": None, "unit": unit}
     median = float(np.median(values))
     mad_scale = 1.4826 * float(np.median(np.abs(values - median)))
     standard_error = mad_scale / math.sqrt(len(values)) if len(values) > 1 else 0.0
     return {
         "status": "proxy_estimate",
         "n": int(len(values)),
+        "unit": unit,
         "diameter_proxy": median,
         "ci95": [median - 1.96 * standard_error, median + 1.96 * standard_error],
         "median_absolute_deviation": float(np.median(np.abs(values - median))),
@@ -680,7 +804,17 @@ def _diameter_fit(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 def _model_parameters(path: Path) -> dict[str, Any]:
+    """Load parameters and an explicitly defensible representative length.
+
+    ``ModelParameters.reference_length`` is a per-segment spacing in the
+    prototype, not the total filament length.  For NPZ trajectories the first
+    state's ``sum(rest_lengths)`` is therefore preferred unless metadata
+    supplies an explicit ``initial_length``/``length``.
+    """
+
     value: dict[str, Any] = {}
+    representative_length: float | None = None
+    length_source: str | None = None
     if path.suffix.lower() == ".npz":
         try:
             with np.load(path, allow_pickle=False) as archive:
@@ -690,6 +824,13 @@ def _model_parameters(path: Path) -> dict[str, Any]:
                     metadata = json.loads(str(decoded))
                     if isinstance(metadata, Mapping):
                         value = dict(metadata.get("parameters", {}))
+                rest_lengths = np.asarray(archive.get("rest_lengths", []), dtype=float)
+                rest_offsets = np.asarray(archive.get("rest_offsets", []), dtype=int)
+                if len(rest_offsets) >= 2 and len(rest_lengths) >= int(rest_offsets[1]):
+                    candidate = float(np.sum(rest_lengths[int(rest_offsets[0]) : int(rest_offsets[1])]))
+                    if math.isfinite(candidate) and candidate > 0.0:
+                        representative_length = candidate
+                        length_source = "initial_state_sum_rest_lengths"
         except (OSError, ValueError, KeyError, json.JSONDecodeError):
             value = {}
     if not value:
@@ -702,16 +843,95 @@ def _model_parameters(path: Path) -> dict[str, Any]:
                         break
                 except (OSError, json.JSONDecodeError):
                     pass
-    return value
+    for key in ("initial_length", "length"):
+        explicit = _float(value.get(key))
+        if explicit is not None and explicit > 0.0:
+            representative_length = explicit
+            length_source = f"explicit_{key}"
+            break
+    return {
+        "parameters": value,
+        "representative_length": representative_length,
+        "representative_length_source": length_source,
+    }
 
 
-def _chi_from_parameters(parameters: Mapping[str, Any]) -> float | None:
+def _chi_from_parameters(parameters: Mapping[str, Any], representative_length: float | None = None) -> float | None:
     ea = _float(parameters.get("axial_stiffness", parameters.get("EA")))
     ei = _float(parameters.get("bending_stiffness", parameters.get("EI")))
-    length = _float(parameters.get("reference_length", parameters.get("length")))
+    # Never fall back to reference_length: it is a segment spacing in the
+    # current trajectory serializer and is not the representative filament L.
+    length = representative_length
+    if length is None:
+        for key in ("initial_length", "length"):
+            candidate = _float(parameters.get(key))
+            if candidate is not None and candidate > 0.0:
+                length = candidate
+                break
     if ea is None or ei is None or length is None or ea <= 0.0 or length <= 0.0:
         return None
     return float(ei / (ea * length * length))
+
+
+def _diameter_comparison(
+    diameter: Mapping[str, Any],
+    model_diameter: float | None,
+    *,
+    width_unit: str,
+    pixel_per_model_unit: float | None = None,
+    model_unit_to_width_unit: float | None = None,
+) -> dict[str, Any]:
+    """Compare observed and model diameter only after proving common units."""
+
+    observed = _float(diameter.get("diameter_proxy"))
+    if observed is None or model_diameter is None:
+        return {
+            "status": "not_computed_missing_diameter",
+            "observed": observed,
+            "model": model_diameter,
+            "unit": width_unit,
+            "model_minus_observed": None,
+        }
+    if width_unit == "pixel":
+        if pixel_per_model_unit is None or pixel_per_model_unit <= 0.0:
+            return {
+                "status": "not_computed_unit_mismatch",
+                "reason": "pixel_per_model_unit_required_to_convert_model_diameter_to_pixel",
+                "observed": observed,
+                "model": model_diameter,
+                "unit": "pixel",
+                "model_minus_observed": None,
+            }
+        model_in_width_unit = float(model_diameter) * pixel_per_model_unit
+    elif width_unit == "model":
+        model_in_width_unit = float(model_diameter)
+    elif width_unit == "physical":
+        if model_unit_to_width_unit is None or model_unit_to_width_unit <= 0.0:
+            return {
+                "status": "not_computed_unit_mismatch",
+                "reason": "model_unit_to_width_unit_required_for_physical_comparison",
+                "observed": observed,
+                "model": model_diameter,
+                "unit": "physical",
+                "model_minus_observed": None,
+            }
+        model_in_width_unit = float(model_diameter) * model_unit_to_width_unit
+    else:
+        return {
+            "status": "not_computed_unit_mismatch",
+            "reason": "width_unit_must_be_declared_as_pixel_model_or_physical",
+            "observed": observed,
+            "model": model_diameter,
+            "unit": width_unit,
+            "model_minus_observed": None,
+        }
+    return {
+        "status": "computed",
+        "observed": observed,
+        "model": model_in_width_unit,
+        "unit": width_unit,
+        "model_minus_observed": model_in_width_unit - observed,
+    }
 
 
 def _registration_points(points: np.ndarray, registration: Mapping[str, Any]) -> np.ndarray:
@@ -792,11 +1012,16 @@ def _shape_candidate(
         per_frame.append(row)
     computed = [row for row in per_frame if row["shape_status"] == "computed"]
     if computed:
-        losses = [
-            float(row["frechet_distance_px"]) / max(float(next(item["length_px"] for item in records if item["frame"] == row["frame"] and item["length_px"] is not None)), 1.0e-12)
-            + math.sqrt(float(row["curvature_mse_px_inv2"])) * max(float(next(item["length_px"] for item in records if item["frame"] == row["frame"] and item["length_px"] is not None)), 1.0e-12)
-            for row in computed
-        ]
+        normalized_frechet = []
+        curvature_length = []
+        for row in computed:
+            observed_length = max(
+                float(next(item["length_px"] for item in records if item["frame"] == row["frame"] and item["length_px"] is not None)),
+                1.0e-12,
+            )
+            normalized_frechet.append(float(row["frechet_distance_px"]) / observed_length)
+            curvature_length.append(math.sqrt(float(row["curvature_mse_px_inv2"])) * observed_length)
+        losses = [float(np.median(normalized_frechet)) + float(np.median(curvature_length))]
         summary: dict[str, Any] = {
             "candidate_id": model_path.name,
             "status": "computed",
@@ -805,7 +1030,9 @@ def _shape_candidate(
             "excluded_rows": len(per_frame) - len(computed),
             "frechet_distance_px_median": float(np.median([row["frechet_distance_px"] for row in computed])),
             "curvature_mse_px_inv2_median": float(np.median([row["curvature_mse_px_inv2"] for row in computed])),
-            "normalized_shape_loss_median": float(np.median(losses)),
+            "normalized_frechet_median": float(np.median(normalized_frechet)),
+            "curvature_rmse_length_median": float(np.median(curvature_length)),
+            "normalized_shape_loss": float(losses[0]),
         }
     else:
         summary = {
@@ -816,15 +1043,21 @@ def _shape_candidate(
             "excluded_rows": len(per_frame),
             "frechet_distance_px_median": None,
             "curvature_mse_px_inv2_median": None,
-            "normalized_shape_loss_median": None,
+            "normalized_frechet_median": None,
+            "curvature_rmse_length_median": None,
+            "normalized_shape_loss": None,
         }
-    parameters = _model_parameters(model_path)
+    model_info = _model_parameters(model_path)
+    parameters = model_info["parameters"]
     summary.update({
         "path": str(model_path.resolve()),
         "sha256": sha256_file(model_path),
         "parameters": parameters,
-        "chi": _chi_from_parameters(parameters),
+        "representative_length": model_info["representative_length"],
+        "representative_length_source": model_info["representative_length_source"],
+        "chi": _chi_from_parameters(parameters, model_info["representative_length"]),
         "diameter": _float(parameters.get("diameter")),
+        "diameter_unit": "model_unit",
     })
     return summary, per_frame
 
@@ -856,7 +1089,12 @@ def fit_observation(
     resolved = observation["source"]
     records = observation["records"]
     growth = _growth_fit(records)
-    diameter = _diameter_fit(records)
+    width_unit = str(values.get("width_unit", "unknown"))
+    if width_unit not in {"unknown", "pixel", "model", "physical"}:
+        raise VideoParameterFittingError("width_unit must be unknown, pixel, model, or physical")
+    model_unit_to_width_unit = values.get("model_unit_to_width_unit")
+    model_unit_to_width_unit = None if model_unit_to_width_unit in (None, "") else float(model_unit_to_width_unit)
+    diameter = _diameter_fit(records, unit=width_unit)
     registration = {
         "pixel_per_model_unit": values.get("pixel_per_model_unit"),
         "x_offset_px": float(values.get("x_offset_px", 0.0)),
@@ -866,6 +1104,8 @@ def fit_observation(
         "time_offset": float(values.get("time_offset", 0.0)),
         "max_time_error_s": float(values.get("max_time_error_s", 0.20)),
         "endpoint_order": str(values.get("endpoint_order", "auto")),
+        "model_unit_to_width_unit": model_unit_to_width_unit,
+        "width_unit": width_unit,
     }
     shape_candidates: list[dict[str, Any]] = []
     shape_rows: list[dict[str, Any]] = []
@@ -881,7 +1121,7 @@ def fit_observation(
             shape_candidates.append(candidate)
             shape_rows.extend(rows)
         fitted = [candidate for candidate in shape_candidates if candidate.get("status") == "computed"]
-        selected = min(fitted, key=lambda candidate: (float(candidate["normalized_shape_loss_median"]), str(candidate["candidate_id"]))) if fitted else None
+        selected = min(fitted, key=lambda candidate: (float(candidate["normalized_shape_loss"]), str(candidate["candidate_id"]))) if fitted else None
         shape = {
             "status": "computed" if selected else "no_computed_metrics",
             "registration": registration,
@@ -906,6 +1146,13 @@ def fit_observation(
     selected_candidate = shape.get("selected_candidate") or {}
     selected_chi = selected_candidate.get("chi")
     selected_model_diameter = selected_candidate.get("diameter")
+    diameter_comparison = _diameter_comparison(
+        diameter,
+        selected_model_diameter,
+        width_unit=width_unit,
+        pixel_per_model_unit=_float(registration.get("pixel_per_model_unit")),
+        model_unit_to_width_unit=model_unit_to_width_unit,
+    )
     report = {
         "schema_version": SCHEMA_VERSION,
         "analysis_revision": ANALYSIS_REVISION,
@@ -938,8 +1185,9 @@ def fit_observation(
                 "estimate": diameter.get("diameter_proxy"),
                 "ci95": diameter.get("ci95"),
                 "status": diameter.get("status"),
+                "unit": width_unit,
                 "model_diameter": selected_model_diameter,
-                "model_minus_observed": None if selected_model_diameter is None or diameter.get("diameter_proxy") is None else float(selected_model_diameter) - float(diameter["diameter_proxy"]),
+                "model_comparison": diameter_comparison,
             },
         },
         "limitations": [
@@ -1141,6 +1389,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--quality-threshold", type=float, default=0.2)
     parser.add_argument("--coordinate-scale", type=float, default=1.0, help="length units per observed pixel")
     parser.add_argument("--width-scale", type=float, help="width units per width-field unit; defaults to coordinate-scale")
+    parser.add_argument("--width-unit", choices=("unknown", "pixel", "model", "physical"), default="unknown")
+    parser.add_argument("--model-unit-to-width-unit", type=float, help="explicit model-unit to declared width-unit scale")
     parser.add_argument("--min-points", type=int, default=3)
     parser.add_argument("--pixel-per-model-unit", type=float)
     parser.add_argument("--x-offset-px", type=float, default=0.0)
@@ -1162,6 +1412,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "quality_threshold": args.quality_threshold,
         "coordinate_scale": args.coordinate_scale,
         "width_scale": args.width_scale,
+        "width_unit": args.width_unit,
+        "model_unit_to_width_unit": args.model_unit_to_width_unit,
         "min_points": args.min_points,
         "pixel_per_model_unit": args.pixel_per_model_unit,
         "x_offset_px": args.x_offset_px,
