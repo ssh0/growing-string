@@ -1,0 +1,1 @@
+frame,time,candidate_id,eligible,shape_status,shape_reason,model_time,time_error_s,frechet_distance_px,endpoint_distance_px,curvature_mse_px_inv2,observed_length,growth_model,growth_predicted_length,growth_residual
