@@ -47,7 +47,7 @@ def _config(args: argparse.Namespace) -> SegmentationConfig:
             values[name] = value
     for name in (
         "frame_stride", "min_component_size", "max_components", "max_centerline_points",
-        "boundary_margin_px", "threshold_value", "threshold_percentile", "contrast_low",
+        "skeleton_backend", "boundary_margin_px", "threshold_value", "threshold_percentile", "contrast_low",
         "contrast_high", "background_value",
     ):
         value = getattr(args, name, None)
@@ -82,6 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
             child.add_argument("--min-component-size", type=int)
             child.add_argument("--max-components", type=int)
             child.add_argument("--max-centerline-points", type=int)
+            child.add_argument("--skeleton-backend", choices=("auto", "skimage", "numpy"))
             child.add_argument("--boundary-margin-px", type=int)
             child.add_argument("--threshold-value", type=float)
             child.add_argument("--threshold-percentile", type=float)

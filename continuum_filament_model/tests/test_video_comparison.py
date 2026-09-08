@@ -93,6 +93,42 @@ class VideoComparisonFixtureTests(unittest.TestCase):
         self.assertGreater(loop_topology["cycle_rank"], 0)
         self.assertEqual(loop_topology["endpoint_count"], 0)
 
+    def test_real_mask_topology_backend_parity(self):
+        t_mask = np.zeros((35, 35), dtype=bool)
+        t_mask[3:8, 3:26] = True
+        t_mask[3:25, 12:17] = True
+        loop_mask = np.zeros((40, 40), dtype=bool)
+        loop_mask[5:30, 5:30] = True
+        loop_mask[10:25, 10:25] = False
+        t_component = np.argwhere(t_mask)
+        loop_component = np.argwhere(loop_mask)
+        t_results = []
+        loop_results = []
+        for backend in ("auto", "numpy"):
+            config = SegmentationConfig(min_component_size=1, skeleton_backend=backend)
+            t_points, t_flags = component_to_centerline(t_component, t_mask.shape, config)
+            loop_points, loop_flags = component_to_centerline(loop_component, loop_mask.shape, config)
+            t_results.append((t_flags, len(t_points)))
+            loop_results.append((loop_flags, len(loop_points)))
+        self.assertEqual(t_results[0][0], t_results[1][0])
+        self.assertIn("branched_component", t_results[0][0])
+        self.assertNotIn("loop_component", t_results[0][0])
+        self.assertEqual(loop_results[0][0], loop_results[1][0])
+        self.assertIn("loop_component", loop_results[0][0])
+        self.assertTrue(all("branched_component" not in flags for flags, _ in loop_results))
+        self.assertTrue(all("loop_component" not in flags for flags, _ in t_results))
+        candidates = [
+            _make_candidate(0, 0.0, "t", t_component, t_mask.shape, SegmentationConfig(min_component_size=1, skeleton_backend=backend), False, 1, 1, None)
+            for backend in ("auto", "numpy")
+        ]
+        loop_candidates = [
+            _make_candidate(0, 0.0, "loop", loop_component, loop_mask.shape, SegmentationConfig(min_component_size=1, skeleton_backend=backend), False, 1, 1, None)
+            for backend in ("auto", "numpy")
+        ]
+        self.assertEqual([(c.censor, c.centerline_exported, c.flags) for c in candidates], [(c.censor, c.centerline_exported, c.flags) for c in candidates[1:]] + [(candidates[0].censor, candidates[0].centerline_exported, candidates[0].flags)])
+        self.assertTrue(all(c.censor and c.centerline_exported for c in candidates))
+        self.assertTrue(all(c.censor and not c.centerline_exported for c in loop_candidates))
+
     def test_component_truncation_and_boundary_are_censored(self):
         component = np.asarray([(y, 10) for y in range(2, 25)], dtype=int)
         candidate = _make_candidate(
@@ -235,6 +271,43 @@ class VideoComparisonFixtureTests(unittest.TestCase):
             self.assertEqual(result["rows"][0]["metric_status"], "not_computed_uncalibrated")
             self.assertEqual(result["rows"][0]["metric_reason"], "pixel_per_model_unit_not_specified")
             self.assertEqual(result["rows"][0]["censor"], 1)
+
+    def test_leading_missing_frame_stays_in_comparison_population(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "centerline.csv").write_text(
+                "time,filament_id,point_id,x,y,quality,frame,coordinate_system,quality_flags,censor\n"
+                "1.0,filament-0000,0,0,0,1,1,pixel,ok,0\n"
+                "1.0,filament-0000,1,10,0,1,1,pixel,ok,0\n",
+                encoding="utf-8",
+            )
+            (root / "observation_summary.csv").write_text(
+                "frame,time,filament_id,n_points,component_area,length_px,endpoint_distance_px,curvature_mean_px_inv,curvature_max_px_inv,quality,quality_flags,censor\n"
+                "1,1.0,filament-0000,2,10,10,10,0,0,1,ok,0\n",
+                encoding="utf-8",
+            )
+            (root / "lineage.csv").write_text(
+                "frame,time,filament_id,status,censor,details\n"
+                "1,1.0,filament-0000,matched,0,\n"
+                "2,2.0,filament-0000,missing,1,no_component\n"
+                "3,3.0,filament-0000,matched,0,\n",
+                encoding="utf-8",
+            )
+            (root / "events.csv").write_text("frame,time,event,severity,details\n2,2.0,missing,censor,no_component\n", encoding="utf-8")
+            (root / "manifest.json").write_text(
+                json.dumps({"video": {"fps": 1.0}, "run": {"frame_range": {"first": 0, "last": 3, "stride": 1}}}),
+                encoding="utf-8",
+            )
+            model = root / "model.csv"
+            model.write_text("time,point_id,x,y\n0,0,0,0\n0,1,1,0\n", encoding="utf-8")
+            result = compare_with_model(root, model, RegistrationConfig(), output_dir=root / "comparison")
+            rows = result["rows"]
+            self.assertEqual(result["summary"]["population_rows"], 4)
+            self.assertEqual(result["summary"]["eligible_rows"] + result["summary"]["excluded_from_metric_denominator"], 4)
+            self.assertEqual(rows[0]["frame"], 0)
+            self.assertEqual(rows[0]["filament_id"], "unknown")
+            self.assertEqual(rows[0]["metric_reason"], "missing_observation_lineage")
+            self.assertEqual(rows[0]["censor"], 1)
 
     def test_censored_comparison_has_no_quantitative_metric(self):
         with tempfile.TemporaryDirectory() as temporary:

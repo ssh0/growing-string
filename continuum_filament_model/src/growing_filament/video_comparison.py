@@ -99,6 +99,7 @@ class SegmentationConfig:
     max_components: int = 8
     max_centerline_points: int = 240
     skeleton: bool = True
+    skeleton_backend: str = "auto"  # auto, skimage, or numpy
     max_jump_px: float = 80.0
     min_quality: float = 0.20
     boundary_margin_px: int = 2
@@ -113,6 +114,8 @@ class SegmentationConfig:
             raise ValueError("contrast must be none or percentile")
         if self.threshold not in {"otsu", "absolute", "percentile"}:
             raise ValueError("threshold must be otsu, absolute, or percentile")
+        if self.skeleton_backend not in {"auto", "skimage", "numpy"}:
+            raise ValueError("skeleton_backend must be auto, skimage, or numpy")
         if self.frame_stride < 1 or self.min_component_size < 1:
             raise ValueError("frame_stride and min_component_size must be positive")
         if self.max_components < 1 or self.max_centerline_points < 2:
@@ -578,48 +581,73 @@ def connected_components(mask: np.ndarray, min_size: int = 1) -> list[np.ndarray
 
 
 def _fallback_skeleton(mask: np.ndarray) -> np.ndarray:
-    """A dependency-free thinning approximation, adequate for line-like fixtures."""
+    """Topology-preserving Zhang--Suen thinning implemented with NumPy only."""
 
     current = np.asarray(mask, dtype=bool).copy()
-    # Iterative boundary erosion preserves the medial-ish core.  It is not
-    # claimed to be a topology-preserving skeleton; skimage is preferred.
-    for _ in range(max(1, min(current.shape) // 3)):
-        if not np.any(current):
-            break
-        neighbour_count = np.zeros_like(current, dtype=np.uint8)
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
-                if not dy and not dx:
-                    continue
-                shifted = np.zeros_like(current)
-                y0, y1 = max(0, dy), min(current.shape[0], current.shape[0] + dy)
-                x0, x1 = max(0, dx), min(current.shape[1], current.shape[1] + dx)
-                shifted[y0:y1, x0:x1] = current[y0 - dy : y1 - dy, x0 - dx : x1 - dx]
-                neighbour_count += shifted
-        boundary = current & (neighbour_count < 8)
-        if not np.any(boundary):
-            break
-        candidate = current & ~boundary
-        if np.any(candidate):
-            current = candidate
-        else:
+    if min(current.shape) < 3:
+        return current
+    for _ in range(200):
+        changed = False
+        for phase in (0, 1):
+            p2 = current[:-2, 1:-1]
+            p3 = current[:-2, 2:]
+            p4 = current[1:-1, 2:]
+            p5 = current[2:, 2:]
+            p6 = current[2:, 1:-1]
+            p7 = current[2:, :-2]
+            p8 = current[1:-1, :-2]
+            p9 = current[:-2, :-2]
+            neighbours = np.stack((p2, p3, p4, p5, p6, p7, p8, p9), axis=0)
+            count = np.sum(neighbours, axis=0)
+            transitions = np.sum(
+                (~neighbours & np.roll(neighbours, -1, axis=0)), axis=0
+            )
+            if phase == 0:
+                keep_product = p2 & p4 & p6
+                second_product = p4 & p6 & p8
+            else:
+                keep_product = p2 & p4 & p8
+                second_product = p2 & p6 & p8
+            removable = (
+                current[1:-1, 1:-1]
+                & (count >= 2)
+                & (count <= 6)
+                & (transitions == 1)
+                & ~keep_product
+                & ~second_product
+            )
+            if np.any(removable):
+                interior = current[1:-1, 1:-1]
+                interior[removable] = False
+                changed = True
+        if not changed:
             break
     return current
 
 
-def _skeleton_coordinates(component: np.ndarray, shape: tuple[int, int], use_skeleton: bool) -> np.ndarray:
+def _skeleton_coordinates(
+    component: np.ndarray,
+    shape: tuple[int, int],
+    use_skeleton: bool,
+    backend: str = "auto",
+) -> np.ndarray:
     y0, x0 = np.min(component, axis=0)
     y1, x1 = np.max(component, axis=0)
     local = np.zeros((int(y1 - y0 + 3), int(x1 - x0 + 3)), dtype=bool)
     local[component[:, 0] - y0 + 1, component[:, 1] - x0 + 1] = True
     skeleton = local
     if use_skeleton:
-        try:
-            from skimage.morphology import skeletonize  # type: ignore
-
-            skeleton = skeletonize(local)
-        except Exception:
+        if backend == "numpy":
             skeleton = _fallback_skeleton(local)
+        else:
+            try:
+                from skimage.morphology import skeletonize  # type: ignore
+
+                skeleton = skeletonize(local)
+            except Exception:
+                if backend == "skimage":
+                    raise
+                skeleton = _fallback_skeleton(local)
     coords = np.argwhere(skeleton)
     if len(coords) == 0:
         coords = np.argwhere(local)
@@ -751,8 +779,11 @@ def component_to_centerline(
     image_shape: tuple[int, int],
     config: SegmentationConfig,
 ) -> tuple[np.ndarray, list[str]]:
-    skeleton = _skeleton_coordinates(component_yx, image_shape, config.skeleton)
-    topology = skeleton_topology(skeleton)
+    skeleton = _skeleton_coordinates(component_yx, image_shape, config.skeleton, config.skeleton_backend)
+    # Topology uses the deterministic NumPy backend for parity even when the
+    # display centerline uses scikit-image.
+    topology_skeleton = _skeleton_coordinates(component_yx, image_shape, config.skeleton, "numpy")
+    topology = skeleton_topology(topology_skeleton)
     points = _ordered_skeleton(skeleton)
     flags: list[str] = []
     if topology["junction_count"] > 0:
@@ -957,7 +988,7 @@ def _make_candidate(
             "out_of_view", "roi_clipped", "low_quality",
         }
     )
-    topology = skeleton_topology(_skeleton_coordinates(component, image_shape, config.skeleton))
+    topology = skeleton_topology(_skeleton_coordinates(component, image_shape, config.skeleton, "numpy"))
     return CenterlineCandidate(
         frame_index, time_s, filament_id, points, len(component), centroid, quality, flags,
         censor, topology, component_total, "loop_component" not in flags,
@@ -1120,8 +1151,9 @@ def run_pipeline(
             events.append({"frame": frame_index, "time": time_s, "event": "components_truncated", "severity": "censor", "details": f"total={component_total};kept={len(components)}"})
         if not components:
             events.append({"frame": frame_index, "time": time_s, "event": "missing", "severity": "censor", "details": "no_component"})
-            for name in sorted(tracker.last):
-                lineage_rows.append({"frame": frame_index, "time": time_s, "filament_id": name, "status": "missing", "censor": 1, "details": "no_component"})
+            missing_names = sorted(tracker.last) or ["unknown"]
+            for name in missing_names:
+                lineage_rows.append({"frame": frame_index, "time": time_s, "filament_id": name, "status": "missing_unknown" if name == "unknown" else "missing", "censor": 1, "details": "no_component"})
             continue
         centroids = [np.mean(component, axis=0)[::-1] for component in components]
         previous_track_ids = set(tracker.last)
@@ -1469,21 +1501,36 @@ def compare_with_model(
     summary_by_key = {(int(row["frame"]), row.get("filament_id", "")): row for row in summary_rows}
     lineage_by_key = {(int(row["frame"]), row.get("filament_id", "")): row for row in lineage_rows}
     population_keys = set(summary_by_key)
+    manifest_path = obs_dir / "manifest.json"
+    observation_manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    frame_range = observation_manifest.get("run", {}).get("frame_range", {})
+    processed_frames = []
+    if frame_range.get("first") is not None and frame_range.get("last") is not None:
+        processed_frames = list(range(int(frame_range["first"]), int(frame_range["last"]) + 1, int(frame_range.get("stride", 1))))
     if chosen is not None:
         population_keys = {key for key in population_keys if key[1] == chosen}
         population_keys.update(key for key in lineage_by_key if key[1] == chosen)
+        # Preserve a row for every processed sample even when no component or
+        # lineage record exists yet (notably a leading missing frame).
+        for frame_index in processed_frames:
+            if (frame_index, chosen) not in population_keys:
+                population_keys.add((frame_index, "unknown"))
     else:
         population_keys.update(lineage_by_key)
     population = [(key, summary_by_key.get(key), lineage_by_key.get(key)) for key in sorted(population_keys)]
     model_frames = load_model_output(model_path)
     output_rows: list[dict[str, Any]] = []
     for (frame_index, population_filament_id), row, lineage in population:
+        if row is None and lineage is None and population_filament_id == "unknown":
+            fps = float((observation_manifest.get("video") or {}).get("fps", 1.0))
+            lineage = {"frame": frame_index, "time": frame_index / max(fps, 1.0), "filament_id": "unknown", "status": "missing_unknown", "censor": "1"}
         if row is None and lineage is None:
             continue
         source_row = row or lineage or {}
         observed_time = float(source_row["time"])
         lineage_status = str((lineage or {}).get("status", "observed"))
         observed_present = row is not None and int(row.get("centerline_exported", "1")) == 1
+        output_filament_id = population_filament_id or "unknown"
 
         registered_time = registration_value.model_time(observed_time)
         model_match = match_model_frame(model_frames, registered_time, registration_value.max_time_error_s)
@@ -1496,7 +1543,7 @@ def compare_with_model(
         result: dict[str, Any] = {
             "frame": frame_index,
             "time": observed_time,
-            "filament_id": population_filament_id,
+            "filament_id": output_filament_id,
             "observed_length_px": float(row["length_px"]) if row is not None else None,
             "observed_endpoint_distance_px": float(row["endpoint_distance_px"]) if row is not None else None,
             "observed_curvature_mean_px_inv": float(row["curvature_mean_px_inv"]) if row is not None else None,
@@ -1538,7 +1585,13 @@ def compare_with_model(
                 result["quality_flags"] = ";".join(flags + [missing_flag]) if flags else missing_flag
         elif censored:
             result["metric_status"] = "not_computed_censored"
-            result["metric_reason"] = "lineage_boundary" if lineage_status not in {"observed", "matched", "initial_lineage"} or not observed_present else "quality_censor_flag"
+            result["metric_reason"] = (
+                "missing_observation_lineage"
+                if not observed_present
+                else "lineage_boundary"
+                if lineage_status not in {"observed", "matched", "initial_lineage"}
+                else "quality_censor_flag"
+            )
             result["censor"] = 1
         elif registration_value.calibrated and len(observed_points) >= 2:
             model_pixels = registration_value.model_to_pixel(model_frame.points)
