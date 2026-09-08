@@ -353,6 +353,23 @@ def _iter_video_frames_imageio(
             break
 
 
+def sampled_frame_range(frame_count: int | None, frame_stride: int, max_frames: int | None = None) -> dict[str, Any]:
+    """Return the expected sampled index range for a decoded video stream."""
+
+    if frame_stride < 1:
+        raise ValueError("frame_stride must be positive")
+    if frame_count is None or frame_count <= 0:
+        return {"count": None, "first": None, "last": None}
+    count = (int(frame_count) + frame_stride - 1) // frame_stride
+    if max_frames is not None:
+        count = min(count, max_frames)
+    return {
+        "count": count,
+        "first": 0,
+        "last": (count - 1) * frame_stride if count else None,
+    }
+
+
 def iter_video_frames(
     path: str | Path,
     metadata: VideoMetadata | None = None,
@@ -381,7 +398,9 @@ def iter_video_frames(
         "-pix_fmt",
         "gray",
         "-vsync",
-        "0",
+        "cfr",
+        "-r",
+        f"{meta.fps:.12g}",
         "-",
     ]
     process: subprocess.Popen[bytes] | None = None
@@ -681,14 +700,12 @@ def skeleton_topology(coords_yx: np.ndarray) -> dict[str, int]:
         }
     index = {point: i for i, point in enumerate(coords)}
     graph: list[list[int]] = [[] for _ in coords]
+    cardinal_offsets = ((-1, 0), (1, 0), (0, -1), (0, 1))
     for i, (y, x) in enumerate(coords):
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
-                if not dy and not dx:
-                    continue
-                j = index.get((y + dy, x + dx))
-                if j is not None:
-                    graph[i].append(j)
+        for dy, dx in cardinal_offsets:
+            j = index.get((y + dy, x + dx))
+            if j is not None:
+                graph[i].append(j)
     visited: set[int] = set()
     component_count = 0
     for start in range(len(coords)):
@@ -1131,11 +1148,9 @@ def run_pipeline(
             if track_status == "reconnected_after_missing":
                 candidate.flags.append("reconnected_after_missing")
                 candidate.censor = True
-                events.append({"frame": frame_index, "time": time_s, "event": "reconnected_after_missing", "severity": "censor", "details": filament_id})
             elif track_status == "new_lineage":
                 candidate.flags.append("new_lineage")
                 candidate.censor = True
-                events.append({"frame": frame_index, "time": time_s, "event": "new_lineage", "severity": "censor", "details": filament_id})
             lineage_rows.append({"frame": frame_index, "time": time_s, "filament_id": filament_id, "status": track_status, "censor": int(candidate.censor), "details": ""})
             previous = previous_points.get(filament_id)
             if previous is not None and len(previous) >= 2 and len(candidate.points) >= 2:
@@ -1171,12 +1186,21 @@ def run_pipeline(
     _write_csv(destination / "events.csv", events, ["frame", "time", "event", "severity", "details"])
     _write_csv(destination / "lineage.csv", lineage_rows, lineage_fields)
     coverage = "full_period" if max_frames is None else "partial_max_frames"
+    expected_frame_range = sampled_frame_range(metadata.frame_count, cfg.frame_stride, max_frames)
+    actual_first = min(processed_frame_indices) if processed_frame_indices else None
+    actual_last = max(processed_frame_indices) if processed_frame_indices else None
     frame_range = {
-        "first": min(processed_frame_indices) if processed_frame_indices else None,
-        "last": max(processed_frame_indices) if processed_frame_indices else None,
+        "first": actual_first,
+        "last": actual_last,
         "count": len(processed_frame_indices),
         "stride": cfg.frame_stride,
         "coverage": coverage,
+        "expected_count": expected_frame_range["count"],
+        "expected_last": expected_frame_range["last"],
+        "decode_complete": (
+            expected_frame_range["count"] is None
+            or (len(processed_frame_indices) == expected_frame_range["count"] and actual_last == expected_frame_range["last"])
+        ),
     }
     command_value = []
     for token in command_line or []:
@@ -1435,34 +1459,51 @@ def compare_with_model(
     registration_value = registration if isinstance(registration, RegistrationConfig) else RegistrationConfig.from_mapping(registration)
     summary_rows = _read_csv_rows(obs_dir / "observation_summary.csv")
     centerline_rows = _read_csv_rows(obs_dir / "centerline.csv")
+    lineage_rows = _read_csv_rows(obs_dir / "lineage.csv") if (obs_dir / "lineage.csv").exists() else []
     chosen = filament_id or _choose_filament(summary_rows)
     grouped: dict[tuple[int, str], list[tuple[int, float, float]]] = {}
     for row in centerline_rows:
         if chosen is not None and row.get("filament_id") != chosen:
             continue
         grouped.setdefault((int(row["frame"]), row["filament_id"]), []).append((int(row["point_id"]), float(row["x"]), float(row["y"])))
+    summary_by_key = {(int(row["frame"]), row.get("filament_id", "")): row for row in summary_rows}
+    lineage_by_key = {(int(row["frame"]), row.get("filament_id", "")): row for row in lineage_rows}
+    population_keys = set(summary_by_key)
+    if chosen is not None:
+        population_keys = {key for key in population_keys if key[1] == chosen}
+        population_keys.update(key for key in lineage_by_key if key[1] == chosen)
+    else:
+        population_keys.update(lineage_by_key)
+    population = [(key, summary_by_key.get(key), lineage_by_key.get(key)) for key in sorted(population_keys)]
     model_frames = load_model_output(model_path)
     output_rows: list[dict[str, Any]] = []
-    for row in summary_rows:
-        if chosen is not None and row.get("filament_id") != chosen:
+    for (frame_index, population_filament_id), row, lineage in population:
+        if row is None and lineage is None:
             continue
-        observed_time = float(row["time"])
+        source_row = row or lineage or {}
+        observed_time = float(source_row["time"])
+        lineage_status = str((lineage or {}).get("status", "observed"))
+        observed_present = row is not None and int(row.get("centerline_exported", "1")) == 1
+
         registered_time = registration_value.model_time(observed_time)
         model_match = match_model_frame(model_frames, registered_time, registration_value.max_time_error_s)
         model_frame = model_match.frame if model_match is not None else None
         time_error_s = model_match.time_error_s if model_match is not None else None
-        flags = [flag for flag in str(row.get("quality_flags", "")).split(";") if flag and flag != "ok"]
-        censored = bool(int(row.get("censor", "0")))
+        flags = [flag for flag in str((row or {}).get("quality_flags", "")).split(";") if flag and flag != "ok"]
+        if lineage_status not in {"observed", "matched", "initial_lineage"} and lineage_status not in flags:
+            flags.append(lineage_status)
+        censored = bool(int((row or {}).get("censor", "0"))) or bool(int((lineage or {}).get("censor", "0"))) or not observed_present
         result: dict[str, Any] = {
-            "frame": int(row["frame"]),
+            "frame": frame_index,
             "time": observed_time,
-            "filament_id": row.get("filament_id", ""),
-            "observed_length_px": float(row["length_px"]),
-            "observed_endpoint_distance_px": float(row["endpoint_distance_px"]),
-            "observed_curvature_mean_px_inv": float(row["curvature_mean_px_inv"]),
-            "observed_curvature_max_px_inv": float(row["curvature_max_px_inv"]),
-            "quality": float(row["quality"]),
+            "filament_id": population_filament_id,
+            "observed_length_px": float(row["length_px"]) if row is not None else None,
+            "observed_endpoint_distance_px": float(row["endpoint_distance_px"]) if row is not None else None,
+            "observed_curvature_mean_px_inv": float(row["curvature_mean_px_inv"]) if row is not None else None,
+            "observed_curvature_max_px_inv": float(row["curvature_max_px_inv"]) if row is not None else None,
+            "quality": float(row["quality"]) if row is not None else None,
             "quality_flags": ";".join(flags) if flags else "ok",
+            "lineage_status": lineage_status,
             "censor": int(censored),
             "registered_model_time": registered_time,
             "model_time": model_frame.time_s if model_frame is not None else None,
@@ -1486,17 +1527,18 @@ def compare_with_model(
             "metric_status": "not_computed_uncalibrated",
             "metric_reason": "pixel_per_model_unit_not_specified",
         }
-        points_rows = sorted(grouped.get((int(row["frame"]), row.get("filament_id", "")), []))
+        points_rows = sorted(grouped.get((frame_index, population_filament_id), []))
         observed_points = np.asarray([[x, y] for _, x, y in points_rows], dtype=float)
         if model_frame is None:
-            result["metric_status"] = "not_computed_model_unmatched"
-            result["metric_reason"] = "model_time_unmatched_or_centerline_unavailable"
+            result["metric_status"] = "not_computed_missing_observation" if not observed_present else "not_computed_model_unmatched"
+            result["metric_reason"] = "missing_observation_lineage" if not observed_present else "model_time_unmatched_or_centerline_unavailable"
             result["censor"] = 1
-            if "model_time_unmatched" not in flags:
-                result["quality_flags"] = ";".join(flags + ["model_time_unmatched"]) if flags else "model_time_unmatched"
+            missing_flag = "missing_observation" if not observed_present else "model_time_unmatched"
+            if missing_flag not in flags:
+                result["quality_flags"] = ";".join(flags + [missing_flag]) if flags else missing_flag
         elif censored:
             result["metric_status"] = "not_computed_censored"
-            result["metric_reason"] = "quality_censor_flag"
+            result["metric_reason"] = "lineage_boundary" if lineage_status not in {"observed", "matched", "initial_lineage"} or not observed_present else "quality_censor_flag"
             result["censor"] = 1
         elif registration_value.calibrated and len(observed_points) >= 2:
             model_pixels = registration_value.model_to_pixel(model_frame.points)
@@ -1528,7 +1570,7 @@ def compare_with_model(
         output_rows.append(result)
     fields = [
         "frame", "time", "filament_id", "observed_length_px", "observed_endpoint_distance_px",
-        "observed_curvature_mean_px_inv", "observed_curvature_max_px_inv", "quality", "quality_flags", "censor",
+        "observed_curvature_mean_px_inv", "observed_curvature_max_px_inv", "quality", "quality_flags", "lineage_status", "censor",
         "registered_model_time", "model_time", "time_error_s", "time_match_method", "time_tolerance_s",
         "model_length", "model_endpoint_distance", "model_curvature_mean", "model_curvature_max",
         "model_length_px", "model_endpoint_distance_px", "endpoint_correspondence_method",
@@ -1538,6 +1580,8 @@ def compare_with_model(
     ]
     _write_csv(out_dir / "comparison.csv", output_rows, fields)
     calibration_status = "calibrated" if registration_value.calibrated else "not_calibrated_metrics_suppressed"
+    all_lineage_ids = sorted({row.get("filament_id", "") for row in summary_rows + lineage_rows if row.get("filament_id", "")})
+    not_selected_lineage_ids = [lineage_id for lineage_id in all_lineage_ids if chosen is not None and lineage_id != chosen]
     compact = {
         "schema_version": SCHEMA_VERSION,
         "observation_dir": str(obs_dir.resolve()),
@@ -1553,6 +1597,14 @@ def compare_with_model(
         "computed_rows": sum(row["metric_status"] == "computed" for row in output_rows),
         "censored_rows": sum(bool(row["censor"]) for row in output_rows),
         "excluded_from_metric_denominator": sum(row["metric_status"] != "computed" for row in output_rows),
+        "population_rows": len(output_rows),
+        "lineage_ids": sorted({row["filament_id"] for row in output_rows}),
+        "all_lineage_ids": all_lineage_ids,
+        "selected_lineage_id": chosen,
+        "not_selected_lineage_ids": not_selected_lineage_ids,
+        "not_selected_lineage_reason": "not_selected_filament_id" if not_selected_lineage_ids else None,
+        "excluded_lineage_ids": sorted({row["filament_id"] for row in output_rows if row["metric_status"] != "computed"}),
+        "excluded_from_metric_reasons": sorted({row["metric_reason"] for row in output_rows if row["metric_status"] != "computed"}),
         "not_computed_reason_counts": {
             reason: sum(row["metric_reason"] == reason for row in output_rows)
             for reason in sorted({row["metric_reason"] for row in output_rows if row["metric_reason"]})
@@ -1575,7 +1627,12 @@ def compare_with_model(
         "calibration_status": calibration_status,
         "artifacts": comparison_artifacts,
         "eligible_rows": compact["eligible_rows"],
+        "population_rows": compact["population_rows"],
         "excluded_from_metric_denominator": compact["excluded_from_metric_denominator"],
+        "excluded_lineage_ids": compact["excluded_lineage_ids"],
+        "all_lineage_ids": compact["all_lineage_ids"],
+        "not_selected_lineage_ids": compact["not_selected_lineage_ids"],
+        "excluded_from_metric_reasons": compact["excluded_from_metric_reasons"],
     }
     (out_dir / "comparison_manifest.json").write_text(canonical_json(comparison_manifest) + "\n", encoding="utf-8")
     return {"rows": output_rows, "summary": compact, "model_frames": model_frames, "filament_id": chosen}
@@ -1679,7 +1736,9 @@ def render_comparison(
                 fill=(10, 10, 10),
             )
             if row is not None:
-                text = f"Lobs={row['observed_length_px']:.1f}px  q={row['quality']}  censor={row['censor']}"
+                observed_length = row.get("observed_length_px")
+                length_text = f"{float(observed_length):.1f}px" if observed_length not in {None, ""} else "missing"
+                text = f"Lobs={length_text}  q={row.get('quality', 'missing')}  censor={row['censor']}"
                 right_draw.text((8, 28), text, fill=(10, 10, 10))
                 right_draw.text((8, 48), str(row["metric_status"]), fill=(10, 10, 10))
                 right_draw.text((8, 68), f"time_error={row.get('time_error_s', '')} method={row.get('time_match_method', '')}", fill=(10, 10, 10))
@@ -1738,6 +1797,7 @@ __all__ = [
     "CenterlineCandidate",
     "probe_video",
     "iter_video_frames",
+    "sampled_frame_range",
     "segment_mask",
     "connected_components",
     "component_to_centerline",

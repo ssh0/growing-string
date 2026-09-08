@@ -19,6 +19,7 @@ from growing_filament.video_comparison import (
     endpoint_correspondence,
     polyline_metrics,
     run_pipeline,
+    sampled_frame_range,
     skeleton_topology,
     segment_mask,
     validate_centerline_rows,
@@ -68,6 +69,10 @@ class VideoComparisonFixtureTests(unittest.TestCase):
             metrics = polyline_metrics(centreline)
             self.assertTrue(np.isfinite(list(metrics.values())).all(), kind)
             self.assertGreater(metrics["length_px"], metrics["endpoint_distance_px"])
+
+    def test_sampled_frame_range_is_mechanical(self):
+        self.assertEqual(sampled_frame_range(698, 15), {"count": 47, "first": 0, "last": 690})
+        self.assertEqual(sampled_frame_range(698, 15, 3), {"count": 3, "first": 0, "last": 30})
 
     def test_branch_and_loop_topology_are_censored_signals(self):
         branch = np.asarray(
@@ -152,6 +157,9 @@ class VideoComparisonFixtureTests(unittest.TestCase):
             with (output / "events.csv").open() as handle:
                 events = list(csv.DictReader(handle))
             self.assertTrue(any(row["event"] == "missing" for row in events))
+            for event_name in ("new_lineage", "reconnected_after_missing"):
+                matching = [row for row in events if row["event"] == event_name]
+                self.assertLessEqual(len(matching), 1, event_name)
 
     def test_growth_and_missing_frames_have_contract_and_censor_signals(self):
         rows = []
