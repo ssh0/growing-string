@@ -1,0 +1,39 @@
+{
+  "schema_version": "continuum-filament-contact-snapshots-config-1",
+  "cases": [
+    {
+      "name": "u_self_contact",
+      "role": "U-shaped self-contact",
+      "length": 2.0,
+      "n_nodes": 7,
+      "axial_stiffness": 100.0,
+      "bending_stiffness": 0.1,
+      "drag_density": 1.0,
+      "growth_rate": 0.05,
+      "contact_stiffness": 10.0,
+      "diameter": 0.35,
+      "dt": 0.001,
+      "t_end": 0.02,
+      "a_max_factor": 8.0,
+      "initial_shape": "u",
+      "amplitude": 0.04
+    },
+    {
+      "name": "s_contact_folding",
+      "role": "S-shaped contact/folding",
+      "length": 2.0,
+      "n_nodes": 9,
+      "axial_stiffness": 100.0,
+      "bending_stiffness": 0.1,
+      "drag_density": 1.0,
+      "growth_rate": 0.05,
+      "contact_stiffness": 10.0,
+      "diameter": 0.30,
+      "dt": 0.0005,
+      "t_end": 0.02,
+      "a_max_factor": 4.0,
+      "initial_shape": "s",
+      "amplitude": 0.20
+    }
+  ]
+}
