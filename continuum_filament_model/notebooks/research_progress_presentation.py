@@ -729,18 +729,26 @@ def _(dense_snapshots, mo, np, plt, video_centerline_rows, video_frame_control, 
     _length_rows = video_presentation.get("length_timeseries", [])
     _length_times = np.asarray([float(row["time"]) for row in _length_rows], dtype=float)
     _length_values = np.asarray([float(row["length_px"]) for row in _length_rows], dtype=float)
+    _length_censor = np.asarray([int(row.get("censor", 0)) for row in _length_rows], dtype=int)
+    _selected_lineage = str(video_presentation.get("selected_filament_id") or "")
+    _same_lineage = np.asarray([str(row.get("filament_id", "")) == _selected_lineage for row in _length_rows], dtype=bool)
     _finite_length = np.isfinite(_length_times) & np.isfinite(_length_values) & (_length_values > 0.0)
-    _eligible_length = _finite_length & np.asarray([int(row.get("censor", 0)) == 0 for row in _length_rows], dtype=bool)
-    _fit_mask = _eligible_length if int(np.count_nonzero(_eligible_length)) >= 2 else _finite_length
-    if int(np.count_nonzero(_fit_mask)) >= 2:
-        _growth_slope, _growth_intercept = np.polyfit(_length_times[_fit_mask], np.log(_length_values[_fit_mask]), 1)
-        _fit_times = np.linspace(float(np.min(_length_times[_finite_length])), float(np.max(_length_times[_finite_length])), 120)
+    _eligible_length = _finite_length & _same_lineage & (_length_censor == 0)
+    _fit_count = int(np.count_nonzero(_eligible_length))
+    if _fit_count >= 2:
+        _growth_slope, _growth_intercept = np.polyfit(_length_times[_eligible_length], np.log(_length_values[_eligible_length]), 1)
+        _fit_times = np.linspace(float(np.min(_length_times[_eligible_length])), float(np.max(_length_times[_eligible_length])), 120)
         _fit_lengths = np.exp(_growth_intercept + _growth_slope * _fit_times)
-        _growth_text = f"log-linear記述fit: g={float(_growth_slope):.4g} 1/time"
+        _growth_text = f"同一lineage（{_selected_lineage}）の適格行だけでlog-linear記述fit: g={float(_growth_slope):.4g} 1/time"
     else:
         _fit_times = np.array([])
         _fit_lengths = np.array([])
-        _growth_text = "fitに必要な2点以上の長さデータなし"
+        _finite_count = int(np.count_nonzero(_finite_length))
+        _censored_count = int(np.count_nonzero(_finite_length & (_length_censor == 1)))
+        if _fit_count == 0 and _finite_count == _censored_count:
+            _growth_text = f"適格観測行なし（全{_finite_count}行が分岐・ループ・品質フラグによりcensor）"
+        else:
+            _growth_text = f"適格観測行={_fit_count}<2（同一lineageかつcensor=0の行のみを対象；fit非表示）"
 
     _profile_groups = {}
     for _row in video_presentation.get("curvature_profile", []):
@@ -787,11 +795,23 @@ def _(dense_snapshots, mo, np, plt, video_centerline_rows, video_frame_control, 
     _axes[0, 1].legend(fontsize=7, ncol=2)
     _axes[0, 1].grid(alpha=0.2)
 
-    _length_censor = np.asarray([int(row.get("censor", 0)) for row in _length_rows], dtype=int)
-    _axes[1, 0].scatter(_length_times[_finite_length], _length_values[_finite_length], c=np.where(_length_censor[_finite_length] == 0, "tab:blue", "tab:red"), s=28, label="L(t) rows")
+    _axes[1, 0].scatter(
+        _length_times[_finite_length & (_length_censor == 0)],
+        _length_values[_finite_length & (_length_censor == 0)],
+        color="tab:blue",
+        s=28,
+        label="候補行（censor=0）",
+    )
+    _axes[1, 0].scatter(
+        _length_times[_finite_length & (_length_censor == 1)],
+        _length_values[_finite_length & (_length_censor == 1)],
+        color="tab:red",
+        s=28,
+        label="候補行（censor=1）",
+    )
     if len(_fit_times):
-        _axes[1, 0].plot(_fit_times, _fit_lengths, "k--", linewidth=2, label="log-linear fit")
-    _axes[1, 0].set_title("輪郭長 $L(t)$ と成長フィッティング")
+        _axes[1, 0].plot(_fit_times, _fit_lengths, "k--", linewidth=2, label="同一lineage適格行の記述fit")
+    _axes[1, 0].set_title("候補フィラメントの輪郭長 $L(t)$（censor付き；適格fitのみ表示）")
     _axes[1, 0].set_xlabel("time")
     _axes[1, 0].set_ylabel("L [pixel]")
     _axes[1, 0].text(0.02, 0.97, _growth_text + "\n赤点=censorフラグあり", transform=_axes[1, 0].transAxes, va="top", fontsize=8)
@@ -837,7 +857,8 @@ def _(dense_snapshots, mo, np, plt, video_centerline_rows, video_frame_control, 
                 抽出中心線の座標、時系列の輪郭長、曲率を直接表示する。赤点は品質・追跡上の `censor` フラグを持つ行であり、
                 データを捨てずにレビュー対象として明示している。
 
-                {_growth_text}。これは抽出輪郭長に対する記述的な成長曲線で、局所成長則や物性定数を自動的に同定した結果ではない。
+                {_growth_text}。プロットの点は候補フィラメントの輪郭長時系列であり、censor行を除外せず表示する。
+                破線は同一lineageかつ `censor=0` の適格行が2件以上ある場合だけ描画し、適格行が不足する場合は物理的な成長率fitを表示しない。
                 下のモデル比較は pixel/model の校正・登録なしに端点方向と弦長だけを合わせた**幾何学的対比**である。
                 形状の類似は $\\chi$、曲げ剛性、径、摩擦、lineage の同定を意味しない。力学パラメータの同定には、単位校正、品質フラグを考慮した
                 holdout、または力–伸長応答など追加観測が必要である。
