@@ -17,6 +17,7 @@ model or of the bacterial experiment. See ``notes/model_spec.md`` and
 from __future__ import annotations
 
 from dataclasses import dataclass
+from numbers import Real
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -173,6 +174,13 @@ class FilamentState:
         )
 
     def validate(self, eps: float = 1.0e-12) -> None:
+        """Validate geometry and scalar metadata invariants.
+
+        ``time`` must be a finite Python/NumPy real scalar. ``step`` must be
+        a finite integer-valued Python/NumPy real scalar; integer-valued
+        floats such as ``3.0`` are accepted for JSON round trips. Strings,
+        bools, lists, arrays, and nonfinite values are rejected.
+        """
         # State metadata is intentionally scalar.  ``np.isfinite`` on a
         # one-element list/array returns a one-element array, which can be
         # coerced to bool and would defer the error to model initialization.
@@ -180,30 +188,38 @@ class FilamentState:
         # integer-valued float (for example ``3.0``) is also accepted for
         # backwards-compatible JSON round trips, while bools and arrays are
         # rejected.
-        if isinstance(self.time, (bool, np.bool_)) or not np.isscalar(self.time):
-            raise ModelError(f"time must be a finite scalar: {self.time!r}")
+        if (
+            isinstance(self.time, (bool, np.bool_))
+            or not isinstance(self.time, Real)
+            or not np.isscalar(self.time)
+        ):
+            raise ModelError(f"time must be a finite real scalar: {self.time!r}")
         try:
             time_value = float(self.time)
         except (TypeError, ValueError, OverflowError) as exc:
-            raise ModelError(f"time must be a finite scalar: {self.time!r}") from exc
+            raise ModelError(f"time must be a finite real scalar: {self.time!r}") from exc
         if not np.isfinite(time_value):
             raise ModelError(f"time must be finite: {self.time!r}")
 
-        if isinstance(self.step, (bool, np.bool_)) or not np.isscalar(self.step):
+        if (
+            isinstance(self.step, (bool, np.bool_))
+            or not isinstance(self.step, Real)
+            or not np.isscalar(self.step)
+        ):
             raise ModelError(
-                "step must be a finite integer-valued scalar: "
+                "step must be a finite integer-valued real scalar: "
                 f"{self.step!r}"
             )
         try:
             step_value = float(self.step)
         except (TypeError, ValueError, OverflowError) as exc:
             raise ModelError(
-                "step must be a finite integer-valued scalar: "
+                "step must be a finite integer-valued real scalar: "
                 f"{self.step!r}"
             ) from exc
         if not np.isfinite(step_value) or not step_value.is_integer():
             raise ModelError(
-                "step must be a finite integer-valued scalar: "
+                "step must be a finite integer-valued real scalar: "
                 f"{self.step!r}"
             )
         if self.positions.ndim != 2 or self.positions.shape[1] != 2:

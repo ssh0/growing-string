@@ -14,7 +14,12 @@ from continuum_filament_model.benchmarks.linear_mode_convergence import (
     _linearization,
     _run_growth_case,
 )
-from growing_filament.model import FilamentState, ModelError
+from growing_filament.model import (
+    FilamentState,
+    ModelError,
+    ModelParameters,
+    OverdampedGrowingFilament,
+)
 
 
 class P0BLinearModeConvergenceTest(unittest.TestCase):
@@ -88,6 +93,34 @@ class P0BLinearModeConvergenceTest(unittest.TestCase):
         self.assertFalse(result["energy_and_dissipation_gated"])
         self.assertTrue(result["audit"]["adaptive_dt_warning"])
         self.assertGreater(result["audit"]["energy_final_relative_span"], 1.0)
+
+    def test_numeric_strings_fail_validation_and_first_step_with_model_error(self):
+        positions = [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]]
+        for field, value in (("time", "0"), ("step", "3")):
+            with self.subTest(field=field):
+                kwargs = {field: value}
+                with self.assertRaises(ModelError):
+                    FilamentState(positions, [1.0, 1.0], **kwargs)
+
+        model = OverdampedGrowingFilament(
+            FilamentState(positions, [1.0, 1.0]),
+            ModelParameters(
+                axial_stiffness=2.0,
+                bending_stiffness=1.0,
+                drag_density=1.0,
+                dt=1.0e-4,
+                t_end=1.0e-3,
+                a_max=2.0,
+                fixed_left=True,
+                fixed_right=True,
+            ),
+        )
+        for field, value in (("time", "0"), ("step", "3")):
+            with self.subTest(mutated_field=field):
+                setattr(model.state, field, value)
+                with self.assertRaises(ModelError):
+                    model.step()
+                setattr(model.state, field, 0.0 if field == "time" else 0)
 
     def test_discrete_linearized_hessian_matches_force_gradient(self):
         reference = _linearization(2.0, 7, 0.1, 1.0)
