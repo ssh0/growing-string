@@ -1,0 +1,401 @@
+{
+  "comparison": {
+    "comparison_manifest.json": {
+      "all_lineage_ids": [
+        "filament-0000",
+        "filament-0001",
+        "filament-0002"
+      ],
+      "artifacts": {
+        "comparison_csv": {
+          "bytes": 7644,
+          "path": "comparison.csv",
+          "sha256": "974591b09de1c1388de3bf8925384e0e74afd063e667c71b7c88d4de5dca3681"
+        },
+        "comparison_json": {
+          "bytes": 1514,
+          "path": "comparison.json",
+          "sha256": "93362b35643bccf7529107312457f96c34f293d131e5fe0a06ea5731574dc3cd"
+        }
+      },
+      "calibration_status": "not_calibrated_metrics_suppressed",
+      "eligible_rows": 0,
+      "excluded_from_metric_denominator": 24,
+      "excluded_from_metric_reasons": [
+        "missing_observation_lineage",
+        "model_time_unmatched_or_centerline_unavailable",
+        "quality_censor_flag",
+        "reconnected_after_missing_boundary"
+      ],
+      "excluded_lineage_ids": [
+        "filament-0000"
+      ],
+      "model_logical_id": "trajectory.npz",
+      "not_selected_lineage_ids": [
+        "filament-0001",
+        "filament-0002"
+      ],
+      "observation_logical_id": "r5-gray5-full",
+      "population_rows": 24,
+      "registration": {
+        "endpoint_order": "auto",
+        "max_time_error_s": 0.2,
+        "pixel_per_model_unit": null,
+        "rotation_deg": 0.0,
+        "time_offset": 0.0,
+        "time_scale": 1.0,
+        "x_offset_px": 0.0,
+        "y_offset_px": 0.0
+      },
+      "schema_version": "continuum-filament-observation-0.1"
+    },
+    "render_manifest.json": {
+      "artifacts": {
+        "comparison_csv": {
+          "bytes": 7644,
+          "path": "comparison.csv",
+          "sha256": "974591b09de1c1388de3bf8925384e0e74afd063e667c71b7c88d4de5dca3681"
+        },
+        "comparison_json": {
+          "bytes": 1514,
+          "path": "comparison.json",
+          "sha256": "93362b35643bccf7529107312457f96c34f293d131e5fe0a06ea5731574dc3cd"
+        },
+        "comparison_manifest": {
+          "bytes": 1070,
+          "path": "comparison_manifest.json",
+          "sha256": "270f901bd448047df591a807a446e4574743ff0c43d7e16c6e5c22a0cf351efa"
+        },
+        "comparison_video": {
+          "bytes": 1170130,
+          "path": "comparison.mp4",
+          "sha256": "212fe73df5691e939f9822999afd60b4e30d716ba12ebbd102ad774bdc5183ba"
+        },
+        "representative_frames": {
+          "frame_000000.png": {
+            "bytes": 265763,
+            "path": "frame_000000.png",
+            "sha256": "316505339272064d464ee5d2e71decec57ab44b69e1a0db706f75504ec8569e5"
+          },
+          "frame_000105.png": {
+            "bytes": 248297,
+            "path": "frame_000105.png",
+            "sha256": "6bffb68d37e6a7ba68a856ff2494abff07ddec25d88f0621862de6bbe59b9849"
+          },
+          "frame_000225.png": {
+            "bytes": 339009,
+            "path": "frame_000225.png",
+            "sha256": "bd6e33a10122ba03df72d771e9b43682cd591df54722f30910242484abf85c8b"
+          },
+          "frame_000345.png": {
+            "bytes": 424359,
+            "path": "frame_000345.png",
+            "sha256": "b4c811057194a38587a8ca9dc047f06ca484c850a55a285f64aaabf8929c4019"
+          }
+        }
+      },
+      "calibration_status": "not_calibrated_metrics_suppressed",
+      "coverage": "full_period",
+      "frames_written": 24,
+      "max_video_frames": null,
+      "output_budget": {
+        "artifact_bytes": 2457786,
+        "bytes": null,
+        "status": "not_configured"
+      },
+      "representative_frames": [
+        0,
+        105,
+        225,
+        345
+      ],
+      "runtime": {
+        "PIL": "10.4.0",
+        "ffmpeg": {
+          "available": true,
+          "version": "ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers"
+        },
+        "ffprobe": {
+          "available": true,
+          "version": "ffprobe version 8.1.2 Copyright (c) 2007-2026 the FFmpeg developers"
+        },
+        "imageio": "2.36.0",
+        "libx264": {
+          "available": true
+        },
+        "marimo": "0.23.6",
+        "matplotlib": "3.10.9",
+        "numpy": "2.2.6",
+        "opencv_used": false,
+        "python": "3.11.5",
+        "skimage": "0.24.0"
+      },
+      "schema_version": "continuum-filament-observation-0.1",
+      "video_logical_id": "gray5.mp4"
+    },
+    "summary": {
+      "all_lineage_ids": [
+        "filament-0000",
+        "filament-0001",
+        "filament-0002"
+      ],
+      "calibration_status": "not_calibrated_metrics_suppressed",
+      "censored_rows": 24,
+      "computed_rows": 0,
+      "eligible_rows": 0,
+      "excluded_from_metric_denominator": 24,
+      "excluded_from_metric_reasons": [
+        "missing_observation_lineage",
+        "model_time_unmatched_or_centerline_unavailable",
+        "quality_censor_flag",
+        "reconnected_after_missing_boundary"
+      ],
+      "excluded_lineage_ids": [
+        "filament-0000"
+      ],
+      "filament_id": "filament-0000",
+      "limitations": [
+        "registration is configuration, not an inferred calibration",
+        "a selected candidate is not proof of single-filament tracking"
+      ],
+      "lineage_ids": [
+        "filament-0000"
+      ],
+      "model_bytes": 442324,
+      "model_logical_id": "trajectory.npz",
+      "model_sha256": "7477c42d14ee00977d7ffb7ca0a30470c105602be31c68b2420568aabd3fa2a6",
+      "not_computed_reason_counts": {
+        "missing_observation_lineage": 16,
+        "model_time_unmatched_or_centerline_unavailable": 6,
+        "quality_censor_flag": 1,
+        "reconnected_after_missing_boundary": 1
+      },
+      "not_selected_lineage_ids": [
+        "filament-0001",
+        "filament-0002"
+      ],
+      "not_selected_lineage_reason": "not_selected_filament_id",
+      "population_rows": 24,
+      "registration": {
+        "endpoint_order": "auto",
+        "max_time_error_s": 0.2,
+        "pixel_per_model_unit": null,
+        "rotation_deg": 0.0,
+        "time_offset": 0.0,
+        "time_scale": 1.0,
+        "x_offset_px": 0.0,
+        "y_offset_px": 0.0
+      },
+      "rows": 24,
+      "schema_version": "continuum-filament-observation-0.1",
+      "selected_lineage_id": "filament-0000"
+    }
+  },
+  "configuration": {
+    "config_sha256": "0ce0b7659de7a946a42ccdb608d632a6194190074399bb7f25718d62203ca722",
+    "segmentation_config": {
+      "background": "local_median",
+      "background_value": 0.0,
+      "boundary_margin_px": 2,
+      "contrast": "percentile",
+      "contrast_high": 99.0,
+      "contrast_low": 1.0,
+      "frame_stride": 15,
+      "max_centerline_points": 200,
+      "max_components": 1,
+      "max_jump_px": 80.0,
+      "min_component_size": 30,
+      "min_quality": 0.2,
+      "output_budget_bytes": 104857600,
+      "polarity": "dark",
+      "roi": [
+        280,
+        150,
+        420,
+        320
+      ],
+      "skeleton": true,
+      "skeleton_backend": "auto",
+      "threshold": "absolute",
+      "threshold_percentile": 12.0,
+      "threshold_value": 0.8
+    }
+  },
+  "full_period_run": {
+    "artifacts": {
+      "centerline": {
+        "bytes": 109493,
+        "path": "centerline.csv",
+        "sha256": "49d58f5a610988103079eb396d649f8f33578882973c45d87e5e46b8d89a1673"
+      },
+      "events": {
+        "bytes": 5686,
+        "path": "events.csv",
+        "sha256": "b13a97580b1957e953aa923aa2a96cdc3d625dd1e8ce09e3caad3cf3607a574d"
+      },
+      "lineage": {
+        "bytes": 1759,
+        "path": "lineage.csv",
+        "sha256": "ea5629fc93e99e38040ec82e1e42913fc817ca3091f3e1a1bf49a575539eb27e"
+      },
+      "metadata": {
+        "bytes": 1622,
+        "path": "metadata.json",
+        "sha256": "903c37ef3022b6ba0ead602d649f19188eb8d7c4636ea67f14d286fb748b171a"
+      },
+      "observation_summary": {
+        "bytes": 4893,
+        "path": "observation_summary.csv",
+        "sha256": "165acd3a714407b4bedabb18cd07e01e414accd475b1e236768da3b578749d44"
+      }
+    },
+    "candidate_censor_count": 20,
+    "candidate_count": 20,
+    "component_count_summary": {
+      "max": 25,
+      "mean": 8.958333333333334
+    },
+    "output_budget": {
+      "artifact_bytes": 123453,
+      "bytes": 104857600,
+      "status": "within_budget"
+    },
+    "processed_frames": 24,
+    "run": {
+      "coverage": "full_period",
+      "frame_range": {
+        "count": 24,
+        "coverage": "full_period",
+        "decode_complete": true,
+        "expected_count": 24,
+        "expected_last": 345,
+        "first": 0,
+        "last": 345,
+        "stride": 15
+      },
+      "max_frames": null
+    },
+    "runtime": {
+      "PIL": "10.4.0",
+      "ffmpeg": {
+        "available": true,
+        "version": "ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers"
+      },
+      "ffprobe": {
+        "available": true,
+        "version": "ffprobe version 8.1.2 Copyright (c) 2007-2026 the FFmpeg developers"
+      },
+      "imageio": "2.36.0",
+      "libx264": {
+        "available": true
+      },
+      "marimo": "0.23.6",
+      "matplotlib": "3.10.9",
+      "numpy": "2.2.6",
+      "opencv_used": false,
+      "python": "3.11.5",
+      "skimage": "0.24.0"
+    },
+    "validation": {
+      "errors": [],
+      "finite_coordinates": true,
+      "n_filaments": 2,
+      "n_rows": 609,
+      "time_monotonic": true,
+      "valid": true,
+      "warnings": []
+    }
+  },
+  "input": {
+    "bytes": 4104980,
+    "ffprobe": {
+      "codec": "h264",
+      "duration_s": 23.266667,
+      "fps": 15.0,
+      "frame_count": 349,
+      "height": 512,
+      "pixel_format": "yuv420p",
+      "width": 680
+    },
+    "logical_id": "gray5.mp4",
+    "sha256": "25eea9e9f439beb0476841f8269d421569fc011e548c3ea85741dea5cfd1072e",
+    "source_note": "local Dropbox-derived input; license/redistribution terms not verified; video not committed"
+  },
+  "limitations": [
+    "candidate extraction is not proof of single-filament lineage",
+    "scale/time calibration was not supplied; quantitative comparison denominator is zero",
+    "no parameter identification, physical validation, contact/friction inference, or universality claim"
+  ],
+  "reproducibility": {
+    "hashes_checked": [
+      "centerline.csv",
+      "observation_summary.csv",
+      "events.csv",
+      "lineage.csv",
+      "metadata.json",
+      "manifest.json"
+    ],
+    "note": "gray5 full-period extraction repeated; listed hashes matched",
+    "same_config_repeated": true
+  },
+  "schema_version": "continuum-filament-observation-run-0.5",
+  "smoke_run": {
+    "artifacts": {
+      "centerline": {
+        "bytes": 33599,
+        "path": "centerline.csv",
+        "sha256": "f835836e294be126cb9c1820ccfdad661ca6d7c8af80e44ff2017912ef277196"
+      },
+      "events": {
+        "bytes": 628,
+        "path": "events.csv",
+        "sha256": "ba49f8d0e45c6dd4e8ab1c285b44f4364dcc2d81b528074a1f69c7118fef9a8e"
+      },
+      "lineage": {
+        "bytes": 148,
+        "path": "lineage.csv",
+        "sha256": "2a5615fa7b1041a8e65eb38bc0d1fd5af79f7a0622ea407ab1881e9b7570e7fa"
+      },
+      "metadata": {
+        "bytes": 1628,
+        "path": "metadata.json",
+        "sha256": "2552bd7f15cf7cfc322429c8edf3746099a931eda46eae4586ad10cddedb50dd"
+      },
+      "observation_summary": {
+        "bytes": 885,
+        "path": "observation_summary.csv",
+        "sha256": "f201d4719eda3441250efdf94a662ac2e0524f61b6412f2c7a0c99e637442e26"
+      }
+    },
+    "candidate_count": 3,
+    "output_budget": {
+      "artifact_bytes": 36888,
+      "bytes": 10485760,
+      "status": "within_budget"
+    },
+    "processed_frames": 3,
+    "run": {
+      "coverage": "partial_max_frames",
+      "frame_range": {
+        "count": 3,
+        "coverage": "partial_max_frames",
+        "decode_complete": true,
+        "expected_count": 3,
+        "expected_last": 60,
+        "first": 0,
+        "last": 60,
+        "stride": 30
+      },
+      "max_frames": 3
+    },
+    "validation": {
+      "errors": [],
+      "finite_coordinates": true,
+      "n_filaments": 1,
+      "n_rows": 200,
+      "time_monotonic": true,
+      "valid": true,
+      "warnings": []
+    }
+  }
+}
