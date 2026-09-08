@@ -88,6 +88,18 @@ D_Euler = dt * sum_i Gamma_i |v_i|^2
 
 どれか一つでも形状条件を満たさない代表点は`numerically-unresolved`とする。これは「座屈が存在しない」という意味ではなく、現行の時間刻み・空間解像度・判定規則で確定できないという意味である。P1B.2で未解決だったboundary近傍・buckled候補を、単一の結果や見た目だけで`resolved`へ再分類しない。energy、mechanical change、散逸は現行成長gateのpass/fail条件ではない。
 
+## 標準configの実行結果
+
+`p0b_linear_mode.json`を、source/execution revision `0ac84ab2ef5635520dbdd7677435de47095f628e`、Python 3.11.5、NumPy 2.2.6で実行した。標準configはlinear 9 run、growth 19 run、合計28 runで、実行時間は約258.5秒だった。詳細なraw/effective config hash、実行環境、temporary output bytes、accepted `dt`監査は`results/p0b/compact_summary.json`に保存する。
+
+結果は次のとおりである。
+
+- `straight`：temporal/spatialとも`morphology-converged`。ただしtemporalのenergy final相対spanは約`178.8`、spatialは約`8.77`で、accepted `dt`の縮小とrejected trialも発生した。したがって、成長–緩和全体の収束結果ではない。
+- `boundary-near`：temporal/spatialとも`numerically-unresolved`。
+- `buckled-candidate`：temporal/spatialとも`numerically-unresolved`。
+
+`morphology-converged`は形状指標だけのstatusであり、energy、mechanical change、散逸、adaptive dt、rejectionが収束したことを意味しない。P1B.2の未解決領域はこの結果でもresolvedへ再分類していない。
+
 ## 実行と成果物
 
 ```bash

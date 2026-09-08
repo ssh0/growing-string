@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from continuum_filament_model.benchmarks.linear_mode_convergence import (
+    _convergence_status,
     _finite_difference_hessian,
     _linearization,
     _run_growth_case,
@@ -49,6 +50,44 @@ class P0BLinearModeConvergenceTest(unittest.TestCase):
         self.assertEqual(state.time, 0.25)
         self.assertEqual(state.step, 3)
         self.assertEqual(integer_float_state.step, 3.0)
+
+    def test_morphology_gate_reports_energy_and_adaptive_dt_as_audit_only(self):
+        base = {
+            "run": "coarse",
+            "failure_reason": None,
+            "fixed_mesh_observed": True,
+            "classification": {
+                "label": "straight",
+                "onset_time": None,
+                "peak_max_transverse_displacement": 0.02,
+            },
+            "peak_A1_over_L": 0.01,
+            "dt_requested": 0.001,
+            "accepted_dt_min": 0.0005,
+            "accepted_dt_max": 0.001,
+            "accepted_dt_mean": 0.00075,
+            "accepted_dt_count": 10,
+            "rejected_trials": 2,
+            "event_count": 13,
+            "energy_final": 1.0,
+            "dissipation_euler_estimate": 2.0,
+        }
+        fine = {**base, "run": "fine", "accepted_dt_min": 0.001, "accepted_dt_mean": 0.001, "rejected_trials": 0, "event_count": 11, "energy_final": 0.01, "dissipation_euler_estimate": 0.1}
+        result = _convergence_status(
+            [base, fine],
+            {
+                "onset_time_relative": 0.1,
+                "peak_transverse_relative": 0.15,
+                "peak_transverse_absolute_fraction_of_length": 0.002,
+                "a1_over_length_relative": 0.15,
+            },
+            "fine",
+        )
+        self.assertEqual(result["status"], "morphology-converged")
+        self.assertEqual(result["scope"], "morphology-only")
+        self.assertFalse(result["energy_and_dissipation_gated"])
+        self.assertTrue(result["audit"]["adaptive_dt_warning"])
+        self.assertGreater(result["audit"]["energy_final_relative_span"], 1.0)
 
     def test_discrete_linearized_hessian_matches_force_gradient(self):
         reference = _linearization(2.0, 7, 0.1, 1.0)
