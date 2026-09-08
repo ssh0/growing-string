@@ -1193,7 +1193,10 @@ def run_pipeline(
                     candidate.flags.append("orientation_reversed")
             previous_points[filament_id] = candidate.points.copy()
             candidates.append(candidate)
+            frame_level_flags = {"ambiguous_components", "components_truncated"}
             for flag in candidate.flags:
+                if flag in frame_level_flags:
+                    continue
                 severity = "censor" if candidate.censor else "warning"
                 events.append({"frame": frame_index, "time": time_s, "event": flag, "severity": severity, "details": filament_id})
     centerline_rows = [row for candidate in candidates for row in _candidate_rows(candidate)]
@@ -1576,22 +1579,22 @@ def compare_with_model(
         }
         points_rows = sorted(grouped.get((frame_index, population_filament_id), []))
         observed_points = np.asarray([[x, y] for _, x, y in points_rows], dtype=float)
+        lineage_reason = (
+            "missing_observation_lineage" if not observed_present else
+            "new_lineage_boundary" if lineage_status == "new_lineage" else
+            "reconnected_after_missing_boundary" if lineage_status == "reconnected_after_missing" else
+            None
+        )
         if model_frame is None:
             result["metric_status"] = "not_computed_missing_observation" if not observed_present else "not_computed_model_unmatched"
-            result["metric_reason"] = "missing_observation_lineage" if not observed_present else "model_time_unmatched_or_centerline_unavailable"
+            result["metric_reason"] = lineage_reason or "model_time_unmatched_or_centerline_unavailable"
             result["censor"] = 1
             missing_flag = "missing_observation" if not observed_present else "model_time_unmatched"
             if missing_flag not in flags:
                 result["quality_flags"] = ";".join(flags + [missing_flag]) if flags else missing_flag
         elif censored:
             result["metric_status"] = "not_computed_censored"
-            result["metric_reason"] = (
-                "missing_observation_lineage"
-                if not observed_present
-                else "lineage_boundary"
-                if lineage_status not in {"observed", "matched", "initial_lineage"}
-                else "quality_censor_flag"
-            )
+            result["metric_reason"] = lineage_reason or "quality_censor_flag"
             result["censor"] = 1
         elif registration_value.calibrated and len(observed_points) >= 2:
             model_pixels = registration_value.model_to_pixel(model_frame.points)

@@ -156,6 +156,35 @@ class VideoComparisonFixtureTests(unittest.TestCase):
         self.assertGreaterEqual(len(components), 2)
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is required for the synthetic video fixture")
+    @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is required for the component event fixture")
+    def test_component_events_are_one_frame_event_each(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            video = root / "components.mp4"
+            frame = np.full((64, 64), 220, dtype=np.uint8)
+            frame[8:11, 5:18] = 20
+            frame[28:31, 5:18] = 20
+            frame[48:51, 5:18] = 20
+            process = subprocess.Popen(
+                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "gray", "-s", "64x64", "-r", "1", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video)],
+                stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            assert process.stdin is not None
+            process.stdin.write(frame.tobytes())
+            process.stdin.close()
+            self.assertEqual(process.wait(), 0)
+            if process.stderr is not None:
+                process.stderr.close()
+            output = root / "output"
+            run_pipeline(
+                video, output,
+                SegmentationConfig(background="none", contrast="none", threshold="absolute", threshold_value=0.5, frame_stride=1, min_component_size=5, max_components=2),
+            )
+            with (output / "events.csv").open() as handle:
+                events = list(csv.DictReader(handle))
+            self.assertEqual(sum(row["event"] == "ambiguous_components" for row in events), 1)
+            self.assertEqual(sum(row["event"] == "components_truncated" for row in events), 1)
+
     def test_missing_frame_lineage_and_new_lineage_are_retained(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -308,6 +337,33 @@ class VideoComparisonFixtureTests(unittest.TestCase):
             self.assertEqual(rows[0]["filament_id"], "unknown")
             self.assertEqual(rows[0]["metric_reason"], "missing_observation_lineage")
             self.assertEqual(rows[0]["censor"], 1)
+
+    def test_comparison_reason_categories_and_denominator_are_distinct(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            centerline_rows = []
+            summary_rows = []
+            for frame, time_s, flags, censor in [
+                (1, 1.0, "new_lineage", 1),
+                (2, 2.0, "reconnected_after_missing", 1),
+                (3, 3.0, "large_jump", 1),
+                (4, 4.0, "ok", 0),
+            ]:
+                centerline_rows.extend([
+                    f"{time_s},filament-0000,0,0,0,0.9,{frame},pixel,{flags},{censor}",
+                    f"{time_s},filament-0000,1,10,0,0.9,{frame},pixel,{flags},{censor}",
+                ])
+                summary_rows.append(f"{frame},{time_s},filament-0000,2,10,10,10,0,0,0.9,{flags},{censor}")
+            (root / "centerline.csv").write_text("time,filament_id,point_id,x,y,quality,frame,coordinate_system,quality_flags,censor\n" + "\n".join(centerline_rows) + "\n", encoding="utf-8")
+            (root / "observation_summary.csv").write_text("frame,time,filament_id,n_points,component_area,length_px,endpoint_distance_px,curvature_mean_px_inv,curvature_max_px_inv,quality,quality_flags,censor\n" + "\n".join(summary_rows) + "\n", encoding="utf-8")
+            (root / "lineage.csv").write_text("frame,time,filament_id,status,censor,details\n0,0.0,unknown,missing_unknown,1,no_component\n1,1.0,filament-0000,new_lineage,1,\n2,2.0,filament-0000,reconnected_after_missing,1,\n3,3.0,filament-0000,matched,1,\n4,4.0,filament-0000,matched,0,\n", encoding="utf-8")
+            (root / "manifest.json").write_text(json.dumps({"video": {"fps": 1.0}, "run": {"frame_range": {"first": 0, "last": 4, "stride": 1}}}), encoding="utf-8")
+            model = root / "model.csv"
+            model.write_text("time,point_id,x,y\n1,0,0,0\n1,1,1,0\n3,0,0,0\n3,1,1,0\n", encoding="utf-8")
+            result = compare_with_model(root, model, RegistrationConfig(pixel_per_model_unit=1.0, max_time_error_s=0.01), output_dir=root / "comparison")
+            reasons = {row["metric_reason"] for row in result["rows"]}
+            self.assertTrue({"missing_observation_lineage", "new_lineage_boundary", "reconnected_after_missing_boundary", "quality_censor_flag", "model_time_unmatched_or_centerline_unavailable"}.issubset(reasons))
+            self.assertEqual(result["summary"]["eligible_rows"] + result["summary"]["excluded_from_metric_denominator"], result["summary"]["population_rows"])
 
     def test_censored_comparison_has_no_quantitative_metric(self):
         with tempfile.TemporaryDirectory() as temporary:
