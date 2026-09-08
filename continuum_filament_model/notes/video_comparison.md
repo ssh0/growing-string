@@ -102,7 +102,8 @@ marimo edit continuum_filament_model/notebooks/video_comparison.py
 - `metadata.json`: video metadata、設定、座標系、validation、限界
 - `manifest.json`: 入力logical ID/SHA-256/size、設定・command SHA-256、runtime、frame coverage、lineage、artifact hash/size、budget
 - `lineage.csv`: matched/new/reconnected/missingを含む追跡lineage（欠損区間を削除しない）
-- `comparison.csv/json`: model time/error、nearest-frame matching、両endpoint対応、model-unit metric、metric status/reason
+- `comparison.csv/json`: sampled frameを母集団として保持し、model time/error、nearest-frame matching、両endpoint対応、model-unit metric、metric status/reason
+- `comparison.json` / `comparison_manifest.json`: eligible denominator、excluded rows/reasons、selected/not-selected lineage ID、CSV/JSON hash/size
 - `comparison_manifest.json`: comparison CSV/JSONのSHA-256とbyte size、eligible/excluded denominator
 - `comparison.mp4`, `frames/`: 左=観測pixel、右=model-unit。大容量のためGit管理しない
 - `results/video_comparison/{gray5,original}_manifest.json`: 動画本体を含めず、入力hash/size/ffprobe、short smoke/full-period run、comparison artifact hash/sizeだけをcompactに保存
@@ -151,16 +152,18 @@ ffmpeg -hide_banner -encoders | grep 264
 23.266667 s、原動画が 680x512、30 fps、698 frames、23.266 s でした。どちらも metadata、centerline、
 events、代表frame、side-by-side comparison videoを生成できました。segment候補は動画全体で安定した
 単一lineageにはならず、frame_stride=15のfull-period runではgray5が24 processed frames・20候補・
-2つのcandidate ID（20候補がcensor、branched/loop flagsを含む）、原動画が24 processed frames・22候補・
-2つのcandidate ID（22候補がcensor）となりました。これは完全自動追跡の成功とは扱わず、large jump、
-missing、topology、censorを比較可能区間の境界として残しています。
+3つのcandidate ID（20候補がcensor、branched/loop flagsを含む）、原動画が47 processed frames・41候補・
+3つのcandidate ID（41候補がcensor）となりました。比較CSVの母集団はlineageのsampled frameを保持し、
+gray5は24行、原動画は47行です。これは完全自動追跡の成功とは扱わず、large jump、missing、topology、
+censorを比較可能区間の境界として残しています。
 
 同じ gray5 設定を2回実行した `centerline.csv`、`observation_summary.csv`、`events.csv`、`lineage.csv`、
 `metadata.json`、`manifest.json` のSHA-256は一致しました。短いsmoke（max_frames=3）はpartial、full-period
-runはmax_frames未指定としてmanifestへ記録しました。P1B runnerの一時trajectoryを読み、
+runはmax_frames未指定としてmanifestへ記録しました。WMVはCFR decodeでffprobe frame_count=698を再現し、
+stride=15で47 frames（last=690）となることを機械検査しました。P1B runnerの一時trajectoryを読み、
 scale未指定で比較したケースでは `calibration_status=not_calibrated_metrics_suppressed` となり、
 model時間が未対応の行も `model_time_unmatched_or_centerline_unavailable` としてcensorされました。
-これらは観察の品質・自動追跡・モデルの物理整合を証明する結果ではありません。
+これらは観察の品質・自動追跡・モデルの物理整合を証明する結果ではありません。marimoページのsliderはlineageのmissing frameも含むprocessed rangeを母集団とし、selected frameのlineage/events、censor、eligible/excluded denominatorを表示します。
 
 ## 検証
 
@@ -176,5 +179,6 @@ marimo check continuum_filament_model/notebooks/video_comparison.py
 ```
 
 実動画を検証するときは `/tmp` などへ出力し、`metadata.json`、代表frame、`centerline.csv`、
-`events.csv`、`comparison.mp4` を確認します。今回のfull-period runはframe_stride=15（入力全期間を24 sampled framesで処理）
-です。動画本体、full mask、per-frame大量データはcommitしません。compact run manifestだけをGit管理します。
+`events.csv`、`comparison.mp4` を確認します。今回のfull-period runはframe_stride=15で、gray5は24 sampled frames、
+原動画はffmpegのCFR decodeにより47 sampled frames（last=690）です。動画本体、full mask、per-frame大量データはcommitしません。
+compact run manifestだけをGit管理します。

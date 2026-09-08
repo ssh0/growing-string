@@ -89,12 +89,33 @@ def _(controls, frame_input, model_input, mo, np, output_input, registration_inp
             summary = list(csv.DictReader(handle))
         with centerline_path.open(encoding="utf-8", newline="") as handle:
             centerline = list(csv.DictReader(handle))
-        if not summary:
-            result = mo.vstack([controls, mo.md("観測候補がありません。threshold、polarity、ROI、min component sizeを見直してください。")])
+        lineage_path = output / "lineage.csv"
+        lineage = []
+        if lineage_path.exists():
+            with lineage_path.open(encoding="utf-8", newline="") as handle:
+                lineage = list(csv.DictReader(handle))
+        events_path = output / "events.csv"
+        events = []
+        if events_path.exists():
+            with events_path.open(encoding="utf-8", newline="") as handle:
+                events = list(csv.DictReader(handle))
+        manifest_path = output / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+        if not summary and not lineage:
+            result = mo.vstack([controls, mo.md("観測候補・lineageがありません。threshold、polarity、ROI、min component sizeを見直してください。")])
         else:
-            available_frames = sorted({int(row["frame"]) for row in summary})
+            frame_range = manifest.get("run", {}).get("frame_range", {})
+            first_frame = frame_range.get("first")
+            last_frame = frame_range.get("last")
+            stride = int(frame_range.get("stride", metadata["segmentation"].get("frame_stride", 1)))
+            if first_frame is not None and last_frame is not None:
+                available_frames = list(range(int(first_frame), int(last_frame) + 1, stride))
+            else:
+                available_frames = sorted({int(row["frame"]) for row in summary} | {int(row["frame"]) for row in lineage})
             selected = min(available_frames, key=lambda value: abs(value - int(frame_input.value)))
             selected_summary = [row for row in summary if int(row["frame"]) == selected]
+            selected_lineage = [row for row in lineage if int(row["frame"]) == selected]
+            selected_events = [row for row in events if row.get("frame", "") not in {"", "-1"} and int(row["frame"]) == selected]
             points = {}
             for row in centerline:
                 if int(row["frame"]) == selected:
@@ -103,10 +124,11 @@ def _(controls, frame_input, model_input, mo, np, output_input, registration_inp
                 values.sort()
 
             video_path = Path(metadata["video"]["path"])
+            selected_time = float((selected_summary or selected_lineage or [{"time": selected / max(float(metadata["video"].get("fps", 1.0)), 1.0)}])[0]["time"])
             frame_image = None
             try:
-                stride = int(metadata["segmentation"].get("frame_stride", 1))
-                for index, _, image in iter_video_frames(video_path, probe_video(video_path), stride, max_frames=1_000_000):
+                video_stride = int(metadata["segmentation"].get("frame_stride", 1))
+                for index, _, image in iter_video_frames(video_path, probe_video(video_path), video_stride, max_frames=1_000_000):
                     if index == selected:
                         frame_image = image
                         break
@@ -125,7 +147,7 @@ def _(controls, frame_input, model_input, mo, np, output_input, registration_inp
                 try:
                     registration_value = RegistrationConfig.from_mapping(json.loads(registration_input.value)) if registration_input.value.strip() else RegistrationConfig()
                     model_frames = load_model_output(Path(model_input.value).expanduser()) if model_input.value.strip() else []
-                    model_match = match_model_frame(model_frames, registration_value.model_time(float(selected_summary[0]["time"])), registration_value.max_time_error_s)
+                    model_match = match_model_frame(model_frames, registration_value.model_time(selected_time), registration_value.max_time_error_s)
                 except Exception as exc:
                     registration_value = RegistrationConfig()
                     model_match = None
@@ -169,14 +191,18 @@ def _(controls, frame_input, model_input, mo, np, output_input, registration_inp
                 else:
                     comparison_rows = []
                 axes[3].axis("off")
-                selected_row = selected_summary[0]
+                selected_row = selected_summary[0] if selected_summary else {}
+                lineage_statuses = ",".join(sorted({row.get("status", "") for row in selected_lineage})) or "none"
+                event_text = ";".join(f"{row.get('event', '')}:{row.get('severity', '')}" for row in selected_events) or "none"
                 lines = [
                     f"frame={selected}",
-                    f"time={selected_row['time']} s",
+                    f"time={selected_time} s",
                     f"candidates={len(selected_summary)}",
-                    f"quality={selected_row['quality']}",
-                    f"flags={selected_row['quality_flags']}",
-                    f"censor={selected_row['censor']}",
+                    f"quality={selected_row.get('quality', 'missing')}",
+                    f"flags={selected_row.get('quality_flags', 'missing_observation')}",
+                    f"censor={selected_row.get('censor', '1' if not selected_summary else '')}",
+                    f"lineage={lineage_statuses}",
+                    f"events={event_text}",
                     f"candidate_count={len(selected_summary)}",
                     "",
                     "model / comparison",
@@ -196,6 +222,8 @@ def _(controls, frame_input, model_input, mo, np, output_input, registration_inp
                     ])
                 else:
                     lines.append("comparison.csv not found; model panel is unavailable")
+                if matching:
+                    lines.append(f"denominator={'eligible' if matching[0].get('metric_status') == 'computed' else 'excluded'}")
                 if model_match is not None and not registration_value.calibrated:
                     lines.append("overlay=suppressed (uncalibrated)")
                 if scale_input.value.strip() and not registration_input.value.strip():

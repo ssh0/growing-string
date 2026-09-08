@@ -1,23 +1,41 @@
 {
   "comparison": {
     "comparison_manifest.json": {
+      "all_lineage_ids": [
+        "filament-0000",
+        "filament-0001",
+        "filament-0002"
+      ],
       "artifacts": {
         "comparison_csv": {
-          "bytes": 3722,
+          "bytes": 13060,
           "path": "comparison.csv",
-          "sha256": "a0fc25596a6cc8e01d4cc9c34119d5bfe8078619fff6e2585efa3b5aaeba732d"
+          "sha256": "0a7385b7449b25c883013a565c698231e1a7ca4189fefce430edc36f817ef65d"
         },
         "comparison_json": {
-          "bytes": 963,
+          "bytes": 1442,
           "path": "comparison.json",
-          "sha256": "fd0532022b6b63af3bc8e1798b6f454ffc41a0b312202f54b14af5a21a6afad8"
+          "sha256": "3173c62e8fb889d64bc44b98c923a9f81c1b2fbb136aab6eb68ffa651721521d"
         }
       },
       "calibration_status": "not_calibrated_metrics_suppressed",
       "eligible_rows": 0,
-      "excluded_from_metric_denominator": 10,
+      "excluded_from_metric_denominator": 47,
+      "excluded_from_metric_reasons": [
+        "missing_observation_lineage",
+        "model_time_unmatched_or_centerline_unavailable",
+        "quality_censor_flag"
+      ],
+      "excluded_lineage_ids": [
+        "filament-0000"
+      ],
       "model_logical_id": "trajectory.npz",
-      "observation_logical_id": "review-original-final-a",
+      "not_selected_lineage_ids": [
+        "filament-0001",
+        "filament-0002"
+      ],
+      "observation_logical_id": "r3-original-full",
+      "population_rows": 47,
       "registration": {
         "endpoint_order": "auto",
         "max_time_error_s": 0.2,
@@ -33,24 +51,24 @@
     "render_manifest.json": {
       "artifacts": {
         "comparison_csv": {
-          "bytes": 3722,
+          "bytes": 13060,
           "path": "comparison.csv",
-          "sha256": "a0fc25596a6cc8e01d4cc9c34119d5bfe8078619fff6e2585efa3b5aaeba732d"
+          "sha256": "0a7385b7449b25c883013a565c698231e1a7ca4189fefce430edc36f817ef65d"
         },
         "comparison_json": {
-          "bytes": 963,
+          "bytes": 1442,
           "path": "comparison.json",
-          "sha256": "fd0532022b6b63af3bc8e1798b6f454ffc41a0b312202f54b14af5a21a6afad8"
+          "sha256": "3173c62e8fb889d64bc44b98c923a9f81c1b2fbb136aab6eb68ffa651721521d"
         },
         "comparison_manifest": {
-          "bytes": 717,
+          "bytes": 1037,
           "path": "comparison_manifest.json",
-          "sha256": "65ae18f341106e42b0b2ee4d49226a656034ea09c491dacacb56b97ad6c0c9f9"
+          "sha256": "9d8bb218b4053f2b0576bb8067e5f023f745931459bb7928cc426c9910efb7c3"
         },
         "comparison_video": {
-          "bytes": 705076,
+          "bytes": 1232508,
           "path": "comparison.mp4",
-          "sha256": "3b71e112ccd1ca0dde3c01297fd344ad56739b606e07c363b43928fdcd72259e"
+          "sha256": "d15c70f0df8c8e716ef2050bd6972cb488a8c27fda0518dc2b241d8b08ac6fd1"
         },
         "representative_frames": {
           "frame_000000.png": {
@@ -58,37 +76,37 @@
             "path": "frame_000000.png",
             "sha256": "388eaf9fec69f36feb708efa58e794cce1aa3891bfd789d6901d7b8327bd7fe4"
           },
-          "frame_000045.png": {
-            "bytes": 209179,
-            "path": "frame_000045.png",
-            "sha256": "dd3bad7640be2121cbc9a8a3361f790149d51b360c0503d5fb3c6c29f60f9e33"
+          "frame_000225.png": {
+            "bytes": 224529,
+            "path": "frame_000225.png",
+            "sha256": "8ccfea8215c93e9859f5dd611621edfa54fcc411408470ab5358481032076ce7"
           },
-          "frame_000090.png": {
-            "bytes": 207676,
-            "path": "frame_000090.png",
-            "sha256": "01e9ed16c9bb672f83ee199aeaf2b4c06a168f8cc71eed0764913526679daa84"
+          "frame_000450.png": {
+            "bytes": 265031,
+            "path": "frame_000450.png",
+            "sha256": "137e3e3c9e1d18a3829a8cf6782e1451870294f911f923b296cb622d7f74509d"
           },
-          "frame_000255.png": {
-            "bytes": 285464,
-            "path": "frame_000255.png",
-            "sha256": "b7f438649a4e2fc60e8872559957c53cd19e45f2c7e8927ae7093e2eb5cd96f1"
+          "frame_000690.png": {
+            "bytes": 348546,
+            "path": "frame_000690.png",
+            "sha256": "a32bd04d62c5a58edc71762f308f42eb3610b875b1af4e3c1419a66c42439818"
           }
         }
       },
       "calibration_status": "not_calibrated_metrics_suppressed",
       "coverage": "full_period",
-      "frames_written": 24,
+      "frames_written": 47,
       "max_video_frames": null,
       "output_budget": {
-        "artifact_bytes": 1631322,
+        "artifact_bytes": 2304678,
         "bytes": null,
         "status": "not_configured"
       },
       "representative_frames": [
         0,
-        45,
-        90,
-        255
+        225,
+        450,
+        690
       ],
       "runtime": {
         "PIL": "10.4.0",
@@ -114,23 +132,46 @@
       "video_logical_id": "2013.09.05_X20_900.wmv"
     },
     "summary": {
+      "all_lineage_ids": [
+        "filament-0000",
+        "filament-0001",
+        "filament-0002"
+      ],
       "calibration_status": "not_calibrated_metrics_suppressed",
-      "censored_rows": 10,
+      "censored_rows": 47,
       "computed_rows": 0,
       "eligible_rows": 0,
-      "excluded_from_metric_denominator": 10,
+      "excluded_from_metric_denominator": 47,
+      "excluded_from_metric_reasons": [
+        "missing_observation_lineage",
+        "model_time_unmatched_or_centerline_unavailable",
+        "quality_censor_flag"
+      ],
+      "excluded_lineage_ids": [
+        "filament-0000"
+      ],
       "filament_id": "filament-0000",
       "limitations": [
         "registration is configuration, not an inferred calibration",
         "a selected candidate is not proof of single-filament tracking"
       ],
+      "lineage_ids": [
+        "filament-0000"
+      ],
       "model_bytes": 442324,
       "model_logical_id": "trajectory.npz",
       "model_sha256": "7477c42d14ee00977d7ffb7ca0a30470c105602be31c68b2420568aabd3fa2a6",
       "not_computed_reason_counts": {
-        "model_time_unmatched_or_centerline_unavailable": 9,
+        "missing_observation_lineage": 24,
+        "model_time_unmatched_or_centerline_unavailable": 22,
         "quality_censor_flag": 1
       },
+      "not_selected_lineage_ids": [
+        "filament-0001",
+        "filament-0002"
+      ],
+      "not_selected_lineage_reason": "not_selected_filament_id",
+      "population_rows": 47,
       "registration": {
         "endpoint_order": "auto",
         "max_time_error_s": 0.2,
@@ -141,8 +182,9 @@
         "x_offset_px": 0.0,
         "y_offset_px": 0.0
       },
-      "rows": 10,
-      "schema_version": "continuum-filament-observation-0.1"
+      "rows": 47,
+      "schema_version": "continuum-filament-observation-0.1",
+      "selected_lineage_id": "filament-0000"
     }
   },
   "configuration": {
@@ -177,50 +219,53 @@
   "full_period_run": {
     "artifacts": {
       "centerline": {
-        "bytes": 19193,
+        "bytes": 283294,
         "path": "centerline.csv",
-        "sha256": "b0270e4e5950231022500503e2aa5376858f9ddc861a3e4b7d20a395de17193f"
+        "sha256": "6e6191858f2e649d25b8913ed86282b767b84471e1a05eb666171791f3ad7658"
       },
       "events": {
-        "bytes": 7390,
+        "bytes": 15204,
         "path": "events.csv",
-        "sha256": "e6111ae55a724ef7b9ebe2dfdd9c5f63d3ec6348b114f640788813980c381640"
+        "sha256": "15bae4117fb508339069a2eaa636ab17c4a27b519ccde662622223ab4d61e54a"
       },
       "lineage": {
-        "bytes": 2398,
+        "bytes": 4780,
         "path": "lineage.csv",
-        "sha256": "0a1da444dcf978f0179bc59fea9f3cdc75ba3cf5c552c8b5ccb6bcc3791f4c79"
+        "sha256": "b54906eab177e0e51667bbcd38e7452cd2041763943feaa86900a64348dfbc64"
       },
       "metadata": {
-        "bytes": 1617,
+        "bytes": 1682,
         "path": "metadata.json",
-        "sha256": "f94b169a9f40d6b6aa08888073ccc768ea2a845093d725bb96d729eeaf19a4a7"
+        "sha256": "8b681e4387fbab38b4ad8015f1eb764195cc4a94b7c810cfd8985923b9e650f8"
       },
       "observation_summary": {
-        "bytes": 4792,
+        "bytes": 9477,
         "path": "observation_summary.csv",
-        "sha256": "e40ac25e3af586b2c8bb568db2b22e4a000405c6fcb2bef34d8e2df887e30593"
+        "sha256": "75fc8c873f1fa78eb7be6db957ee37d2c4c32a313810bc2e63337b76ff6eb94b"
       }
     },
-    "candidate_censor_count": 22,
-    "candidate_count": 22,
+    "candidate_censor_count": 41,
+    "candidate_count": 41,
     "component_count_summary": {
       "max": 28,
-      "mean": 10.333333333333334
+      "mean": 10.595744680851064
     },
     "output_budget": {
-      "artifact_bytes": 35390,
+      "artifact_bytes": 314437,
       "bytes": 104857600,
       "status": "within_budget"
     },
-    "processed_frames": 24,
+    "processed_frames": 47,
     "run": {
       "coverage": "full_period",
       "frame_range": {
-        "count": 24,
+        "count": 47,
         "coverage": "full_period",
+        "decode_complete": true,
+        "expected_count": 47,
+        "expected_last": 690,
         "first": 0,
-        "last": 345,
+        "last": 690,
         "stride": 15
       },
       "max_frames": null
@@ -248,12 +293,12 @@
     "validation": {
       "errors": [],
       "finite_coordinates": true,
-      "n_filaments": 2,
-      "n_rows": 144,
+      "n_filaments": 3,
+      "n_rows": 1615,
       "time_monotonic": true,
       "valid": true,
       "warnings": [
-        "filament filament-0000: centroid jump 85.643px near time 8.5"
+        "filament filament-0000: centroid jump 92.935px near time 17.0"
       ]
     }
   },
@@ -278,21 +323,29 @@
     "no parameter identification, physical validation, contact/friction inference, or universality claim"
   ],
   "reproducibility": {
-    "note": "gray5 full-period extraction repeated with normalized input/output variables; CSV/metadata/manifest hashes matched",
+    "hashes_checked": [
+      "centerline.csv",
+      "observation_summary.csv",
+      "events.csv",
+      "lineage.csv",
+      "metadata.json",
+      "manifest.json"
+    ],
+    "note": "gray5 full-period extraction repeated with normalized input/output variables; listed hashes matched",
     "same_config_repeated": false
   },
-  "schema_version": "continuum-filament-observation-run-0.1",
+  "schema_version": "continuum-filament-observation-run-0.3",
   "smoke_run": {
     "artifacts": {
       "centerline": {
-        "bytes": 8069,
+        "bytes": 11376,
         "path": "centerline.csv",
-        "sha256": "c4378acbdb51638f6eade4017b9a2eecc1447cce9dcc81cf77bb61c98a999af6"
+        "sha256": "4a4ccc3697e4e72f17864c466c55b5b901f5009087e6ddce3974c068a73a55a0"
       },
       "events": {
-        "bytes": 719,
+        "bytes": 823,
         "path": "events.csv",
-        "sha256": "93519ae667562a3b31ce32fbd56070f960d4746e1bda62be1da56a0efe0b81d4"
+        "sha256": "0dc9f0b9ff9b9c4c6a16009cd2abb1b1176378fe6416f25f7729554751c7ba86"
       },
       "lineage": {
         "bytes": 148,
@@ -300,19 +353,19 @@
         "sha256": "95c978751d8a4b93b85b6d91c8d851add4feba84c6e49b6e786a5c997b1148e3"
       },
       "metadata": {
-        "bytes": 1562,
+        "bytes": 1623,
         "path": "metadata.json",
-        "sha256": "d62248b8ba11580ebd7fa292df42c639a4d120a32c40f079ff505e3f0acf2759"
+        "sha256": "3601e136a089cf8393737cc119c21ae265d22273fc9aa8da27c64cd9c7f73969"
       },
       "observation_summary": {
-        "bytes": 789,
+        "bytes": 855,
         "path": "observation_summary.csv",
-        "sha256": "fca10bf975b5047b4aa3a2e1175797a9ff66d6309446d1d653eaae95060f9d8d"
+        "sha256": "5463d089a7497bf9159bc8b3790c0387856aaabd823a7e60a4c858dab8a25ff7"
       }
     },
     "candidate_count": 3,
     "output_budget": {
-      "artifact_bytes": 11287,
+      "artifact_bytes": 14825,
       "bytes": 10485760,
       "status": "within_budget"
     },
@@ -322,6 +375,9 @@
       "frame_range": {
         "count": 3,
         "coverage": "partial_max_frames",
+        "decode_complete": true,
+        "expected_count": 3,
+        "expected_last": 60,
         "first": 0,
         "last": 60,
         "stride": 30
@@ -332,7 +388,7 @@
       "errors": [],
       "finite_coordinates": true,
       "n_filaments": 1,
-      "n_rows": 62,
+      "n_rows": 73,
       "time_monotonic": true,
       "valid": true,
       "warnings": []
