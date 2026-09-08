@@ -304,6 +304,10 @@ def dimensionless_groups(config: Mapping[str, Any]) -> dict[str, float | str]:
         "length_scale": length,
         "tau_b": float(tau_b),
         "tau_s": float(tau_s),
+        # Keep the P1B field names alongside descriptive P2 aliases so
+        # existing summary consumers can compare the two benchmarks directly.
+        "G_b": float(growth * tau_b),
+        "G_s": float(growth * tau_s),
         "growth_number_G_b": float(growth * tau_b),
         "growth_number_G_s": float(growth * tau_s),
         "chi": float(chi),
@@ -687,7 +691,10 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
         "classification": result["classification"],
         "chi": groups["chi"],
         "growth_rate": config["growth_rate"],
+        "G_b": groups["G_b"],
+        "G_s": groups["G_s"],
         "growth_number_G_b": groups["growth_number_G_b"],
+        "growth_number_G_s": groups["growth_number_G_s"],
         "contact_stiffness": config["contact_stiffness"],
         "diameter": config["diameter"],
         "Pi_c": groups["Pi_c"],

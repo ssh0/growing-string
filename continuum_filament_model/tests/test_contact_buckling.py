@@ -58,6 +58,8 @@ class ContactBucklingBenchmarkTests(unittest.TestCase):
         config = self._config()
         groups = dimensionless_groups(config)
         self.assertAlmostEqual(groups["chi"], 0.1 / (100.0 * 2.0**2))
+        self.assertAlmostEqual(groups["G_b"], groups["growth_number_G_b"])
+        self.assertAlmostEqual(groups["G_s"], groups["growth_number_G_s"])
         self.assertAlmostEqual(groups["Pi_c"], 10.0 * 0.35**2 / 0.1)
         self.assertGreater(groups["growth_number_G_b"], -1.0)
 

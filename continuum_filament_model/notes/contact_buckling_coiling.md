@@ -4,7 +4,7 @@
 
 `benchmarks/contact_buckling_benchmark.py` は、有限径 `D` と線分ペナルティ接触剛性 `k_c` を持つ成長フィラメントについて、自己接触・二次的な折りたたみ・接触時のエネルギー収支を同じ条件で比較するための実験ハーネスである。力、成長、再メッシュ、交差拒否は `growing_filament.model.OverdampedGrowingFilament` に委譲し、ベンチマーク側で物理則を複製しない。
 
-標準 fixture は、両端の位置を固定した半円状の U 字形である。S 字形は `initial_shape: "s"` で選択できる。これらは代表的な検証用初期条件であり、実験形状の同定結果ではない。出力は相図の候補と数値感度を整理するためのもので、臨界曲線、普遍性、実験再現性を主張するものではない。
+標準 fixture は、両端の位置を固定した半円状の U 字形である。S 字形は `initial_shape: "s"` で選択できる。これらは代表的な検証用初期条件であり、実験形状の同定結果ではない。設定済みの標準25ケースは、初期U字接触と penalty 感度を中心にした診断スイートであり、動的な長時間 coiling、複数巻きの形成、相転移の実証ではない。出力は相図の候補と数値感度を整理するためのもので、臨界曲線、普遍性、実験再現性を主張するものではない。
 
 ## 数理仕様と無次元軸
 
@@ -27,6 +27,8 @@ G_s = g * zeta L^2 / EA
 ```
 
 ここで `EA` は `axial_stiffness`、`EI` は `bending_stiffness`、`zeta` は `drag_density`、`L` は `length`、`g` は `growth_rate` である。`Pi_c` は接触剛性を曲げ剛性と径で無次元化した軸であり、penalty 法の剛性依存性を比較するための指標である。`D/L`、`dt/tau_b` もマニフェストと集計 CSV に保存する。
+
+P1B との出力互換性のため、無次元量のJSONには `G_b`、`G_s`、`chi` をそのまま保存し、説明的な別名として `growth_number_G_b`、`growth_number_G_s`、`bending_to_stretching` 相当の `chi` を扱う。summary CSV/JSON の `G_b`、`G_s`、`chi` は P1B と同じ定義であり、P2固有の `Pi_c`、`contact_stiffness`、`diameter` と併記する。したがって、P1Bの非接触結果とP2の有限径結果を、同じ `G_b`–`chi` 軸で比較できるが、接触状態を無視した同一相図とは解釈しない。
 
 ## 計測量の定義
 
@@ -109,4 +111,4 @@ python continuum_filament_model/benchmarks/contact_buckling_benchmark.py \
 - 非隣接線分の penalty と既存の非隣接節点接触項は同じ `contact_stiffness` で加算される。`energy_contact` は線分項単独ではない。
 - 摩擦、接着、履歴、摩擦散逸、接触の粘性、有限要素の拘束解法、連続時間の CCD は含まれない。
 - `contact_length`、`fold_count`、`self_loop_count`、FFT 周期性は観測量の proxy であり、実験画像から直接得る物理量や厳密な幾何分類ではない。
-- 短時間の代表 fixture と小さな相図は、長時間の coiling や多重巻きの存在を検証しない。長時間計算を追加する場合は、出力サイズ、交差拒否、再メッシュ区間、`dt` 収束を別途監査する。
+- 標準25ケースは初期U字接触および penalty 感度の診断であり、動的な長時間 coiling、複数巻き、相転移を実証しない。長時間計算を追加する場合は、出力サイズ、交差拒否、再メッシュ区間、`dt` 収束を別途監査する。
