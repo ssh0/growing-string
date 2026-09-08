@@ -30,6 +30,7 @@ if __package__ in {None, ""}:
 else:
     _HERE = Path(__file__).resolve()
 
+from growing_filament.reproducibility import detect_git_revision  # noqa: E402
 from growing_filament.video_comparison import (  # noqa: E402
     RegistrationConfig,
     SegmentationConfig,
@@ -60,6 +61,51 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _logical_video_id(source: Path) -> str:
+    return "img/gray5.mp4" if source.name == "gray5.mp4" else source.name
+
+
+def _normalise_pipeline_artifacts(output: Path, logical_id: str, source_revision: str | None) -> dict[str, Any]:
+    """Remove local absolute input paths from the generated pipeline artifacts."""
+
+    metadata_path = output / "metadata.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    video_metadata = dict(metadata.get("video", {}))
+    video_metadata["path"] = logical_id
+    metadata["video"] = video_metadata
+    metadata["input_logical_id"] = logical_id
+    metadata["source_revision"] = source_revision
+    _write_json(metadata_path, metadata)
+
+    manifest_path = output / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source_revision"] = source_revision
+    manifest["input"] = dict(manifest.get("input", {}))
+    manifest["input"]["logical_id"] = logical_id
+    manifest["input"]["path"] = logical_id
+    manifest["input"]["metadata"] = video_metadata
+    for record in manifest.get("artifacts", {}).values():
+        artifact_path = output / str(record.get("path", ""))
+        if artifact_path.is_file():
+            record["bytes"] = artifact_path.stat().st_size
+            record["sha256"] = _sha256(artifact_path)
+    _write_json(manifest_path, manifest)
+    return manifest
+
+
+def _normalise_comparison_paths(output: Path) -> None:
+    """Keep optional model-comparison JSON portable as well."""
+
+    path = output / "comparison.json"
+    if not path.is_file():
+        return
+    value = json.loads(path.read_text(encoding="utf-8"))
+    value["observation_dir"] = "continuum_filament_model/results/presentation_data/video_gray5"
+    if value.get("model_path"):
+        value["model_path"] = Path(str(value["model_path"])).name
+    _write_json(path, value)
 
 
 def _curvature_profile(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -163,6 +209,8 @@ def run_export(
 ) -> dict[str, Any]:
     output.mkdir(parents=True, exist_ok=True)
     source = video.expanduser().resolve()
+    logical_id = _logical_video_id(source)
+    source_revision = detect_git_revision(Path.cwd())
     cfg = config or SegmentationConfig(
         polarity="dark", background="local_median", contrast="percentile",
         threshold="absolute", threshold_value=0.8, frame_stride=15,
@@ -172,20 +220,23 @@ def run_export(
     if not source.is_file():
         payload = {
             "schema_version": SCHEMA_VERSION,
+            "source_revision": source_revision,
             "status": "input_missing",
             "raw_centerline_available": False,
-            "input": {"logical_id": source.name, "requested_path": str(source)},
-            "reason": "img/gray5.mp4 is not present in this worktree; no observation rows were fabricated",
+            "input": {"logical_id": logical_id, "path": logical_id},
+            "reason": "img/gray5.mp4 is not available at extraction time; no observation rows were fabricated",
             "backend": {"opencv_used": False, "requested": "PIL/imageio/skimage-compatible existing pipeline"},
         }
         _write_json(output / "video_presentation.json", payload)
-        manifest = {"schema_version": SCHEMA_VERSION, "status": "input_missing", "input": payload["input"], "artifacts": {}}
+        manifest = {"schema_version": SCHEMA_VERSION, "source_revision": source_revision, "status": "input_missing", "input": payload["input"], "artifacts": {}}
         path = output / "video_presentation.json"
         manifest["artifacts"][path.name] = {"bytes": path.stat().st_size, "sha256": _sha256(path)}
         _write_json(output / "manifest.json", manifest)
         return payload
     result = run_pipeline(source, output, cfg, max_frames=max_frames, command_line=["video_presentation_export", str(source), str(output)])
+    result["manifest"] = _normalise_pipeline_artifacts(output, logical_id, source_revision)
     payload = _presentation_records(output, result, representative_count)
+    payload["source_revision"] = source_revision
     payload["input"] = result["manifest"]["input"]
     payload["segmentation_config"] = cfg.to_dict()
     if model_path is not None:
@@ -196,13 +247,15 @@ def run_export(
             filament_id=filament_id,
             output_dir=output,
         )
+        _normalise_comparison_paths(output)
         payload["status"] = "extracted_compared"
         payload["comparison"] = comparison["summary"]
     _write_json(output / "video_presentation.json", payload)
     compact_paths = [output / name for name in ("centerline.csv", "observation_summary.csv", "events.csv", "lineage.csv", "metadata.json", "video_presentation.json", "comparison.csv", "comparison.json", "comparison_manifest.json") if (output / name).is_file()]
     manifest = {
         "schema_version": SCHEMA_VERSION,
-        "status": "extracted",
+        "source_revision": source_revision,
+        "status": payload["status"],
         "input": result["manifest"]["input"],
         "selected_filament_id": result["manifest"].get("selected_filament_id"),
         "processed_frames": result["manifest"].get("processed_frames"),

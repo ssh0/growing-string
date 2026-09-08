@@ -221,7 +221,7 @@ python continuum_filament_model/video_compare.py extract \
 
 ## 発表用の追加数値・観測データ
 
-中間発表向けの粗い3x3相図と未解決セルの物理的内訳を補うため、決定論的な `G_b × chi` 7x8（56条件）密度座屈マップを追加しました。既存solverを変更せず、`A_max/L`、第一モード分率、曲率RMS、onset時刻、受理Eulerの散逸エネルギー推定値、支配モードを測定します。`dominant_mode` と波形分類（高次モード波、局所座屈、mixed mode、no onset）を同じセルに保存し、代表4条件の `t0/t_mid/t_end` 座標だけを出力します。
+中間発表向けの粗い3x3相図と未解決セルの物理的内訳を補うため、決定論的な `G_b × chi` 7x8（56条件）密度座屈マップを追加しました。既存solverを変更せず、`A_max/L`、第一モード分率、曲率RMS、onset時刻、受理Eulerの散逸エネルギー推定値、支配モードを測定します。`dominant_mode` と波形分類（高次モード波、局所座屈、mixed mode、sub-threshold transient）を同じセルに保存し、判定閾値を `notes/dense_buckling_heatmap.md` に固定しています。代表4条件の `t0/t_mid/t_end` 座標だけを出力します。
 
 ```bash
 PYTHONPATH="$PWD:$PWD/continuum_filament_model/src" \

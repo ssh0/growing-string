@@ -233,7 +233,11 @@ def _waveform_classification(
     rms = float(peak.get("rms_curvature", 0.0))
     concentration = curvature / max(rms, 1.0e-15)
     if amplitude <= threshold:
-        return {"label": "no_onset", "reason": "no_onset", "detail": "peak transverse displacement did not exceed onset threshold"}
+        return {
+            "label": "sub_threshold_transient",
+            "reason": "sub_threshold_transient",
+            "detail": "peak transverse displacement did not exceed onset threshold",
+        }
     # A dominant n>=2 mode is the direct explanation for f1 < 70%; a large
     # max/RMS curvature ratio is retained as a separate localised-buckling
     # signal so the two unresolved mechanisms are not conflated.
@@ -358,10 +362,20 @@ def _select_representatives(records: Sequence[Mapping[str, Any]], requested: Seq
         return None
 
     selected: dict[str, str | None] = {}
-    selected["straight"] = first(lambda item: item["waveform_classification"]["reason"] == "no_onset")
+    selected["straight"] = first(lambda item: item["waveform_classification"]["reason"] in {"no_onset", "sub_threshold_transient"})
     selected["single_buckling"] = first(lambda item: item["waveform_classification"]["reason"] == "single_mode")
     selected["higher_mode"] = first(lambda item: "higher_mode" in str(item["waveform_classification"]["reason"]))
-    selected["boundary_near"] = first(lambda item: item["classification"].get("label") == "unresolved")
+    higher_cell = selected["higher_mode"]
+    selected["boundary_near"] = first(
+        lambda item: item["classification"].get("label") == "unresolved"
+        and "higher_mode" not in str(item["waveform_classification"].get("reason"))
+        and str(item["cell"]) != str(higher_cell)
+    )
+    if selected["boundary_near"] is None:
+        selected["boundary_near"] = first(
+            lambda item: item["classification"].get("label") == "unresolved"
+            and str(item["cell"]) != str(higher_cell)
+        )
     # Guarantee a compact representative artifact even when a particular axis
     # range has no member of one morphology class.
     fallback = str(records[len(records) // 2]["cell"]) if records else None
@@ -413,7 +427,7 @@ def run_experiment(config: Mapping[str, Any], output: Path) -> dict[str, Any]:
             "higher_mode_wave": "dominant mode n>=2 and higher-mode fraction >= 0.30",
             "localized_buckling": "peak max curvature / curvature RMS >= 3.0",
             "mixed_mode": "onset with first-mode fraction < 0.70 but neither specific signal alone",
-            "no_onset": "peak transverse displacement did not exceed onset threshold",
+            "sub_threshold_transient": "peak transverse displacement did not exceed onset threshold; the cell is not called a resolved buckling morphology",
         },
         "rows": rows,
         "records": [{key: value for key, value in record.items() if key != "metrics_rows"} for record in records],

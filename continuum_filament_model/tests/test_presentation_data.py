@@ -66,6 +66,7 @@ class PresentationDataArtifactTests(unittest.TestCase):
                 self.assertEqual(len(snapshot["x"]), snapshot["n_nodes"])
                 self.assertTrue(np.isfinite(snapshot["x"]).all())
                 self.assertTrue(np.isfinite(snapshot["y"]).all())
+        self.assertNotEqual(payload["representatives"]["higher_mode"], payload["representatives"]["boundary_near"])
 
     def test_contact_snapshots_include_geometry_and_normal_force(self):
         root = self.PRESENTATION / "contact_snapshots"
