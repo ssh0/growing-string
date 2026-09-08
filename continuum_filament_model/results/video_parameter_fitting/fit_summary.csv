@@ -1,0 +1,3 @@
+logical_id,status,population_rows,eligible_rows,censored_rows,growth_rate,growth_rate_ci95,growth_model,diameter_proxy,chi,shape_status,shape_candidate,frame_fits
+gray5.mp4,centerline_not_found,0,0,0,,null,,,,not_requested,,gray5_frame_fits.csv
+2013.09.05_X20_900.wmv,centerline_not_found,0,0,0,,null,,,,not_requested,,2013_09_05_X20_900_frame_fits.csv
