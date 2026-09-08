@@ -90,7 +90,7 @@ D_Euler = dt * sum_i Gamma_i |v_i|^2
 
 ## 標準configの実行結果
 
-`p0b_linear_mode.json`を、source/execution revision `0ac84ab2ef5635520dbdd7677435de47095f628e`、Python 3.11.5、NumPy 2.2.6で実行した。標準configはlinear 9 run、growth 19 run、合計28 runで、実行時間は約258.5秒だった。詳細なraw/effective config hash、実行環境、temporary output bytes、accepted `dt`監査は`results/p0b/compact_summary.json`に保存する。
+`p0b_linear_mode.json`を、source/execution revision `7814a9166dcbc54b6f5a414edeb9e2f0a9de2f0d`、Python 3.11.5、NumPy 2.2.6で実行した。標準configはlinear 9 run、growth 19 run、合計28 runで、実行時間は約258.6秒だった。詳細なraw/effective config hash、実行環境、temporary output bytes、accepted `dt`監査は`results/p0b/compact_summary.json`に保存する。
 
 結果は次のとおりである。
 
