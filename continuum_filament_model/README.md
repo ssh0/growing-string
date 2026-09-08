@@ -201,6 +201,21 @@ results/p1b2/
 
 この追加実験が扱わないものは、接触・有限径・折りたたみ、実験fit、三角格子比較、普遍性、臨界指数です。境界域や解像度依存が残る場合は、未解決として報告します。
 
+## 実観察動画との比較
+
+動画から中心線候補を抽出し、pixel座標の観測データとmodel-unitのtrajectoryを、品質・censor付きで比較する独立パイプラインを追加しています。コア物理solverは変更しません。入口は `video_compare.py`、実装は `src/growing_filament/video_comparison.py`、レビュー用marimoページは `notebooks/video_comparison.py` です。
+
+```bash
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/video_compare.py extract \
+  --video /path/to/video.mp4 --output /tmp/filament-observation \
+  --polarity dark --background median --threshold otsu --frame-stride 5
+```
+
+`centerline.csv` は `time, filament_id, point_id, x, y, quality` を含み、`metadata.json` と `manifest.json` に座標系、設定、品質検査、入力hashを保存します。scale/time calibrationが未指定ならpixel/model-unitを別表示し、定量metricは抑制します。ROI、複数component、飛び、欠損、skeleton不良は `events.csv`、`quality_flags`、`censor` に残します。入力動画、full mask、per-frame大量データ、比較動画は `/tmp` 等へ出力し、Gitへ追加しません。
+
+詳細なschema、登録式、限界、再実行コマンドは `notes/video_comparison.md` を参照してください。
+
 ## 三角格子モデルとの関係
 
 `triangular_lattice/` は、新モデルのコードへ直接importしません。接続は観測量と無次元パラメータを介して行います。
