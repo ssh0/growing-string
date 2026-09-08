@@ -92,7 +92,7 @@ marimo edit continuum_filament_model/notebooks/video_comparison.py
 - `contrast`: `none` / `percentile`
 - `threshold`: `otsu` / `absolute` / `percentile`
 - `skeleton_backend`: `auto` / `skimage` / `numpy`。topology判定はNumPy Zhang–Suen backendをcanonicalに使い、flags/censor/exportをbackend間で一致させる。topology graphは4近傍edge、centerline順序は8近傍trace
-- `roi`, `frame_stride`, `min_component_size`, `max_components
+- `roi`, `frame_stride`, `min_component_size`, `max_components`
 - `max_centerline_points`, `max_jump_px`, `min_quality`
 
 一時outputには次が作られます。
@@ -105,7 +105,6 @@ marimo edit continuum_filament_model/notebooks/video_comparison.py
 - `lineage.csv`: matched/new/reconnected/missingを含む追跡lineage（欠損区間を削除しない）
 - `comparison.csv/json`: sampled frameを母集団として保持し、model time/error、nearest-frame matching、両endpoint対応、model-unit metric、metric status/reason
 - `comparison.json` / `comparison_manifest.json`: eligible denominator、excluded rows/reasons、selected/not-selected lineage ID、CSV/JSON hash/size
-- `comparison_manifest.json`: comparison CSV/JSONのSHA-256とbyte size、eligible/excluded denominator
 - `comparison.mp4`, `frames/`: 左=観測pixel、右=model-unit。大容量のためGit管理しない
 - `results/video_comparison/{gray5,original}_manifest.json`: 動画本体を含めず、入力hash/size/ffprobe、short smoke/full-period run、comparison artifact hash/sizeだけをcompactに保存
 
@@ -159,7 +158,7 @@ gray5は24行、原動画は47行です。これは完全自動追跡の成功�
 censorを比較可能区間の境界として残しています。
 
 同じ gray5 設定を2回実行した `centerline.csv`、`observation_summary.csv`、`events.csv`、`lineage.csv`、
-`metadata.json`、`manifest.json` のSHA-256は一致しました。短いsmoke（max_frames=3）はpartial、full-period
+`metadata.json`、`manifest.json` のSHA-256は一致しました。ambiguous/components_truncatedのframe-level event exact-onceもfixtureで確認しました。短いsmoke（max_frames=3）はpartial、full-period
 runはmax_frames未指定としてmanifestへ記録しました。WMVはCFR decodeでffprobe frame_count=698を再現し、
 stride=15で47 frames（last=690）となることを機械検査しました。P1B runnerの一時trajectoryを読み、
 scale未指定で比較したケースでは `calibration_status=not_calibrated_metrics_suppressed` となり、
@@ -169,7 +168,7 @@ model時間が未対応の行も `model_time_unmatched_or_centerline_unavailable
 ## 検証
 
 合成fixture（直線、円弧、sinusoidal、成長、欠損、noise、ambiguous、real-mask T branch、矩形loop、
-NumPy/skimage topology parity、ROI truncation、endpoint order、leading missing population、event重複）は
+NumPy/skimage topology parity、ROI truncation、endpoint order、leading missing population、frame-level event exact-once）は
 `tests/test_video_comparison.py` にあります。先頭missing frameもprocessed frame rangeから比較母集団へ残し、
 `unknown` lineage、missing reason、censor、eligible/excluded denominatorを検査します。既存モデルを変更せず、次で実行します。
 

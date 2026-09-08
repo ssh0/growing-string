@@ -8,14 +8,14 @@
       ],
       "artifacts": {
         "comparison_csv": {
-          "bytes": 7656,
+          "bytes": 7644,
           "path": "comparison.csv",
-          "sha256": "98edacfe579abf9a88e28a5b2293c51d064bf5b328d85f1f5058c2658c138718"
+          "sha256": "974591b09de1c1388de3bf8925384e0e74afd063e667c71b7c88d4de5dca3681"
         },
         "comparison_json": {
-          "bytes": 1438,
+          "bytes": 1514,
           "path": "comparison.json",
-          "sha256": "7c01324c0416ede08be20e19fd94d5ab44189fd7d248e0ee07a62ab88ba8357f"
+          "sha256": "93362b35643bccf7529107312457f96c34f293d131e5fe0a06ea5731574dc3cd"
         }
       },
       "calibration_status": "not_calibrated_metrics_suppressed",
@@ -24,7 +24,8 @@
       "excluded_from_metric_reasons": [
         "missing_observation_lineage",
         "model_time_unmatched_or_centerline_unavailable",
-        "quality_censor_flag"
+        "quality_censor_flag",
+        "reconnected_after_missing_boundary"
       ],
       "excluded_lineage_ids": [
         "filament-0000"
@@ -34,7 +35,7 @@
         "filament-0001",
         "filament-0002"
       ],
-      "observation_logical_id": "r4-gray5-full",
+      "observation_logical_id": "r5-gray5-full",
       "population_rows": 24,
       "registration": {
         "endpoint_order": "auto",
@@ -51,24 +52,24 @@
     "render_manifest.json": {
       "artifacts": {
         "comparison_csv": {
-          "bytes": 7656,
+          "bytes": 7644,
           "path": "comparison.csv",
-          "sha256": "98edacfe579abf9a88e28a5b2293c51d064bf5b328d85f1f5058c2658c138718"
+          "sha256": "974591b09de1c1388de3bf8925384e0e74afd063e667c71b7c88d4de5dca3681"
         },
         "comparison_json": {
-          "bytes": 1438,
+          "bytes": 1514,
           "path": "comparison.json",
-          "sha256": "7c01324c0416ede08be20e19fd94d5ab44189fd7d248e0ee07a62ab88ba8357f"
+          "sha256": "93362b35643bccf7529107312457f96c34f293d131e5fe0a06ea5731574dc3cd"
         },
         "comparison_manifest": {
-          "bytes": 1033,
+          "bytes": 1070,
           "path": "comparison_manifest.json",
-          "sha256": "613b74df9271f5cc586df15a861649d6e89e2472400cbb52dd453ba9f4685e66"
+          "sha256": "270f901bd448047df591a807a446e4574743ff0c43d7e16c6e5c22a0cf351efa"
         },
         "comparison_video": {
-          "bytes": 1168791,
+          "bytes": 1170130,
           "path": "comparison.mp4",
-          "sha256": "3d28bb706cf92bcdd8f7d81ce890e2399a1e9174d13547dbaae0b976d008ef92"
+          "sha256": "212fe73df5691e939f9822999afd60b4e30d716ba12ebbd102ad774bdc5183ba"
         },
         "representative_frames": {
           "frame_000000.png": {
@@ -98,7 +99,7 @@
       "frames_written": 24,
       "max_video_frames": null,
       "output_budget": {
-        "artifact_bytes": 2456346,
+        "artifact_bytes": 2457786,
         "bytes": null,
         "status": "not_configured"
       },
@@ -145,7 +146,8 @@
       "excluded_from_metric_reasons": [
         "missing_observation_lineage",
         "model_time_unmatched_or_centerline_unavailable",
-        "quality_censor_flag"
+        "quality_censor_flag",
+        "reconnected_after_missing_boundary"
       ],
       "excluded_lineage_ids": [
         "filament-0000"
@@ -163,8 +165,9 @@
       "model_sha256": "7477c42d14ee00977d7ffb7ca0a30470c105602be31c68b2420568aabd3fa2a6",
       "not_computed_reason_counts": {
         "missing_observation_lineage": 16,
-        "model_time_unmatched_or_centerline_unavailable": 7,
-        "quality_censor_flag": 1
+        "model_time_unmatched_or_centerline_unavailable": 6,
+        "quality_censor_flag": 1,
+        "reconnected_after_missing_boundary": 1
       },
       "not_selected_lineage_ids": [
         "filament-0001",
@@ -225,9 +228,9 @@
         "sha256": "49d58f5a610988103079eb396d649f8f33578882973c45d87e5e46b8d89a1673"
       },
       "events": {
-        "bytes": 7588,
+        "bytes": 5686,
         "path": "events.csv",
-        "sha256": "90f6cce1d2b8cf8a38fd4d7fa32afe3b1bc6f112a0c179a6b2ec995af5a709fd"
+        "sha256": "b13a97580b1957e953aa923aa2a96cdc3d625dd1e8ce09e3caad3cf3607a574d"
       },
       "lineage": {
         "bytes": 1759,
@@ -252,7 +255,7 @@
       "mean": 8.958333333333334
     },
     "output_budget": {
-      "artifact_bytes": 125355,
+      "artifact_bytes": 123453,
       "bytes": 104857600,
       "status": "within_budget"
     },
@@ -333,7 +336,7 @@
     "note": "gray5 full-period extraction repeated; listed hashes matched",
     "same_config_repeated": true
   },
-  "schema_version": "continuum-filament-observation-run-0.4",
+  "schema_version": "continuum-filament-observation-run-0.5",
   "smoke_run": {
     "artifacts": {
       "centerline": {
@@ -342,9 +345,9 @@
         "sha256": "f835836e294be126cb9c1820ccfdad661ca6d7c8af80e44ff2017912ef277196"
       },
       "events": {
-        "bytes": 920,
+        "bytes": 628,
         "path": "events.csv",
-        "sha256": "566db17584aec5200e49aad94faf5d9b77637bcd71a2b987b015c15a2fb55f02"
+        "sha256": "ba49f8d0e45c6dd4e8ab1c285b44f4364dcc2d81b528074a1f69c7118fef9a8e"
       },
       "lineage": {
         "bytes": 148,
@@ -364,7 +367,7 @@
     },
     "candidate_count": 3,
     "output_budget": {
-      "artifact_bytes": 37180,
+      "artifact_bytes": 36888,
       "bytes": 10485760,
       "status": "within_budget"
     },
