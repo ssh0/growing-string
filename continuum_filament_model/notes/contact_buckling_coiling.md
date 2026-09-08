@@ -94,6 +94,8 @@ suite.json               # 実行結果と限界の要約
 
 全ステップの座標 NPZ、動画、per-run の大容量イベント列は保存しない。個別の完全な `OverdampedGrowingFilament` event log はベンチマーク内部で manifest hash の生成に使うが、compact manifest には棄却イベントの要約だけを残す。
 
+`compact_manifest.json` と `suite.json` の `git_revision` は、成果物自身を含むコミットのSHAではなく、成果物を生成した実行時点で参照したコードHEAD（`source_revision` / `parent_revision`）を記録する。成果物を含むコミットのSHAは、その成果物を含めてコミットを作成するまで確定しないため、manifestへ自己参照として記録しない。この来歴を前提に、同じコードrevision・設定hash・Python/NumPy環境で再実行し、ケース別state hashと集計結果を比較する。
+
 再実行例：
 
 ```bash
