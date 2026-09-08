@@ -1089,7 +1089,8 @@ def _runtime_capabilities() -> dict[str, Any]:
         "numpy": np.__version__,
         "opencv_used": False,
     }
-    optional_modules = ("imageio", "PIL", "marimo", "skimage")
+    # matplotlib is optional for the CLI pipeline but required by the marimo review page.
+    optional_modules = ("imageio", "PIL", "marimo", "matplotlib", "skimage")
     for module_name in optional_modules:
         try:
             module = __import__(module_name)

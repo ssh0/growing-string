@@ -123,11 +123,15 @@ manifestとcompact comparisonの再現性を検査できます。Python/NumPy/ff
 
 ## 依存関係・出力budget
 
-必須はPython >=3.10、NumPy >=1.23、ffmpeg/ffprobe >=4.4です。`imageio >=2.25`、Pillow >=9、
-scikit-image >=0.19、SciPy >=1.8、marimo >=0.23はoptionalです。OpenCVは使用しません。
+動画CLIの必須依存はPython >=3.10、NumPy >=1.23、ffmpeg/ffprobe >=4.4です。`imageio >=2.25`、
+Pillow >=9、scikit-image >=0.19、SciPy >=1.8はCLI pipelineのoptional依存です。OpenCVは使用しません。
 scikit-imageがない場合はconnected components/skeletonにNumPy fallbackを使います。比較動画の生成には
-ffmpegの`libx264` encoderが必要です。今回の実行環境はPython 3.11.5、NumPy 2.2.6、ffmpeg/ffprobe 8.1.2、
-imageio 2.36.0、Pillow 10.4.0、scikit-image 0.24.0、marimo 0.23.6でした。
+ffmpegの`libx264` encoderが必要です。marimo review page（`notebooks/video_comparison.py`）は
+`marimo >=0.23` と `matplotlib` を必須とし、`matplotlib.pyplot` をimportして描画します。これら2つは
+動画CLIだけを実行する場合に限りoptionalです。生成manifestの`runtime`にはmarimo/matplotlibの検出versionを
+記録し、importできない場合は`unavailable:<ExceptionName>`を記録します。今回の検証環境はPython 3.11.5、
+NumPy 2.2.6、ffmpeg/ffprobe 8.1.2、imageio 2.36.0、Pillow 10.4.0、scikit-image 0.24.0、
+marimo 0.23.6、matplotlib 3.10.9でした。
 
 ```bash
 python --version
