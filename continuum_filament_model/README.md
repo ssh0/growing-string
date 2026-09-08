@@ -110,6 +110,31 @@ python continuum_filament_model/benchmarks/time_integration.py
 `dt`、棄却理由を出力します。成長なしの試行はエネルギー非増加を受理条件としますが、
 成長ありでは成長がエネルギーを注入し得るため、単調減少を要求しません。
 
+## P0-B：線形mode・時間／空間数値ゲート
+
+現行の非接触モデルについて、端点の**位置だけを固定し、接線は自由**とした離散線形化を検証します。これはクランプ端（位置と接線を固定）ではありません。
+
+```bash
+TMP_DIR=$(mktemp -d /tmp/growing-string-p0b.XXXXXX)
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/benchmarks/linear_mode_convergence.py \
+  --config continuum_filament_model/benchmarks/configs/p0b_linear_mode.json \
+  --output "$TMP_DIR"
+```
+
+線形mode部では、既存のエネルギーgradient（`forces()`）を有限差分したHessian、離散曲げHessian `K=(EI/h^3)D^T D`、参照長重みのdrag `Gamma=zeta*h I` の固有値・mode shapeを比較します。小振幅・成長なし・`contact_stiffness=0`・`diameter=0`で、`n_nodes=[5,9,17]`、複数の`dt`について減衰率も測定します。`tau_b=zeta*L^4/(EI*pi^4)`は第一正弦modeの**定義値**として保存するだけで、固定位置・自由接線の離散mode時間の真値とは仮定しません。実測`tau_mode=1/decay_rate_measured`を別列で記録します。
+
+成長部のgate scopeは`morphology-only`です。`straight`、`boundary-near`、`buckled-candidate`と成長なしcontrolを、時間方向は`n_nodes=9`で`dt, dt/2, dt/4`、空間方向は`n_nodes=[5,7,9]`で比較します。`A1/L`、mode spectrum、onset、peak transverse、curvature RMS、energy、accepted/rejected/eventを保存し、次の量を分離します。`morphology-converged`は成長–緩和全体やenergy/workの収束を意味せず、実accepted `dt`、reject数、energy・散逸の変動を監査情報として併記します。
+
+- `growth_reference_energy_change`：同じ幾何で参照長を更新した離散energy差。完全な連続体growth workの導出・主張ではありません。
+- `dissipation_euler_estimate`：受理Euler試行の`dt*sum Gamma_i|v_i|^2`という診断値。
+- `remesh_energy_jump`：再mesh前後のenergy差（固定mesh gateでは0であることを確認）。
+- `rejected_trials`と`event_count`：solverの試行・イベント数であり、energy項ではありません。
+
+`g=0`ではenergy非増加を確認し、`g>0`では成長によるenergy変化を単純な散逸や再mesh jumpと混同しません。比較条件、許容値、分類規則、未解決判定は `notes/p0b_linear_mode_convergence.md` に固定します。P1B.2で`numerically-unresolved`だった境界近傍・座屈候補は、収束不一致や許容値超過があれば同じラベルを維持します。線形減衰率には`decay_rate_relative_tolerance=0.01`の診断thresholdを適用します。このgateから座屈境界・臨界値・普遍性・相転移を主張しません。
+
+compactな実行結果だけを残す場合は、`$TMP_DIR/compact_summary.json` と`compact_summary.csv`を確認し、per-runのtrajectoryやmetricsをリポジトリへコピーしません。
+
 ## P1B：成長–緩和競合と座屈ベンチマーク
 
 非接触・両端固定・決定論的な `y(x)=A sin(pi*x/L)` 摂動を用いた小規模ベンチマークを、`benchmarks/buckling_benchmark.py` で実行できます。既存の `growing_filament` APIを呼び出し、成長・力・再メッシュの式を複製しません。`G_b = growth_rate * tau_b`（`tau_b = drag_density * L**4 / (bending_stiffness * pi**4)`）と `G_s`、`EI/(EA*L**2)` を保存し、`straight` / `buckled-single` / `unresolved` の機械的regimeとして整理します。これは相転移の主張ではありません。
