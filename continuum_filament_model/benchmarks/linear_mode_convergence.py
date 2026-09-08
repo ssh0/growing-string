@@ -26,7 +26,9 @@ import csv
 import hashlib
 import json
 import math
+import platform
 import sys
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -74,7 +76,7 @@ from growing_filament.reproducibility import (  # noqa: E402
 )
 
 
-SCHEMA_VERSION = "continuum-filament-p0b-linear-mode-convergence-1"
+SCHEMA_VERSION = "continuum-filament-p0b-linear-mode-convergence-2"
 DEFAULT_CONFIG: dict[str, Any] = {
     "linear_mode": {
         "length": 2.0,
@@ -88,6 +90,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "hessian_fd_epsilon": 1.0e-7,
         "n_modes": 3,
         "a_max_factor": 2.0,
+        "decay_rate_relative_tolerance": 0.01,
     },
     "growth": {
         "length": 2.0,
@@ -103,6 +106,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "a_max_factor": 2.0,
         "max_retries": 12,
         "max_displacement_fraction": 0.25,
+        "gate_scope": "morphology-only",
         "representatives": [
             {"name": "straight", "growth_rate": 0.05},
             {"name": "boundary-near", "growth_rate": 0.15},
@@ -171,6 +175,14 @@ def load_config(path: Path | None) -> dict[str, Any]:
     return _merge_config(raw)
 
 
+def raw_config_sha256(path: Path | None) -> str | None:
+    """Return the hash of the exact JSON file supplied by the caller."""
+
+    if path is None:
+        return None
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def _positive(value: Any, name: str) -> float:
     try:
         number = float(value)
@@ -185,7 +197,7 @@ def _validate_config(config: Mapping[str, Any]) -> None:
     linear = config["linear_mode"]
     growth = config["growth"]
     for section, keys in {
-        "linear_mode": ("length", "t_end", "axial_stiffness", "bending_stiffness", "drag_density", "amplitude_fraction", "hessian_fd_epsilon", "a_max_factor"),
+        "linear_mode": ("length", "t_end", "axial_stiffness", "bending_stiffness", "drag_density", "amplitude_fraction", "hessian_fd_epsilon", "a_max_factor", "decay_rate_relative_tolerance"),
         "growth": ("length", "axial_stiffness", "bending_stiffness", "drag_density", "dt", "t_end", "amplitude", "a_max_factor"),
     }.items():
         values = config[section]
@@ -204,6 +216,8 @@ def _validate_config(config: Mapping[str, Any]) -> None:
         raise BenchmarkError("growth.dt_factors must contain three positive values")
     if int(linear["n_modes"]) < 1:
         raise BenchmarkError("linear_mode.n_modes must be positive")
+    if growth.get("gate_scope") != "morphology-only":
+        raise BenchmarkError("growth.gate_scope must be 'morphology-only'")
     reps = growth.get("representatives")
     if not isinstance(reps, Sequence) or not reps:
         raise BenchmarkError("growth.representatives must be non-empty")
@@ -351,6 +365,8 @@ def _linear_decay_record(
     valid = np.isfinite(times_array) & np.isfinite(amplitudes_array) & (amplitudes_array > 0.0)
     slope = float(np.polyfit(times_array[valid], np.log(amplitudes_array[valid]), 1)[0])
     measured_rate = -slope
+    relative_error = float(abs(measured_rate - analytic_rate) / analytic_rate)
+    tolerance = float(linear["decay_rate_relative_tolerance"])
     return {
         "n_nodes": n_nodes,
         "dt": float(dt),
@@ -359,7 +375,9 @@ def _linear_decay_record(
         "rejected_steps": int(model.rejected_steps),
         "decay_rate_analytic": float(analytic_rate),
         "decay_rate_measured": float(measured_rate),
-        "decay_rate_relative_error": float(abs(measured_rate - analytic_rate) / analytic_rate),
+        "decay_rate_relative_error": relative_error,
+        "decay_rate_relative_tolerance": tolerance,
+        "decay_rate_status": "pass" if relative_error <= tolerance else "fail",
         "tau_mode_measured": float(1.0 / measured_rate),
         "accepted_dt_min": float(min(model.accepted_dts)),
         "accepted_dt_max": float(max(model.accepted_dts)),
@@ -467,6 +485,19 @@ def _growth_metrics(
         row[f"mode_{index}_abs_amplitude"] = float(abs(coefficient))
     row["mode_spectrum"] = [float(value) for value in coefficients]
     return row
+
+
+def _union_fieldnames(rows: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Preserve first-seen order while retaining every per-step column."""
+
+    fields: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for key in row:
+            if key not in seen:
+                seen.add(key)
+                fields.append(key)
+    return fields
 
 
 def _run_growth_case(
@@ -604,6 +635,22 @@ def _run_growth_case(
             config["growth_rate"] != 0.0
             or np.all(np.diff(total_energy) <= 1.0e-12 * np.maximum(1.0, np.abs(total_energy[:-1])))
         )
+        accepted_dt_values = [
+            float(row["accepted_dt_actual"])
+            for row in rows
+            if row.get("accepted_dt_actual") is not None
+        ]
+        mechanical_changes = [
+            float(row["mechanical_energy_change_step"])
+            for row in rows
+            if row.get("mechanical_energy_change_step") is not None
+        ]
+        balance_residuals = [
+            abs(float(row["energy_balance_residual_step"]))
+            for row in rows
+            if row.get("energy_balance_residual_step") is not None
+        ]
+        metrics_fieldnames = _union_fieldnames(rows)
         summary = {
             "schema_version": SCHEMA_VERSION,
             "record_type": "growth_run",
@@ -632,6 +679,20 @@ def _run_growth_case(
             "peak_curvature_rms": max(row["rms_curvature"] for row in rows),
             "energy_initial": rows[0]["energy_total"],
             "energy_final": rows[-1]["energy_total"],
+            "energy_min": float(np.min(total_energy)),
+            "energy_max": float(np.max(total_energy)),
+            "energy_span_relative_to_initial": float(
+                (np.max(total_energy) - np.min(total_energy))
+                / max(abs(float(rows[0]["energy_total"])), 1.0e-15)
+            ),
+            "mechanical_energy_change_cumulative": float(sum(mechanical_changes)),
+            "energy_balance_residual_max_abs": float(max(balance_residuals, default=0.0)),
+            "accepted_dt_count": len(accepted_dt_values),
+            "accepted_dt_min": min(accepted_dt_values) if accepted_dt_values else None,
+            "accepted_dt_max": max(accepted_dt_values) if accepted_dt_values else None,
+            "accepted_dt_mean": float(np.mean(accepted_dt_values)) if accepted_dt_values else None,
+            "metrics_schema": metrics_fieldnames,
+            "metrics_rows": len(rows),
             "failure_reason": None,
             "boundary_condition": "endpoint positions fixed; endpoint tangents free",
             "contact_stiffness": 0.0,
@@ -673,11 +734,12 @@ def _run_growth_case(
             }
     _write_json(run_dir / "summary.json", summary)
     if rows:
+        fields = summary.get("metrics_schema", _union_fieldnames(rows))
         with (run_dir / "metrics.csv").open("w", encoding="utf-8", newline="") as stream:
-            fields = list(rows[0].keys())
-            writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
+            writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="raise", lineterminator="\n")
             writer.writeheader()
-            writer.writerows(_jsonable(row) for row in rows)
+            for row in rows:
+                writer.writerow(_jsonable({field: row.get(field) for field in fields}))
     return summary
 
 
@@ -686,14 +748,84 @@ def _convergence_status(
     tolerance: Mapping[str, Any],
     reference_key: str,
 ) -> dict[str, Any]:
+    """Evaluate morphology only and expose adaptive-dt audit diagnostics.
+
+    The growth energy/work diagnostics are deliberately not pass criteria:
+    the current explicit Euler runner may adapt the accepted step after trial
+    rejection, so a morphology pass is not a full growth-relaxation
+    convergence claim.
+    """
+
+    base = {
+        "scope": "morphology-only",
+        "energy_and_dissipation_gated": False,
+        "run_count": len(runs),
+    }
     if not runs or any(run.get("failure_reason") for run in runs):
-        return {"status": "numerically-unresolved", "reason": "failed run", "run_count": len(runs)}
+        return {**base, "status": "numerically-unresolved", "reason": "failed run"}
     if any(not run.get("fixed_mesh_observed", True) for run in runs):
-        return {"status": "numerically-unresolved", "reason": "unexpected remesh in fixed-mesh gate", "run_count": len(runs)}
+        return {
+            **base,
+            "status": "numerically-unresolved",
+            "reason": "unexpected remesh in fixed-mesh gate",
+        }
     reference = next(run for run in runs if run["run"] == reference_key)
     labels = [str(run["classification"].get("label")) for run in runs]
+    accepted_dt_ranges = [
+        {
+            "run": run["run"],
+            "requested_dt": run.get("dt_requested"),
+            "accepted_dt_min": run.get("accepted_dt_min"),
+            "accepted_dt_max": run.get("accepted_dt_max"),
+            "accepted_dt_mean": run.get("accepted_dt_mean"),
+            "accepted_dt_count": run.get("accepted_dt_count"),
+            "rejected_trials": run.get("rejected_trials"),
+            "event_count": run.get("event_count"),
+            "energy_final": run.get("energy_final"),
+            "dissipation_euler_estimate": run.get("dissipation_euler_estimate"),
+        }
+        for run in runs
+    ]
+    dt_ratios = [
+        float(item["accepted_dt_min"]) / float(item["requested_dt"])
+        for item in accepted_dt_ranges
+        if item["accepted_dt_min"] is not None and float(item["requested_dt"]) > 0.0
+    ]
+    energy_values = [
+        float(run["energy_final"])
+        for run in runs
+        if run.get("energy_final") is not None
+    ]
+    dissipation_values = [
+        float(run["dissipation_euler_estimate"])
+        for run in runs
+        if run.get("dissipation_euler_estimate") is not None
+    ]
+    adaptive_dt_warning = bool(dt_ratios and min(dt_ratios) < 0.999999)
+    audit = {
+        "accepted_dt_ranges": accepted_dt_ranges,
+        "accepted_dt_min_over_requested_min": min(dt_ratios) if dt_ratios else None,
+        "accepted_dt_max_over_requested_max": max(dt_ratios) if dt_ratios else None,
+        "adaptive_dt_warning": adaptive_dt_warning,
+        "energy_final_values": energy_values,
+        "energy_final_relative_span": (
+            (max(energy_values) - min(energy_values)) / max(min(abs(value) for value in energy_values), 1.0e-15)
+            if energy_values
+            else None
+        ),
+        "dissipation_euler_estimate_values": dissipation_values,
+        "rejected_trials_values": [int(run.get("rejected_trials", 0)) for run in runs],
+        "event_count_values": [int(run.get("event_count", 0)) for run in runs],
+    }
     if len(set(labels)) != 1 or labels[0] == "unresolved":
-        return {"status": "numerically-unresolved", "reason": "classification disagreement or unresolved fixture", "labels": labels, "run_count": len(runs)}
+        return {
+            **base,
+            "status": "numerically-unresolved",
+            "reason": "classification disagreement or unresolved fixture",
+            "labels": labels,
+            "reference_run": reference_key,
+            "audit": audit,
+        }
     ref_class = reference["classification"]
     ref_peak = ref_class.get("peak_max_transverse_displacement")
     ref_onset = ref_class.get("onset_time")
@@ -716,12 +848,17 @@ def _convergence_status(
         if not math.isfinite(a1) or abs(a1 - ref_a1) / max(abs(ref_a1), 1.0e-12) > float(tolerance["a1_over_length_relative"]):
             failures.append(f"{run['run']}: A1/L tolerance")
     return {
-        "status": "converged" if not failures else "numerically-unresolved",
+        **base,
+        "status": "morphology-converged" if not failures else "numerically-unresolved",
         "reason": None if not failures else "; ".join(failures),
         "labels": labels,
-        "run_count": len(runs),
         "reference_run": reference_key,
+        "audit": audit,
     }
+
+
+def _directory_bytes(root: Path) -> int:
+    return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
 
 
 def _write_compact_csv(path: Path, records: Sequence[Mapping[str, Any]]) -> None:
@@ -732,10 +869,22 @@ def _write_compact_csv(path: Path, records: Sequence[Mapping[str, Any]]) -> None
         writer.writerows(_jsonable(record) for record in records)
 
 
-def run_benchmark(config: Mapping[str, Any], output: Path) -> dict[str, Any]:
+def run_benchmark(
+    config: Mapping[str, Any],
+    output: Path,
+    *,
+    raw_config_sha256_value: str | None = None,
+    raw_config_path: str | None = None,
+) -> dict[str, Any]:
     _validate_config(config)
     output.mkdir(parents=True, exist_ok=True)
+    started = time.perf_counter()
     revision = detect_git_revision(Path.cwd())
+    planned_linear_runs = len(config["linear_mode"]["n_nodes"]) * len(config["linear_mode"]["dt_values"])
+    planned_growth_runs = sum(
+        1 if bool(rep.get("control_only", False)) else 6
+        for rep in config["growth"]["representatives"]
+    )
     linear_records = run_linear_modes(config["linear_mode"], output)
     growth_records: list[dict[str, Any]] = []
     convergence: list[dict[str, Any]] = []
@@ -786,11 +935,35 @@ def run_benchmark(config: Mapping[str, Any], output: Path) -> dict[str, Any]:
             "refinement": "spatial",
             **_convergence_status(spatial_runs, growth["tolerances"], spatial_reference),
         })
+    elapsed_seconds = time.perf_counter() - started
+    effective_hash = _sha256_json(config)
     compact = {
         "schema_version": SCHEMA_VERSION,
         "benchmark": "P0-B non-contact linear-mode and growth numerical gates",
         "git_revision": revision,
-        "config_sha256": _sha256_json(config),
+        "source_revision": revision,
+        "execution_revision": revision,
+        "config_sha256": effective_hash,
+        "effective_config_sha256": effective_hash,
+        "raw_config_sha256": raw_config_sha256_value,
+        "config_hash_algorithm": "SHA-256",
+        "raw_config_path": raw_config_path,
+        "provenance": {
+            "source_revision": revision,
+            "execution_revision": revision,
+            "raw_config_sha256": raw_config_sha256_value,
+            "effective_config_sha256": effective_hash,
+            "hash_algorithm": "SHA-256",
+            "python_version": platform.python_version(),
+            "numpy_version": np.__version__,
+            "platform": platform.platform(),
+            "elapsed_seconds": float(elapsed_seconds),
+            "planned_linear_run_count": planned_linear_runs,
+            "planned_growth_run_count": planned_growth_runs,
+            "actual_linear_run_count": len(config["linear_mode"]["n_nodes"]) * len(config["linear_mode"]["dt_values"]),
+            "actual_growth_run_count": len(growth_records),
+            "actual_run_count": len(config["linear_mode"]["n_nodes"]) * len(config["linear_mode"]["dt_values"]) + len(growth_records),
+        },
         "boundary_condition": "endpoint positions fixed; endpoint tangents free; not a clamped-end condition",
         "non_contact_fixture": {"contact_stiffness": 0.0, "diameter": 0.0, "initial_nonintersection_required": True},
         "linear_mode": {
@@ -799,10 +972,16 @@ def run_benchmark(config: Mapping[str, Any], output: Path) -> dict[str, Any]:
             "drag_reference": "Gamma=zeta*h I on free interior nodes",
             "tau_b_definition": "zeta*L^4/(EI*pi^4)",
             "tau_b_status": "definition only; measured tau_mode is reported separately and tau_b is not assumed to be the true discrete mode time",
+            "decay_rate_gate": {
+                "scope": "linear diagnostic threshold",
+                "relative_tolerance": float(config["linear_mode"]["decay_rate_relative_tolerance"]),
+                "status_field": "decay_rate_status",
+            },
         },
         "growth": {
             "records": growth_records,
             "convergence": convergence,
+            "gate_scope": growth["gate_scope"],
             "energy_accounting": {
                 "growth_reference_energy_change": "E(r_before,a_grown)-E(r_before,a_before), fixed-geometry discrete diagnostic",
                 "dissipation_euler_estimate": "dt*sum Gamma_i|v_i|^2 at accepted Euler trial",
@@ -818,13 +997,31 @@ def run_benchmark(config: Mapping[str, Any], output: Path) -> dict[str, Any]:
         "acceptance_gates": {
             "growth_free_energy_nonincrease": "required for growth_rate=0 records",
             "linear_hessian_and_mode": "finite-difference Hessian eigenvalue/mode overlap against the discrete reference",
-            "growth_temporal": "dt, dt/2, dt/4 with classification and observable tolerances",
-            "growth_spatial": "three spatial resolutions with classification and observable tolerances",
+            "linear_decay_rate": "diagnostic pass/fail threshold on measured-vs-discrete first-mode rate",
+            "growth_temporal": "morphology-only dt, dt/2, dt/4 comparison; adaptive accepted dt/rejections and energy diagnostics are reported, not gated",
+            "growth_spatial": "morphology-only three-resolution comparison; adaptive accepted dt/rejections and energy diagnostics are reported, not gated",
         },
     }
-    _write_json(output / "compact_summary.json", compact)
-    _write_compact_csv(output / "compact_summary.csv", [*linear_records, *growth_records, *convergence])
-    _write_json(output / "effective_config.json", config)
+    compact_json_path = output / "compact_summary.json"
+    compact_csv_path = output / "compact_summary.csv"
+    effective_config_path = output / "effective_config.json"
+    _write_json(compact_json_path, compact)
+    _write_compact_csv(compact_csv_path, [*linear_records, *growth_records, *convergence])
+    _write_json(effective_config_path, config)
+    # Measure the temporary run tree before the final compact JSON rewrite.
+    # The measurement point is explicit because the JSON contains its own
+    # provenance fields and therefore cannot contain a self-referential exact
+    # byte count.
+    compact["provenance"].update(
+        {
+            "temporary_output_bytes_before_final_summary_write": _directory_bytes(output),
+            "compact_json_bytes_before_final_summary_write": compact_json_path.stat().st_size,
+            "compact_csv_bytes": compact_csv_path.stat().st_size,
+            "effective_config_bytes": effective_config_path.stat().st_size,
+            "measurement_note": "byte counts are measured immediately before the final compact JSON provenance write",
+        }
+    )
+    _write_json(compact_json_path, compact)
     return compact
 
 
@@ -839,13 +1036,19 @@ def main() -> int:
     args = _cli()
     try:
         config = load_config(args.config)
-        summary = run_benchmark(config, args.output)
+        summary = run_benchmark(
+            config,
+            args.output,
+            raw_config_sha256_value=raw_config_sha256(args.config),
+            raw_config_path=None if args.config is None else str(args.config),
+        )
     except (BenchmarkError, OSError, json.JSONDecodeError) as exc:
         print(f"P0-B benchmark configuration/output error: {exc}", file=sys.stderr)
         return 2
     linear_failures = [
         record for record in summary["linear_mode"]["records"]
-        if record.get("record_type") == "linear_decay" and record.get("decay_failure")
+        if record.get("record_type") == "linear_decay"
+        and (record.get("decay_failure") or record.get("decay_rate_status") == "fail")
     ]
     unresolved = [
         row for row in summary["growth"]["convergence"]

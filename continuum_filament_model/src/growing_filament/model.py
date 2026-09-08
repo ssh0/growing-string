@@ -173,22 +173,39 @@ class FilamentState:
         )
 
     def validate(self, eps: float = 1.0e-12) -> None:
+        # State metadata is intentionally scalar.  ``np.isfinite`` on a
+        # one-element list/array returns a one-element array, which can be
+        # coerced to bool and would defer the error to model initialization.
+        # Python/NumPy real scalar values are accepted; for ``step`` an
+        # integer-valued float (for example ``3.0``) is also accepted for
+        # backwards-compatible JSON round trips, while bools and arrays are
+        # rejected.
+        if isinstance(self.time, (bool, np.bool_)) or not np.isscalar(self.time):
+            raise ModelError(f"time must be a finite scalar: {self.time!r}")
         try:
-            finite_time = bool(np.isfinite(self.time))
-        except (TypeError, ValueError):
-            finite_time = False
-        if not finite_time:
+            time_value = float(self.time)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ModelError(f"time must be a finite scalar: {self.time!r}") from exc
+        if not np.isfinite(time_value):
             raise ModelError(f"time must be finite: {self.time!r}")
-        if isinstance(self.step, (bool, np.bool_)):
-            raise ModelError(f"step must be an integer: {self.step!r}")
+
+        if isinstance(self.step, (bool, np.bool_)) or not np.isscalar(self.step):
+            raise ModelError(
+                "step must be a finite integer-valued scalar: "
+                f"{self.step!r}"
+            )
         try:
-            finite_step = bool(np.isfinite(self.step))
-            integer_step = int(self.step) == self.step
-        except (TypeError, ValueError, OverflowError):
-            finite_step = False
-            integer_step = False
-        if not finite_step or not integer_step:
-            raise ModelError(f"step must be a finite integer: {self.step!r}")
+            step_value = float(self.step)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ModelError(
+                "step must be a finite integer-valued scalar: "
+                f"{self.step!r}"
+            ) from exc
+        if not np.isfinite(step_value) or not step_value.is_integer():
+            raise ModelError(
+                "step must be a finite integer-valued scalar: "
+                f"{self.step!r}"
+            )
         if self.positions.ndim != 2 or self.positions.shape[1] != 2:
             raise ModelError("positions must have shape (N, 2)")
         if self.n_nodes < 3:

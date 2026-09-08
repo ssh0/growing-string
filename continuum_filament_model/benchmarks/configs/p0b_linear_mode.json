@@ -1,5 +1,5 @@
 {
-  "schema_version": "continuum-filament-p0b-config-1",
+  "schema_version": "continuum-filament-p0b-config-2",
   "linear_mode": {
     "length": 2.0,
     "n_nodes": [5, 9, 17],
@@ -11,7 +11,8 @@
     "amplitude_fraction": 0.00001,
     "hessian_fd_epsilon": 0.0000001,
     "n_modes": 3,
-    "a_max_factor": 2.0
+    "a_max_factor": 2.0,
+    "decay_rate_relative_tolerance": 0.01
   },
   "growth": {
     "length": 2.0,
@@ -27,6 +28,7 @@
     "a_max_factor": 2.0,
     "max_retries": 12,
     "max_displacement_fraction": 0.25,
+    "gate_scope": "morphology-only",
     "representatives": [
       {"name": "straight", "growth_rate": 0.05},
       {"name": "boundary-near", "growth_rate": 0.15},

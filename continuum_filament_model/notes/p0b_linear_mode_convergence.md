@@ -48,7 +48,7 @@ runnerは次を比較する。
 
 ## 成長部とenergyの分解
 
-各代表点について、まず`n_nodes=13`を固定して`dt,dt/2,dt/4`を比較し、その後`n_nodes=[9,13,17]`を同じ基準`dt`で比較する。`a_max=2h`かつ本configの短時間runではmesh変更が起きないことを固定mesh条件として確認する。もし再meshが起きれば、そのrunのgate statusは成功にせず`numerically-unresolved`とする。
+各代表点について、まず`n_nodes=9`を固定して`dt,dt/2,dt/4`を比較し、その後`n_nodes=[5,7,9]`を同じ基準`dt`で比較する。`a_max=2h`かつ本configの短時間runではmesh変更が起きないことを固定mesh条件として確認する。もし再meshが起きれば、そのrunのgate statusは成功にせず`numerically-unresolved`とする。
 
 各受理stepで、次の順序を記録する。`r`はstep前の幾何、`a`はstep前の参照長、`a_grown`は成長後、`r_remesh`と`a_remesh`は再mesh後、`r_trial`は受理後の幾何である。
 
@@ -84,7 +84,9 @@ D_Euler = dt * sum_i Gamma_i |v_i|^2
 - fixed-mesh runでremesh countが0。
 - `g=0` runでenergy非増加。
 
-どれか一つでも満たさない代表点は`numerically-unresolved`とする。これは「座屈が存在しない」という意味ではなく、現行の時間刻み・空間解像度・判定規則で確定できないという意味である。P1B.2で未解決だったboundary近傍・buckled候補を、単一の結果や見た目だけで`resolved`へ再分類しない。
+成長部の収束gateのscopeは`morphology-only`である。したがって、上記の分類・onset・peak transverse・`A1/L`・fixed-mesh条件を満たした場合のstatusは`morphology-converged`とし、成長–緩和全体の収束やenergy/workの収束を意味しない。各runについて、実際のaccepted `dt`のmin/max/mean/count、rejected trial、event count、energy finalの変動、散逸推定を監査用に保存する。adaptive `dt`やreject数がrequested `dt`間で変わる場合は警告として明示し、同じrequested `dt`の時間収束と無条件に解釈しない。
+
+どれか一つでも形状条件を満たさない代表点は`numerically-unresolved`とする。これは「座屈が存在しない」という意味ではなく、現行の時間刻み・空間解像度・判定規則で確定できないという意味である。P1B.2で未解決だったboundary近傍・buckled候補を、単一の結果や見た目だけで`resolved`へ再分類しない。energy、mechanical change、散逸は現行成長gateのpass/fail条件ではない。
 
 ## 実行と成果物
 
@@ -104,7 +106,9 @@ continuum_filament_model/results/p0b/
 └── compact_summary.csv
 ```
 
-compact summaryには、実行revision、config hash、境界条件、非接触条件、線形mode比較、成長energy分解、accepted/rejected/event、判定status、P1B.2との関係、未主張事項を保存する。trajectory、per-run event、plotはcommitしない。
+compact summaryには、source/execution revision、raw/effective configのSHA-256、Python/NumPy/platform、elapsed、planned/actual run count、一時出力bytes、compact artifact bytes、境界条件、非接触条件、線形mode比較、成長energy分解、accepted/rejected/event、実accepted `dt`監査、判定status、P1B.2との関係、未主張事項を保存する。trajectory、per-run event、plotはcommitしない。
+
+線形減衰率には、configの`decay_rate_relative_tolerance=0.01`による診断thresholdを適用し、`decay_rate_status`を保存する。これは離散linear fixtureの数値チェックであり、成長あり座屈の臨界値や普遍性の検証ではない。
 
 ## 未解決・対象外
 
@@ -114,4 +118,4 @@ compact summaryには、実行revision、config hash、境界条件、非接触�
 - 完全なgrowth workの連続体導出。
 - 端点反力の独立solver。
 
-これらはP0-Bのpassやcompact summaryの`converged`を根拠に確定しない。
+これらはP0-Bのpassやcompact summaryの`morphology-converged`を根拠に確定しない。
