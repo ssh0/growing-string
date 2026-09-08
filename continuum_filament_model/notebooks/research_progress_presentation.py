@@ -745,8 +745,17 @@ def _(dense_snapshots, mo, np, plt, video_centerline_rows, video_frame_control, 
         _fit_lengths = np.array([])
         _finite_count = int(np.count_nonzero(_finite_length))
         _censored_count = int(np.count_nonzero(_finite_length & (_length_censor == 1)))
+        _unique_lineages = sorted({str(row.get("filament_id", "")) for row in _length_rows})
+        _other_lineage_count = sum(
+            str(row.get("filament_id", "")) != _selected_lineage for row in _length_rows
+        )
         if _fit_count == 0 and _finite_count == _censored_count:
-            _growth_text = f"適格観測行なし（全{_finite_count}行が分岐・ループ・品質フラグによりcensor）"
+            _growth_text = (
+                f"適格観測行なし（全{_finite_count}行がcensor（分岐・ループ等の品質フラグ）、"
+                f"{len(_unique_lineages)}種類の候補lineageが混在、選択lineage: {_selected_lineage}、"
+                f"選択lineage以外の候補行={_other_lineage_count}行）。"
+                "単一フィラメントの成長曲線としてはfit不可"
+            )
         else:
             _growth_text = f"適格観測行={_fit_count}<2（同一lineageかつcensor=0の行のみを対象；fit非表示）"
 
