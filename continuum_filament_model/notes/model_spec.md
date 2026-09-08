@@ -87,22 +87,36 @@ F_{i+1} -= (EI / h_i) P_i Δt_i / l_i
 
 ### 接触
 
-初期版は非隣接節点間の軟接触を実装する。
+非局所線分対 `(i,j)` の最近接点を `x(s)`、`y(u)`、距離を `d`、排除径を `D` とする。
+既存の `geometry.py` の `nonlocal_segment_contacts()` が返す `s,u ∈ [0,1]` と法線
+`n=(x-y)/d`（`d>0`）を使い、摩擦なしの有限径 penalty を計算する。
 
 ```math
-E_c = Σ_{i,j} (k_c / 2) [d_c - |r_i-r_j|]_+^2
+δ_{ij} = [D-d]_+ = max(0,D-d)
+E_{c,ij} = (k_c/2) δ_{ij}^2
+f_{ij} = k_c δ_{ij} n
 ```
 
-ここで `d_c` は排除距離、`[x]_+=max(x,0)` である。これは節点間の力則であり、線分間の反発力ではない。
+`f_ij` は線分 `i` へ加え、線分 `j` へ `-f_ij` を加える。4端点には最近接パラメータによる
+双線形形状関数で scatter する。
 
-`growing_filament.geometry` は力を加えない独立した線分診断として、非隣接線分の最近接距離・最近接点・
-パラメータ・有限径の `gap=d-D`・`penetration=max(0,D-d)`・feature・normal status を計算する。
-方式非依存のレコード仕様、`d=0`、collinear overlap、配列添字と将来lineage IDの限界は
-`notes/segment_contact_geometry.md` に記録する。初期形状に非隣接線分の交差がある場合は、
-`reject_crossing` の設定にかかわらずモデル生成を拒否する。中心線交差と交差しない有限径 gap 接触は
-診断種別を分ける。診断上の線分接触は、現在のproxyでは受理を妨げず、線分反発・摩擦・接着を追加しない。
-動的有限径接触の力則、solver、CCDによる非貫入保証は未実装であり、`diameter` と最近接距離は
-有限径フィラメントの物理的な接触則を実装・検証したことを意味しない。
+```text
+F_i     += (1-s) f_ij       F_{i+1} += s f_ij
+F_j     -= (1-u) f_ij       F_{j+1} -= u f_ij
+```
+
+この線分接触を標準の非局所接触応答として `forces()` と `energy_components()` に含める。
+過去のパラメータ・3節点 fixture との互換性のため、既存の非隣接節点 penalty も同じ
+`contact_stiffness` で加算する。節点・線分が同時に閾値内となる形状では両方の項が寄与する。
+定式化、`d=0` で法線を選ばない境界、U字 fixture、有限差分・作用反作用・剛体変換の検証は
+`notes/segment_penalty_contact.md` に記録する。
+
+`growing_filament.geometry` は引き続き、最近接距離・最近接点・パラメータ・有限径の
+`gap=d-D`・`penetration=max(0,D-d)`・feature・normal status を方式非依存に提供する。
+初期形状に非隣接線分の交差がある場合は、`reject_crossing` の設定にかかわらずモデル生成を拒否する。
+`d=0` の交差・共線重なりでは法線が一意でないため、接触エネルギーは定義するが任意の反発方向は
+生成しない。有限の時間刻みでの非貫入保証、摩擦・接着、動的CCDは未実装であり、`diameter` と
+最近接距離は実験妥当性を意味しない。
 
 ## 散逸
 
