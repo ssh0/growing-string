@@ -45,10 +45,16 @@ def _config(args: argparse.Namespace) -> SegmentationConfig:
         value = getattr(args, name, None)
         if value is not None:
             values[name] = value
-    for name in ("frame_stride", "min_component_size", "max_components", "max_centerline_points"):
+    for name in (
+        "frame_stride", "min_component_size", "max_components", "max_centerline_points",
+        "boundary_margin_px", "threshold_value", "threshold_percentile", "contrast_low",
+        "contrast_high", "background_value",
+    ):
         value = getattr(args, name, None)
         if value is not None:
             values[name] = value
+    if getattr(args, "output_budget_mb", None) is not None:
+        values["output_budget_bytes"] = int(float(args.output_budget_mb) * 1024 * 1024)
     if getattr(args, "roi", None) is not None:
         values["roi"] = args.roi
     return SegmentationConfig.from_mapping(values)
@@ -76,7 +82,16 @@ def build_parser() -> argparse.ArgumentParser:
             child.add_argument("--min-component-size", type=int)
             child.add_argument("--max-components", type=int)
             child.add_argument("--max-centerline-points", type=int)
+            child.add_argument("--boundary-margin-px", type=int)
+            child.add_argument("--threshold-value", type=float)
+            child.add_argument("--threshold-percentile", type=float)
+            child.add_argument("--contrast-low", type=float)
+            child.add_argument("--contrast-high", type=float)
+            child.add_argument("--background-value", type=float)
+            child.add_argument("--output-budget-mb", type=float)
             child.add_argument("--roi", nargs=4, type=int, metavar=("X0", "Y0", "X1", "Y1"))
+        if command == "render":
+            child.add_argument("--output-budget-mb", type=float)
     return parser
 
 
@@ -88,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in {"extract", "all"}:
         if not args.video:
             raise SystemExit("--video is required")
-        run_pipeline(args.video, output, config, max_frames=args.max_frames)
+        run_pipeline(args.video, output, config, max_frames=args.max_frames, command_line=sys.argv)
     if args.command in {"compare", "all"}:
         if not args.model:
             raise SystemExit("--model is required for compare/all")
@@ -96,6 +111,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in {"render", "all"}:
         if not args.video or not args.model:
             raise SystemExit("--video and --model are required for render/all")
+        render_budget = config.output_budget_bytes if args.command == "all" else (
+            int(float(args.output_budget_mb) * 1024 * 1024) if getattr(args, "output_budget_mb", None) is not None else None
+        )
         render_comparison(
             args.video,
             output,
@@ -104,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
             registration,
             max_video_frames=args.max_frames,
             representative_count=args.representative_count,
+            output_budget_bytes=render_budget,
         )
     print(json.dumps({"output": str(output.resolve()), "command": args.command}, ensure_ascii=False))
     return 0

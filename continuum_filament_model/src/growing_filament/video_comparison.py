@@ -101,6 +101,8 @@ class SegmentationConfig:
     skeleton: bool = True
     max_jump_px: float = 80.0
     min_quality: float = 0.20
+    boundary_margin_px: int = 2
+    output_budget_bytes: int | None = None
 
     def __post_init__(self) -> None:
         if self.polarity not in {"dark", "bright"}:
@@ -115,6 +117,10 @@ class SegmentationConfig:
             raise ValueError("frame_stride and min_component_size must be positive")
         if self.max_components < 1 or self.max_centerline_points < 2:
             raise ValueError("max_components and max_centerline_points are too small")
+        if self.boundary_margin_px < 0:
+            raise ValueError("boundary_margin_px must be non-negative")
+        if self.output_budget_bytes is not None and self.output_budget_bytes <= 0:
+            raise ValueError("output_budget_bytes must be positive when specified")
         _parse_roi(self.roi)
 
     @classmethod
@@ -144,12 +150,15 @@ class RegistrationConfig:
     time_scale: float = 1.0
     time_offset: float = 0.0
     max_time_error_s: float = 0.20
+    endpoint_order: str = "auto"  # auto, forward, or reverse
 
     def __post_init__(self) -> None:
         if self.pixel_per_model_unit is not None and self.pixel_per_model_unit <= 0:
             raise ValueError("pixel_per_model_unit must be positive")
         if self.time_scale <= 0 or self.max_time_error_s < 0:
             raise ValueError("time_scale must be positive and max_time_error_s non-negative")
+        if self.endpoint_order not in {"auto", "forward", "reverse"}:
+            raise ValueError("endpoint_order must be auto, forward, or reverse")
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any] | None) -> "RegistrationConfig":
@@ -204,6 +213,9 @@ class CenterlineCandidate:
     quality: float
     flags: list[str] = field(default_factory=list)
     censor: bool = False
+    topology: dict[str, int] = field(default_factory=dict)
+    component_count_total: int = 1
+    centerline_exported: bool = True
 
     def summary(self) -> dict[str, Any]:
         metrics = polyline_metrics(self.points)
@@ -211,8 +223,13 @@ class CenterlineCandidate:
             "frame": self.frame_index,
             "time": self.time_s,
             "filament_id": self.filament_id,
-            "n_points": int(len(self.points)),
+            "n_points": int(len(self.points)) if self.centerline_exported else 0,
+            "centerline_exported": int(self.centerline_exported),
             "component_area": self.component_area,
+            "component_count_total": self.component_count_total,
+            "endpoint_count": int(self.topology.get("endpoint_count", 0)),
+            "junction_count": int(self.topology.get("junction_count", 0)),
+            "cycle_rank": int(self.topology.get("cycle_rank", 0)),
             "length_px": metrics["length_px"],
             "endpoint_distance_px": metrics["endpoint_distance_px"],
             "curvature_mean_px_inv": metrics["curvature_mean_px_inv"],
@@ -399,6 +416,11 @@ def iter_video_frames(
         if process is not None and process.poll() is None:
             process.kill()
             process.wait()
+        if process is not None:
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
 
 
 # ---------------------------------------------------------------------------
@@ -639,6 +661,61 @@ def _ordered_skeleton(coords_yx: np.ndarray) -> np.ndarray:
     return np.asarray([coords[i] for i in best_path], dtype=float)[:, ::-1]
 
 
+def skeleton_topology(coords_yx: np.ndarray) -> dict[str, int]:
+    """Summarise skeleton graph topology without assuming an open curve.
+
+    ``cycle_rank = E - V + C`` detects loops, while degree-one and degree-three
+    pixels detect endpoints and branches.  A loop is never silently exported as
+    an open centerline candidate: callers mark it censored.
+    """
+
+    coords = [tuple(int(round(v)) for v in row) for row in np.asarray(coords_yx)]
+    if not coords:
+        return {
+            "skeleton_vertices": 0,
+            "skeleton_edges": 0,
+            "skeleton_components": 0,
+            "endpoint_count": 0,
+            "junction_count": 0,
+            "cycle_rank": 0,
+        }
+    index = {point: i for i, point in enumerate(coords)}
+    graph: list[list[int]] = [[] for _ in coords]
+    for i, (y, x) in enumerate(coords):
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if not dy and not dx:
+                    continue
+                j = index.get((y + dy, x + dx))
+                if j is not None:
+                    graph[i].append(j)
+    visited: set[int] = set()
+    component_count = 0
+    for start in range(len(coords)):
+        if start in visited:
+            continue
+        component_count += 1
+        queue = [start]
+        visited.add(start)
+        while queue:
+            current = queue.pop()
+            for neighbour in graph[current]:
+                if neighbour not in visited:
+                    visited.add(neighbour)
+                    queue.append(neighbour)
+    vertices = len(coords)
+    edges = sum(len(neighbours) for neighbours in graph) // 2
+    cycle_rank = max(0, edges - vertices + component_count)
+    return {
+        "skeleton_vertices": vertices,
+        "skeleton_edges": edges,
+        "skeleton_components": component_count,
+        "endpoint_count": sum(len(neighbours) == 1 for neighbours in graph),
+        "junction_count": sum(len(neighbours) >= 3 for neighbours in graph),
+        "cycle_rank": cycle_rank,
+    }
+
+
 def resample_polyline(points_xy: np.ndarray, max_points: int = 240) -> np.ndarray:
     points = np.asarray(points_xy, dtype=float)
     if len(points) <= max_points:
@@ -658,8 +735,15 @@ def component_to_centerline(
     config: SegmentationConfig,
 ) -> tuple[np.ndarray, list[str]]:
     skeleton = _skeleton_coordinates(component_yx, image_shape, config.skeleton)
+    topology = skeleton_topology(skeleton)
     points = _ordered_skeleton(skeleton)
     flags: list[str] = []
+    if topology["junction_count"] > 0:
+        flags.append("branched_component")
+    if topology["cycle_rank"] > 0 or topology["endpoint_count"] == 0:
+        flags.append("loop_component")
+    if topology["skeleton_components"] > 1:
+        flags.append("disconnected_skeleton")
     if len(points) < 3:
         flags.append("short_centerline")
     if len(component_yx) > 0 and len(points) < max(2, int(math.sqrt(len(component_yx)) / 2)):
@@ -706,14 +790,19 @@ class _TrackManager:
         self.max_jump_px = max_jump_px
         self.next_id = 0
         self.last: dict[str, np.ndarray] = {}
-        self.last_frame: dict[str, int] = {}
+        self.last_order: dict[str, int] = {}
 
-    def assign(self, centroids: Sequence[np.ndarray], frame_index: int) -> tuple[list[str], list[bool]]:
+    def assign(
+        self,
+        centroids: Sequence[np.ndarray],
+        frame_index: int,
+        observation_order: int,
+    ) -> tuple[list[str], list[bool], list[str]]:
         names = list(self.last)
         pairs: list[tuple[float, int, str]] = []
         for index, centroid in enumerate(centroids):
             for name in names:
-                if self.last_frame[name] >= frame_index:
+                if self.last_order[name] >= observation_order:
                     continue
                 distance = float(np.linalg.norm(centroid - self.last[name]))
                 pairs.append((distance, index, name))
@@ -721,6 +810,7 @@ class _TrackManager:
         assigned: dict[int, str] = {}
         used: set[str] = set()
         jumps = [False] * len(centroids)
+        statuses = ["new_lineage"] * len(centroids)
         for distance, index, name in pairs:
             if index in assigned or name in used:
                 continue
@@ -728,15 +818,21 @@ class _TrackManager:
                 assigned[index] = name
                 used.add(name)
                 jumps[index] = distance > self.max_jump_px * 0.5
+                statuses[index] = (
+                    "reconnected_after_missing"
+                    if self.last_order[name] < observation_order - 1
+                    else "matched"
+                )
         for index, centroid in enumerate(centroids):
             if index not in assigned:
                 assigned[index] = f"filament-{self.next_id:04d}"
                 self.next_id += 1
+                statuses[index] = "initial_lineage" if observation_order == 0 else "new_lineage"
         result = [assigned[i] for i in range(len(centroids))]
         for name, centroid in zip(result, centroids):
             self.last[name] = np.asarray(centroid, dtype=float)
-            self.last_frame[name] = frame_index
-        return result, jumps
+            self.last_order[name] = observation_order
+        return result, jumps, statuses
 
 
 def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]], fieldnames: Sequence[str]) -> None:
@@ -750,6 +846,8 @@ def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]], fieldnames: Sequen
 
 
 def _candidate_rows(candidate: CenterlineCandidate) -> list[dict[str, Any]]:
+    if not candidate.centerline_exported:
+        return []
     rows = []
     for point_id, (x, y) in enumerate(candidate.points):
         rows.append(
@@ -778,6 +876,7 @@ def _make_candidate(
     config: SegmentationConfig,
     track_jump: bool,
     component_count: int,
+    component_total: int,
     roi: tuple[int, int, int, int] | None,
 ) -> CenterlineCandidate:
     points, flags = component_to_centerline(component, image_shape, config)
@@ -788,16 +887,64 @@ def _make_candidate(
     quality = float(np.clip(0.5 * area_score + 0.5 * line_score, 0.0, 1.0))
     if track_jump:
         flags.append("large_jump")
-    if component_count > 1:
+    if component_total > 1:
         flags.append("ambiguous_components")
+    if component_total > component_count:
+        flags.append("components_truncated")
+    margin = max(0, int(config.boundary_margin_px))
+    component_y, component_x = component[:, 0], component[:, 1]
+    height, width = image_shape
+    image_boundary = bool(
+        np.any(component_x <= margin)
+        or np.any(component_x >= width - 1 - margin)
+        or np.any(component_y <= margin)
+        or np.any(component_y >= height - 1 - margin)
+    )
+    endpoint_boundary = bool(
+        len(points) >= 2
+        and (
+            np.any(points[0] <= [margin, margin])
+            or np.any(points[0] >= [width - 1 - margin, height - 1 - margin])
+            or np.any(points[-1] <= [margin, margin])
+            or np.any(points[-1] >= [width - 1 - margin, height - 1 - margin])
+        )
+    )
+    if image_boundary or endpoint_boundary:
+        flags.append("out_of_view")
     if roi is not None:
         x0, y0, x1, y1 = roi
-        if np.any((centroid <= [x0 + 1, y0 + 1]) | (centroid >= [x1 - 2, y1 - 2])):
-            flags.append("near_roi_edge")
+        roi_boundary = bool(
+            np.any(component_x <= x0 + margin)
+            or np.any(component_x >= x1 - 1 - margin)
+            or np.any(component_y <= y0 + margin)
+            or np.any(component_y >= y1 - 1 - margin)
+            or (
+                len(points) >= 2
+                and (
+                    np.any(points[0] <= [x0 + margin, y0 + margin])
+                    or np.any(points[0] >= [x1 - 1 - margin, y1 - 1 - margin])
+                    or np.any(points[-1] <= [x0 + margin, y0 + margin])
+                    or np.any(points[-1] >= [x1 - 1 - margin, y1 - 1 - margin])
+                )
+            )
+        )
+        if roi_boundary:
+            flags.append("roi_clipped")
     if quality < config.min_quality:
         flags.append("low_quality")
-    censor = any(flag in flags for flag in {"short_centerline", "skeleton_loss", "large_jump", "ambiguous_components", "low_quality"})
-    return CenterlineCandidate(frame_index, time_s, filament_id, points, len(component), centroid, quality, flags, censor)
+    censor = any(
+        flag in flags
+        for flag in {
+            "short_centerline", "skeleton_loss", "large_jump", "ambiguous_components",
+            "components_truncated", "branched_component", "loop_component", "disconnected_skeleton",
+            "out_of_view", "roi_clipped", "low_quality",
+        }
+    )
+    topology = skeleton_topology(_skeleton_coordinates(component, image_shape, config.skeleton))
+    return CenterlineCandidate(
+        frame_index, time_s, filament_id, points, len(component), centroid, quality, flags,
+        censor, topology, component_total, "loop_component" not in flags,
+    )
 
 
 def validate_centerline_rows(rows: Sequence[Mapping[str, Any]], max_jump_px: float = 80.0) -> dict[str, Any]:
@@ -883,12 +1030,49 @@ def _choose_filament(summary_rows: Sequence[Mapping[str, Any]]) -> str | None:
     return sorted(counts, key=lambda name: (-counts[name], name))[0]
 
 
+def _file_record(path: str | Path) -> dict[str, Any]:
+    value = Path(path)
+    return {"path": value.name, "bytes": value.stat().st_size, "sha256": sha256_file(value)}
+
+
+def _runtime_capabilities() -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "python": sys.version.split()[0],
+        "numpy": np.__version__,
+        "opencv_used": False,
+    }
+    optional_modules = ("imageio", "PIL", "marimo", "skimage")
+    for module_name in optional_modules:
+        try:
+            module = __import__(module_name)
+            result[module_name] = getattr(module, "__version__", "installed")
+        except Exception as exc:
+            result[module_name] = f"unavailable:{type(exc).__name__}"
+    for executable in ("ffmpeg", "ffprobe"):
+        result[executable] = {"available": shutil.which(executable) is not None}
+        if shutil.which(executable):
+            try:
+                result[executable]["version"] = _run_command([executable, "-version"]).splitlines()[0]
+            except Exception as exc:
+                result[executable]["version_error"] = f"{type(exc).__name__}: {exc}"
+    if shutil.which("ffmpeg"):
+        try:
+            encoders = _run_command(["ffmpeg", "-hide_banner", "-encoders"])
+            result["libx264"] = {"available": "libx264" in encoders}
+        except Exception as exc:
+            result["libx264"] = {"available": False, "error": f"{type(exc).__name__}: {exc}"}
+    else:
+        result["libx264"] = {"available": False}
+    return result
+
+
 def run_pipeline(
     video_path: str | Path,
     output_dir: str | Path,
     config: SegmentationConfig | Mapping[str, Any] | None = None,
     *,
     max_frames: int | None = None,
+    command_line: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Segment a video and write contract, QC, metadata, and manifest artifacts."""
 
@@ -901,21 +1085,37 @@ def run_pipeline(
     previous_points: dict[str, np.ndarray] = {}
     candidates: list[CenterlineCandidate] = []
     events: list[dict[str, Any]] = []
+    lineage_rows: list[dict[str, Any]] = []
     threshold_values: list[float] = []
     component_counts: list[int] = []
-    for frame_index, time_s, frame in iter_video_frames(source, metadata, cfg.frame_stride, max_frames):
+    processed_frame_indices: list[int] = []
+    processed_times: list[float] = []
+    for observation_order, (frame_index, time_s, frame) in enumerate(iter_video_frames(source, metadata, cfg.frame_stride, max_frames)):
+        processed_frame_indices.append(frame_index)
+        processed_times.append(time_s)
         mask, diagnostics = segment_mask(frame, cfg)
         threshold_values.append(float(diagnostics["threshold"]))
-        components = connected_components(mask, cfg.min_component_size)[: cfg.max_components]
-        component_counts.append(len(components))
+        all_components = connected_components(mask, cfg.min_component_size)
+        component_total = len(all_components)
+        components = all_components[: cfg.max_components]
+        component_counts.append(component_total)
+        if component_total > cfg.max_components:
+            events.append({"frame": frame_index, "time": time_s, "event": "components_truncated", "severity": "censor", "details": f"total={component_total};kept={len(components)}"})
         if not components:
             events.append({"frame": frame_index, "time": time_s, "event": "missing", "severity": "censor", "details": "no_component"})
+            for name in sorted(tracker.last):
+                lineage_rows.append({"frame": frame_index, "time": time_s, "filament_id": name, "status": "missing", "censor": 1, "details": "no_component"})
             continue
         centroids = [np.mean(component, axis=0)[::-1] for component in components]
-        filament_ids, jumps = tracker.assign(centroids, frame_index)
-        if len(components) > 1:
-            events.append({"frame": frame_index, "time": time_s, "event": "ambiguous_components", "severity": "warning", "details": str(len(components))})
-        for component, filament_id, jump in zip(components, filament_ids, jumps):
+        previous_track_ids = set(tracker.last)
+        filament_ids, jumps, track_statuses = tracker.assign(centroids, frame_index, observation_order)
+        assigned_track_ids = set(filament_ids)
+        for name in sorted(previous_track_ids - assigned_track_ids):
+            lineage_rows.append({"frame": frame_index, "time": time_s, "filament_id": name, "status": "missing", "censor": 1, "details": "component_not_assigned"})
+            events.append({"frame": frame_index, "time": time_s, "event": "missing", "severity": "censor", "details": name})
+        if component_total > 1:
+            events.append({"frame": frame_index, "time": time_s, "event": "ambiguous_components", "severity": "warning", "details": str(component_total)})
+        for component, filament_id, jump, track_status in zip(components, filament_ids, jumps, track_statuses):
             candidate = _make_candidate(
                 frame_index,
                 time_s,
@@ -925,8 +1125,18 @@ def run_pipeline(
                 cfg,
                 jump,
                 len(components),
+                component_total,
                 _parse_roi(cfg.roi),
             )
+            if track_status == "reconnected_after_missing":
+                candidate.flags.append("reconnected_after_missing")
+                candidate.censor = True
+                events.append({"frame": frame_index, "time": time_s, "event": "reconnected_after_missing", "severity": "censor", "details": filament_id})
+            elif track_status == "new_lineage":
+                candidate.flags.append("new_lineage")
+                candidate.censor = True
+                events.append({"frame": frame_index, "time": time_s, "event": "new_lineage", "severity": "censor", "details": filament_id})
+            lineage_rows.append({"frame": frame_index, "time": time_s, "filament_id": filament_id, "status": track_status, "censor": int(candidate.censor), "details": ""})
             previous = previous_points.get(filament_id)
             if previous is not None and len(previous) >= 2 and len(candidate.points) >= 2:
                 direct = float(np.linalg.norm(candidate.points[0] - previous[0]) + np.linalg.norm(candidate.points[-1] - previous[-1]))
@@ -945,15 +1155,92 @@ def run_pipeline(
     if not validation["valid"]:
         events.append({"frame": -1, "time": "", "event": "contract_invalid", "severity": "error", "details": ";".join(validation["errors"])})
     selected_filament = _choose_filament(summary_rows)
+    centerline_fields = [
+        "time", "filament_id", "point_id", "x", "y", "quality", "frame",
+        "coordinate_system", "quality_flags", "censor",
+    ]
+    summary_fields = [
+        "frame", "time", "filament_id", "n_points", "centerline_exported", "component_area",
+        "component_count_total", "endpoint_count", "junction_count", "cycle_rank", "length_px",
+        "endpoint_distance_px", "curvature_mean_px_inv", "curvature_max_px_inv", "quality",
+        "quality_flags", "censor",
+    ]
+    lineage_fields = ["frame", "time", "filament_id", "status", "censor", "details"]
+    _write_csv(destination / "centerline.csv", centerline_rows, centerline_fields)
+    _write_csv(destination / "observation_summary.csv", summary_rows, summary_fields)
+    _write_csv(destination / "events.csv", events, ["frame", "time", "event", "severity", "details"])
+    _write_csv(destination / "lineage.csv", lineage_rows, lineage_fields)
+    coverage = "full_period" if max_frames is None else "partial_max_frames"
+    frame_range = {
+        "first": min(processed_frame_indices) if processed_frame_indices else None,
+        "last": max(processed_frame_indices) if processed_frame_indices else None,
+        "count": len(processed_frame_indices),
+        "stride": cfg.frame_stride,
+        "coverage": coverage,
+    }
+    command_value = []
+    for token in command_line or []:
+        text = str(token)
+        if text == str(source):
+            text = "${INPUT_VIDEO}"
+        else:
+            try:
+                is_output_path = Path(text).expanduser().resolve() == destination
+            except (OSError, RuntimeError):
+                is_output_path = False
+            if text == str(destination) or is_output_path:
+                text = "${OUTPUT_DIR}"
+        command_value.append(text)
+    config_hash = sha256_text(canonical_json(cfg.to_dict()))
+    metadata_json = {
+        "schema_version": SCHEMA_VERSION,
+        "video": metadata.to_dict(),
+        "input_logical_id": source.name,
+        "coordinate_system": "pixel",
+        "time_unit": "s",
+        "data_contract": ["time", "filament_id", "point_id", "x", "y", "quality"],
+        "segmentation": cfg.to_dict(),
+        "selected_filament_id": selected_filament,
+        "quality_definition": "deterministic area/centerline-point score; flags and censor are authoritative",
+        "calibration": {"pixel_per_model_unit": None, "status": "not_specified"},
+        "run": {"max_frames": max_frames, "frame_range": frame_range, "coverage": coverage},
+        "validation": validation,
+        "limitations": [
+            "frame-local segmentation candidates are not proof of a single biological filament lineage",
+            "pixel coordinates are not physical coordinates",
+            "quality/censor flags identify intervals requiring review",
+        ],
+    }
+    (destination / "metadata.json").write_text(canonical_json(metadata_json) + "\n", encoding="utf-8")
+    artifact_paths = [
+        destination / "metadata.json", destination / "centerline.csv", destination / "observation_summary.csv",
+        destination / "events.csv", destination / "lineage.csv",
+    ]
+    artifacts = {path.stem: _file_record(path) for path in artifact_paths}
+    artifact_bytes = sum(item["bytes"] for item in artifacts.values())
+    budget_status = "not_configured"
+    if cfg.output_budget_bytes is not None:
+        budget_status = "within_budget" if artifact_bytes <= cfg.output_budget_bytes else "exceeded"
+    runtime = _runtime_capabilities()
     manifest = {
         "schema_version": SCHEMA_VERSION,
-        "input": {"path": str(source), "sha256": sha256_file(source), "metadata": metadata.to_dict()},
+        "input": {
+            "logical_id": source.name,
+            "path": str(source),
+            "sha256": sha256_file(source),
+            "bytes": source.stat().st_size,
+            "metadata": metadata.to_dict(),
+        },
         "segmentation_config": cfg.to_dict(),
-        "config_sha256": sha256_text(canonical_json(cfg.to_dict())),
+        "config_sha256": config_hash,
+        "command": command_value,
+        "command_sha256": sha256_text(canonical_json(command_value)),
+        "run": {"max_frames": max_frames, "frame_range": frame_range, "coverage": coverage},
         "validation": validation,
         "selected_filament_id": selected_filament,
-        "processed_frames": len({candidate.frame_index for candidate in candidates}),
+        "processed_frames": len(processed_frame_indices),
         "candidate_count": len(candidates),
+        "candidate_censor_count": sum(int(candidate.censor) for candidate in candidates),
         "threshold_summary": {
             "min": min(threshold_values) if threshold_values else None,
             "max": max(threshold_values) if threshold_values else None,
@@ -963,37 +1250,11 @@ def run_pipeline(
             "max": max(component_counts) if component_counts else 0,
             "mean": float(np.mean(component_counts)) if component_counts else 0.0,
         },
-        "implementation": {"python": sys.version.split()[0], "numpy": np.__version__, "opencv_used": False},
+        "runtime": runtime,
+        "artifacts": artifacts,
+        "output_budget": {"bytes": cfg.output_budget_bytes, "artifact_bytes": artifact_bytes, "status": budget_status},
+        "comparison_artifacts": {},
     }
-    _write_csv(
-        destination / "centerline.csv",
-        centerline_rows,
-        ["time", "filament_id", "point_id", "x", "y", "quality", "frame", "coordinate_system", "quality_flags", "censor"],
-    )
-    _write_csv(
-        destination / "observation_summary.csv",
-        summary_rows,
-        ["frame", "time", "filament_id", "n_points", "component_area", "length_px", "endpoint_distance_px", "curvature_mean_px_inv", "curvature_max_px_inv", "quality", "quality_flags", "censor"],
-    )
-    _write_csv(destination / "events.csv", events, ["frame", "time", "event", "severity", "details"])
-    metadata_json = {
-        "schema_version": SCHEMA_VERSION,
-        "video": metadata.to_dict(),
-        "coordinate_system": "pixel",
-        "time_unit": "s",
-        "data_contract": ["time", "filament_id", "point_id", "x", "y", "quality"],
-        "segmentation": cfg.to_dict(),
-        "selected_filament_id": selected_filament,
-        "quality_definition": "deterministic area/centerline-point score; flags and censor are authoritative",
-        "calibration": {"pixel_per_model_unit": None, "status": "not_specified"},
-        "validation": validation,
-        "limitations": [
-            "frame-local segmentation candidates are not proof of a single biological filament lineage",
-            "pixel coordinates are not physical coordinates",
-            "quality/censor flags identify intervals requiring review",
-        ],
-    }
-    (destination / "metadata.json").write_text(canonical_json(metadata_json) + "\n", encoding="utf-8")
     (destination / "manifest.json").write_text(canonical_json(manifest) + "\n", encoding="utf-8")
     return {
         "output_dir": str(destination),
@@ -1016,6 +1277,14 @@ class ModelFrame:
     points: np.ndarray
     source: str
     metrics: dict[str, float]
+
+
+@dataclass(frozen=True)
+class ModelMatch:
+    frame: ModelFrame
+    time_error_s: float
+    method: str
+    tolerance_s: float
 
 
 def _model_polyline_metrics(points: np.ndarray) -> dict[str, float]:
@@ -1084,13 +1353,60 @@ def _read_csv_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def _interpolate_model(frames: Sequence[ModelFrame], time_s: float, max_error: float) -> ModelFrame | None:
+def match_model_frame(frames: Sequence[ModelFrame], time_s: float, max_error: float) -> ModelMatch | None:
+    """Match, rather than interpolate, the nearest model frame within tolerance."""
+
     if not frames:
         return None
     index = min(range(len(frames)), key=lambda i: abs(frames[i].time_s - time_s))
-    if abs(frames[index].time_s - time_s) > max_error:
+    error = abs(float(frames[index].time_s) - float(time_s))
+    if error > max_error:
         return None
-    return frames[index]
+    return ModelMatch(frames[index], error, "nearest_frame", float(max_error))
+
+
+def endpoint_correspondence(
+    observed_points: np.ndarray,
+    model_points_px: np.ndarray,
+    order: str = "auto",
+) -> dict[str, Any]:
+    """Evaluate both endpoint orientations and select an explicit correspondence."""
+
+    if len(observed_points) < 2 or len(model_points_px) < 2:
+        return {
+            "selected_method": None,
+            "forward_endpoint_distance_px": None,
+            "reverse_endpoint_distance_px": None,
+            "selected_endpoint_distance_px": None,
+            "model_points": model_points_px,
+        }
+    forward = float(
+        0.5
+        * (
+            np.linalg.norm(observed_points[0] - model_points_px[0])
+            + np.linalg.norm(observed_points[-1] - model_points_px[-1])
+        )
+    )
+    reverse = float(
+        0.5
+        * (
+            np.linalg.norm(observed_points[0] - model_points_px[-1])
+            + np.linalg.norm(observed_points[-1] - model_points_px[0])
+        )
+    )
+    if order == "forward":
+        selected = "forward"
+    elif order == "reverse":
+        selected = "reverse"
+    else:
+        selected = "forward" if forward <= reverse else "reverse"
+    return {
+        "selected_method": selected,
+        "forward_endpoint_distance_px": forward,
+        "reverse_endpoint_distance_px": reverse,
+        "selected_endpoint_distance_px": forward if selected == "forward" else reverse,
+        "model_points": model_points_px if selected == "forward" else model_points_px[::-1].copy(),
+    }
 
 
 def _resample_for_rmse(points: np.ndarray, n: int = 80) -> np.ndarray:
@@ -1131,7 +1447,10 @@ def compare_with_model(
         if chosen is not None and row.get("filament_id") != chosen:
             continue
         observed_time = float(row["time"])
-        model_frame = _interpolate_model(model_frames, registration_value.model_time(observed_time), registration_value.max_time_error_s)
+        registered_time = registration_value.model_time(observed_time)
+        model_match = match_model_frame(model_frames, registered_time, registration_value.max_time_error_s)
+        model_frame = model_match.frame if model_match is not None else None
+        time_error_s = model_match.time_error_s if model_match is not None else None
         flags = [flag for flag in str(row.get("quality_flags", "")).split(";") if flag and flag != "ok"]
         censored = bool(int(row.get("censor", "0")))
         result: dict[str, Any] = {
@@ -1145,36 +1464,60 @@ def compare_with_model(
             "quality": float(row["quality"]),
             "quality_flags": ";".join(flags) if flags else "ok",
             "censor": int(censored),
+            "registered_model_time": registered_time,
             "model_time": model_frame.time_s if model_frame is not None else None,
+            "time_error_s": time_error_s,
+            "time_match_method": model_match.method if model_match is not None else "no_match",
+            "time_tolerance_s": registration_value.max_time_error_s,
             "model_length": model_frame.metrics["length_model"] if model_frame is not None else None,
             "model_endpoint_distance": model_frame.metrics["endpoint_distance_model"] if model_frame is not None else None,
             "model_curvature_mean": model_frame.metrics["curvature_mean_model_inv"] if model_frame is not None else None,
             "model_curvature_max": model_frame.metrics["curvature_max_model_inv"] if model_frame is not None else None,
+            "model_length_px": None,
+            "model_endpoint_distance_px": None,
+            "endpoint_correspondence_method": None,
+            "forward_endpoint_distance_px": None,
+            "reverse_endpoint_distance_px": None,
+            "selected_endpoint_distance_px": None,
+            "endpoint_distance_px": None,
+            "shape_rmse_px": None,
+            "length_difference_px": None,
+            "curvature_difference_model_units": None,
             "metric_status": "not_computed_uncalibrated",
             "metric_reason": "pixel_per_model_unit_not_specified",
         }
         points_rows = sorted(grouped.get((int(row["frame"]), row.get("filament_id", "")), []))
         observed_points = np.asarray([[x, y] for _, x, y in points_rows], dtype=float)
         if model_frame is None:
+            result["metric_status"] = "not_computed_model_unmatched"
             result["metric_reason"] = "model_time_unmatched_or_centerline_unavailable"
             result["censor"] = 1
             if "model_time_unmatched" not in flags:
                 result["quality_flags"] = ";".join(flags + ["model_time_unmatched"]) if flags else "model_time_unmatched"
+        elif censored:
+            result["metric_status"] = "not_computed_censored"
+            result["metric_reason"] = "quality_censor_flag"
+            result["censor"] = 1
         elif registration_value.calibrated and len(observed_points) >= 2:
             model_pixels = registration_value.model_to_pixel(model_frame.points)
+            correspondence = endpoint_correspondence(observed_points, model_pixels, registration_value.endpoint_order)
+            selected_model_pixels = correspondence["model_points"]
             observed_resampled = _resample_for_rmse(observed_points)
-            model_resampled = _resample_for_rmse(model_pixels)
-            endpoint_distance = float(np.linalg.norm(observed_points[-1] - model_pixels[-1]))
+            model_resampled = _resample_for_rmse(selected_model_pixels)
             result.update(
                 {
                     "model_length_px": model_frame.metrics["length_model"] * float(registration_value.pixel_per_model_unit),
                     "model_endpoint_distance_px": model_frame.metrics["endpoint_distance_model"] * float(registration_value.pixel_per_model_unit),
-                    "endpoint_distance_px": endpoint_distance,
+                    "endpoint_correspondence_method": correspondence["selected_method"],
+                    "forward_endpoint_distance_px": correspondence["forward_endpoint_distance_px"],
+                    "reverse_endpoint_distance_px": correspondence["reverse_endpoint_distance_px"],
+                    "selected_endpoint_distance_px": correspondence["selected_endpoint_distance_px"],
+                    "endpoint_distance_px": correspondence["selected_endpoint_distance_px"],
                     "shape_rmse_px": float(np.sqrt(np.mean(np.sum((observed_resampled - model_resampled) ** 2, axis=1)))),
                     "length_difference_px": float(row["length_px"]) - model_frame.metrics["length_model"] * float(registration_value.pixel_per_model_unit),
                     "curvature_difference_model_units": float(row["curvature_mean_px_inv"]) * float(registration_value.pixel_per_model_unit) - model_frame.metrics["curvature_mean_model_inv"],
-                    "metric_status": "computed" if not censored else "computed_censored_observation",
-                    "metric_reason": "quality_censor_flag" if censored else "",
+                    "metric_status": "computed",
+                    "metric_reason": "",
                 }
             )
         elif model_frame is not None:
@@ -1186,23 +1529,30 @@ def compare_with_model(
     fields = [
         "frame", "time", "filament_id", "observed_length_px", "observed_endpoint_distance_px",
         "observed_curvature_mean_px_inv", "observed_curvature_max_px_inv", "quality", "quality_flags", "censor",
-        "model_time", "model_length", "model_endpoint_distance", "model_curvature_mean", "model_curvature_max",
-        "model_length_px", "model_endpoint_distance_px", "endpoint_distance_px", "shape_rmse_px", "length_difference_px",
-        "curvature_difference_model_units", "metric_status", "metric_reason",
+        "registered_model_time", "model_time", "time_error_s", "time_match_method", "time_tolerance_s",
+        "model_length", "model_endpoint_distance", "model_curvature_mean", "model_curvature_max",
+        "model_length_px", "model_endpoint_distance_px", "endpoint_correspondence_method",
+        "forward_endpoint_distance_px", "reverse_endpoint_distance_px", "selected_endpoint_distance_px",
+        "endpoint_distance_px", "shape_rmse_px", "length_difference_px", "curvature_difference_model_units",
+        "metric_status", "metric_reason",
     ]
     _write_csv(out_dir / "comparison.csv", output_rows, fields)
     calibration_status = "calibrated" if registration_value.calibrated else "not_calibrated_metrics_suppressed"
     compact = {
         "schema_version": SCHEMA_VERSION,
         "observation_dir": str(obs_dir.resolve()),
+        "model_logical_id": Path(model_path).name,
         "model_path": str(Path(model_path).resolve()),
         "model_sha256": sha256_file(model_path),
+        "model_bytes": Path(model_path).stat().st_size,
         "registration": registration_value.to_dict(),
         "calibration_status": calibration_status,
         "filament_id": chosen,
         "rows": len(output_rows),
+        "eligible_rows": sum(row["metric_status"] == "computed" for row in output_rows),
         "computed_rows": sum(row["metric_status"] == "computed" for row in output_rows),
         "censored_rows": sum(bool(row["censor"]) for row in output_rows),
+        "excluded_from_metric_denominator": sum(row["metric_status"] != "computed" for row in output_rows),
         "not_computed_reason_counts": {
             reason: sum(row["metric_reason"] == reason for row in output_rows)
             for reason in sorted({row["metric_reason"] for row in output_rows if row["metric_reason"]})
@@ -1213,6 +1563,21 @@ def compare_with_model(
         ],
     }
     (out_dir / "comparison.json").write_text(canonical_json(compact) + "\n", encoding="utf-8")
+    comparison_artifacts = {
+        "comparison_csv": _file_record(out_dir / "comparison.csv"),
+        "comparison_json": _file_record(out_dir / "comparison.json"),
+    }
+    comparison_manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "observation_logical_id": obs_dir.name,
+        "model_logical_id": Path(model_path).name,
+        "registration": registration_value.to_dict(),
+        "calibration_status": calibration_status,
+        "artifacts": comparison_artifacts,
+        "eligible_rows": compact["eligible_rows"],
+        "excluded_from_metric_denominator": compact["excluded_from_metric_denominator"],
+    }
+    (out_dir / "comparison_manifest.json").write_text(canonical_json(comparison_manifest) + "\n", encoding="utf-8")
     return {"rows": output_rows, "summary": compact, "model_frames": model_frames, "filament_id": chosen}
 
 
@@ -1238,6 +1603,7 @@ def render_comparison(
     *,
     max_video_frames: int | None = None,
     representative_count: int = 6,
+    output_budget_bytes: int | None = None,
 ) -> dict[str, Any]:
     """Render side-by-side frames/video; never writes them into the repository by default."""
 
@@ -1273,6 +1639,11 @@ def render_comparison(
         )
         representative_targets.update(candidate_frames[int(index)] for index in representative_indices)
     output_video = destination / "comparison.mp4"
+    runtime = _runtime_capabilities()
+    if not runtime["ffmpeg"]["available"]:
+        raise RuntimeError("comparison video requires ffmpeg; run `ffmpeg -version` to inspect the installation")
+    if not runtime["libx264"]["available"]:
+        raise RuntimeError("comparison video requires the libx264 encoder; run `ffmpeg -hide_banner -encoders | grep 264`")
     ffmpeg_command = [
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
         "-s", f"{meta.width * 2}x{meta.height}", "-r", f"{meta.fps / max(1, observation_config.frame_stride):.9f}", "-i", "-",
@@ -1289,11 +1660,12 @@ def render_comparison(
             if observed_points is not None:
                 _draw_line(left_draw, observed_points, (255, 50, 30), 3)
             row = rows_by_frame.get(frame_index)
-            model_frame = _interpolate_model(
+            model_match = match_model_frame(
                 model_frames,
                 registration_value.model_time(time_s),
                 registration_value.max_time_error_s,
             )
+            model_frame = model_match.frame if model_match is not None else None
             if model_frame is not None and registration_value.calibrated:
                 _draw_line(left_draw, registration_value.model_to_pixel(model_frame.points), (40, 220, 255), 2)
             left_draw.text((8, 8), f"observed pixel  frame={frame_index}  t={time_s:.3f}s", fill=(255, 255, 0))
@@ -1310,6 +1682,8 @@ def render_comparison(
                 text = f"Lobs={row['observed_length_px']:.1f}px  q={row['quality']}  censor={row['censor']}"
                 right_draw.text((8, 28), text, fill=(10, 10, 10))
                 right_draw.text((8, 48), str(row["metric_status"]), fill=(10, 10, 10))
+                right_draw.text((8, 68), f"time_error={row.get('time_error_s', '')} method={row.get('time_match_method', '')}", fill=(10, 10, 10))
+                right_draw.text((8, 88), f"reason={row.get('metric_reason', '')}", fill=(10, 10, 10))
             combined = np.asarray(Image.fromarray(np.hstack((np.asarray(left), np.asarray(right)))))
             assert process.stdin is not None
             process.stdin.write(combined.tobytes())
@@ -1325,13 +1699,32 @@ def render_comparison(
             # A build without libx264 may still have another encoder.  Retry is
             # intentionally explicit rather than silently producing no video.
             raise RuntimeError(f"comparison video encoding failed: {stderr.strip()}")
+    frame_artifacts = {
+        path.name: _file_record(path)
+        for path in sorted(frame_images.glob("*.png"))
+    }
+    rendered_artifacts = {
+        "comparison_video": _file_record(output_video),
+        "comparison_csv": _file_record(destination / "comparison.csv"),
+        "comparison_json": _file_record(destination / "comparison.json"),
+        "comparison_manifest": _file_record(destination / "comparison_manifest.json"),
+        "representative_frames": frame_artifacts,
+    }
+    rendered_bytes = sum(item["bytes"] for key, item in rendered_artifacts.items() if key != "representative_frames") + sum(item["bytes"] for item in frame_artifacts.values())
+    budget_status = "not_configured" if output_budget_bytes is None else ("within_budget" if rendered_bytes <= output_budget_bytes else "exceeded")
     render_manifest = {
         "schema_version": SCHEMA_VERSION,
+        "video_logical_id": Path(video_path).name,
         "video": str(Path(video_path).resolve()),
         "frames_written": written,
+        "max_video_frames": max_video_frames,
+        "coverage": "full_period" if max_video_frames is None else "partial_max_frames",
         "output_video": str(output_video),
         "representative_frames": sorted(representative_targets),
         "calibration_status": comparison["summary"]["calibration_status"],
+        "runtime": runtime,
+        "artifacts": rendered_artifacts,
+        "output_budget": {"bytes": output_budget_bytes, "artifact_bytes": rendered_bytes, "status": budget_status},
     }
     (destination / "render_manifest.json").write_text(canonical_json(render_manifest) + "\n", encoding="utf-8")
     return {"output_dir": str(destination), "comparison": comparison, "render_manifest": render_manifest}
@@ -1348,12 +1741,16 @@ __all__ = [
     "segment_mask",
     "connected_components",
     "component_to_centerline",
+    "skeleton_topology",
     "polyline_metrics",
     "validate_centerline_rows",
     "validate_centerline_csv",
     "run_pipeline",
     "ModelFrame",
+    "ModelMatch",
     "load_model_output",
+    "match_model_frame",
+    "endpoint_correspondence",
     "compare_with_model",
     "render_comparison",
     "sha256_file",
