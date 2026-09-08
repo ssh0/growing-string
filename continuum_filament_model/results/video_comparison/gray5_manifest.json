@@ -8,14 +8,14 @@
       ],
       "artifacts": {
         "comparison_csv": {
-          "bytes": 7700,
+          "bytes": 7656,
           "path": "comparison.csv",
-          "sha256": "e4d50d1336599732ab6d0916810aec4848df621ca4017833d930fd3ce0921a91"
+          "sha256": "98edacfe579abf9a88e28a5b2293c51d064bf5b328d85f1f5058c2658c138718"
         },
         "comparison_json": {
-          "bytes": 1439,
+          "bytes": 1438,
           "path": "comparison.json",
-          "sha256": "c0d67e1ca91b160e526412cc64f4fcd21f6afe036d561b9a956435368ec4db1e"
+          "sha256": "7c01324c0416ede08be20e19fd94d5ab44189fd7d248e0ee07a62ab88ba8357f"
         }
       },
       "calibration_status": "not_calibrated_metrics_suppressed",
@@ -34,7 +34,7 @@
         "filament-0001",
         "filament-0002"
       ],
-      "observation_logical_id": "r3-gray5-full",
+      "observation_logical_id": "r4-gray5-full",
       "population_rows": 24,
       "registration": {
         "endpoint_order": "auto",
@@ -51,24 +51,24 @@
     "render_manifest.json": {
       "artifacts": {
         "comparison_csv": {
-          "bytes": 7700,
+          "bytes": 7656,
           "path": "comparison.csv",
-          "sha256": "e4d50d1336599732ab6d0916810aec4848df621ca4017833d930fd3ce0921a91"
+          "sha256": "98edacfe579abf9a88e28a5b2293c51d064bf5b328d85f1f5058c2658c138718"
         },
         "comparison_json": {
-          "bytes": 1439,
+          "bytes": 1438,
           "path": "comparison.json",
-          "sha256": "c0d67e1ca91b160e526412cc64f4fcd21f6afe036d561b9a956435368ec4db1e"
+          "sha256": "7c01324c0416ede08be20e19fd94d5ab44189fd7d248e0ee07a62ab88ba8357f"
         },
         "comparison_manifest": {
           "bytes": 1033,
           "path": "comparison_manifest.json",
-          "sha256": "0baac94db4698026fd6b4c8d523c3078df5755a8b705f5f7ca1447227f25c2cb"
+          "sha256": "613b74df9271f5cc586df15a861649d6e89e2472400cbb52dd453ba9f4685e66"
         },
         "comparison_video": {
-          "bytes": 1172146,
+          "bytes": 1168791,
           "path": "comparison.mp4",
-          "sha256": "9104a6661fa39aa12ed7728994691ddd4d40cfb0915d5da88fda3805eefe2d69"
+          "sha256": "3d28bb706cf92bcdd8f7d81ce890e2399a1e9174d13547dbaae0b976d008ef92"
         },
         "representative_frames": {
           "frame_000000.png": {
@@ -98,7 +98,7 @@
       "frames_written": 24,
       "max_video_frames": null,
       "output_budget": {
-        "artifact_bytes": 2459746,
+        "artifact_bytes": 2456346,
         "bytes": null,
         "status": "not_configured"
       },
@@ -162,8 +162,8 @@
       "model_logical_id": "trajectory.npz",
       "model_sha256": "7477c42d14ee00977d7ffb7ca0a30470c105602be31c68b2420568aabd3fa2a6",
       "not_computed_reason_counts": {
-        "missing_observation_lineage": 13,
-        "model_time_unmatched_or_centerline_unavailable": 10,
+        "missing_observation_lineage": 16,
+        "model_time_unmatched_or_centerline_unavailable": 7,
         "quality_censor_flag": 1
       },
       "not_selected_lineage_ids": [
@@ -188,7 +188,7 @@
     }
   },
   "configuration": {
-    "config_sha256": "e309e06e77322f1e066f134be21a0dd286c4a4eb2e61511293a22c248ee1e343",
+    "config_sha256": "0ce0b7659de7a946a42ccdb608d632a6194190074399bb7f25718d62203ca722",
     "segmentation_config": {
       "background": "local_median",
       "background_value": 0.0,
@@ -211,6 +211,7 @@
         320
       ],
       "skeleton": true,
+      "skeleton_backend": "auto",
       "threshold": "absolute",
       "threshold_percentile": 12.0,
       "threshold_value": 0.8
@@ -219,14 +220,14 @@
   "full_period_run": {
     "artifacts": {
       "centerline": {
-        "bytes": 178748,
+        "bytes": 109493,
         "path": "centerline.csv",
-        "sha256": "73849cb11b77cfaf1acb130143d8887c07c709207b0271abda1ae68306912aef"
+        "sha256": "49d58f5a610988103079eb396d649f8f33578882973c45d87e5e46b8d89a1673"
       },
       "events": {
-        "bytes": 7508,
+        "bytes": 7588,
         "path": "events.csv",
-        "sha256": "3193ae2fe941edfc783d61638aa2a060d8743f3a18d85e210a46018c91379996"
+        "sha256": "90f6cce1d2b8cf8a38fd4d7fa32afe3b1bc6f112a0c179a6b2ec995af5a709fd"
       },
       "lineage": {
         "bytes": 1759,
@@ -234,14 +235,14 @@
         "sha256": "ea5629fc93e99e38040ec82e1e42913fc817ca3091f3e1a1bf49a575539eb27e"
       },
       "metadata": {
-        "bytes": 1659,
+        "bytes": 1622,
         "path": "metadata.json",
-        "sha256": "cddcb4bae30dae951b6022e6654ac33e3cebcc8976bd33beb2719976906bd97b"
+        "sha256": "903c37ef3022b6ba0ead602d649f19188eb8d7c4636ea67f14d286fb748b171a"
       },
       "observation_summary": {
-        "bytes": 4879,
+        "bytes": 4893,
         "path": "observation_summary.csv",
-        "sha256": "f5982b1dfd9a230483d74d08831348ca97234688999c63a00cbcf0edbdd1fade"
+        "sha256": "165acd3a714407b4bedabb18cd07e01e414accd475b1e236768da3b578749d44"
       }
     },
     "candidate_censor_count": 20,
@@ -251,7 +252,7 @@
       "mean": 8.958333333333334
     },
     "output_budget": {
-      "artifact_bytes": 194553,
+      "artifact_bytes": 125355,
       "bytes": 104857600,
       "status": "within_budget"
     },
@@ -293,13 +294,11 @@
     "validation": {
       "errors": [],
       "finite_coordinates": true,
-      "n_filaments": 3,
-      "n_rows": 963,
+      "n_filaments": 2,
+      "n_rows": 609,
       "time_monotonic": true,
       "valid": true,
-      "warnings": [
-        "filament filament-0000: centroid jump 83.490px near time 16.0"
-      ]
+      "warnings": []
     }
   },
   "input": {
@@ -331,21 +330,21 @@
       "metadata.json",
       "manifest.json"
     ],
-    "note": "gray5 full-period extraction repeated with normalized input/output variables; listed hashes matched",
+    "note": "gray5 full-period extraction repeated; listed hashes matched",
     "same_config_repeated": true
   },
-  "schema_version": "continuum-filament-observation-run-0.3",
+  "schema_version": "continuum-filament-observation-run-0.4",
   "smoke_run": {
     "artifacts": {
       "centerline": {
-        "bytes": 36126,
+        "bytes": 33599,
         "path": "centerline.csv",
-        "sha256": "3bca99be0f4d375c98c87fbf81bf92be435e91eb5895953d7d818920c61d3ead"
+        "sha256": "f835836e294be126cb9c1820ccfdad661ca6d7c8af80e44ff2017912ef277196"
       },
       "events": {
-        "bytes": 967,
+        "bytes": 920,
         "path": "events.csv",
-        "sha256": "402372c9705c05e9b9d48c3e740eac2367b4d3dcbabf35d4a133c989f4257acb"
+        "sha256": "566db17584aec5200e49aad94faf5d9b77637bcd71a2b987b015c15a2fb55f02"
       },
       "lineage": {
         "bytes": 148,
@@ -353,19 +352,19 @@
         "sha256": "2a5615fa7b1041a8e65eb38bc0d1fd5af79f7a0622ea407ab1881e9b7570e7fa"
       },
       "metadata": {
-        "bytes": 1602,
+        "bytes": 1628,
         "path": "metadata.json",
-        "sha256": "23c78bb9cbb4ec86cd491a98e239f15cecb8c08a00df0d382e9ee12575068009"
+        "sha256": "2552bd7f15cf7cfc322429c8edf3746099a931eda46eae4586ad10cddedb50dd"
       },
       "observation_summary": {
-        "bytes": 905,
+        "bytes": 885,
         "path": "observation_summary.csv",
-        "sha256": "27755cbed465ddbea2e817ab0ba64df25280dbfbb4e8548c671845e736d2bc1d"
+        "sha256": "f201d4719eda3441250efdf94a662ac2e0524f61b6412f2c7a0c99e637442e26"
       }
     },
     "candidate_count": 3,
     "output_budget": {
-      "artifact_bytes": 39748,
+      "artifact_bytes": 37180,
       "bytes": 10485760,
       "status": "within_budget"
     },

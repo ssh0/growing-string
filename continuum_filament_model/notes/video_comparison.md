@@ -91,7 +91,8 @@ marimo edit continuum_filament_model/notebooks/video_comparison.py
 - `background`: `none` / `median` / `local_median` / `scalar`
 - `contrast`: `none` / `percentile`
 - `threshold`: `otsu` / `absolute` / `percentile`
-- `roi`, `frame_stride`, `min_component_size`, `max_components`
+- `skeleton_backend`: `auto` / `skimage` / `numpy`。topology判定はNumPy Zhang–Suen backendをcanonicalに使い、flags/censor/exportをbackend間で一致させる。topology graphは4近傍edge、centerline順序は8近傍trace
+- `roi`, `frame_stride`, `min_component_size`, `max_components
 - `max_centerline_points`, `max_jump_px`, `min_quality`
 
 一時outputには次が作られます。
@@ -167,8 +168,10 @@ model時間が未対応の行も `model_time_unmatched_or_centerline_unavailable
 
 ## 検証
 
-合成fixture（直線、円弧、sinusoidal、成長、欠損、noise、ambiguous）は
-`tests/test_video_comparison.py` にあります。既存モデルを変更せず、次で実行します。
+合成fixture（直線、円弧、sinusoidal、成長、欠損、noise、ambiguous、real-mask T branch、矩形loop、
+NumPy/skimage topology parity、ROI truncation、endpoint order、leading missing population、event重複）は
+`tests/test_video_comparison.py` にあります。先頭missing frameもprocessed frame rangeから比較母集団へ残し、
+`unknown` lineage、missing reason、censor、eligible/excluded denominatorを検査します。既存モデルを変更せず、次で実行します。
 
 ```bash
 PYTHONPATH=continuum_filament_model/src \
