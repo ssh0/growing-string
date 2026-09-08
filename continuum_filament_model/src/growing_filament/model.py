@@ -5,7 +5,8 @@ The implementation deliberately starts with a small, explicit model:
 * two-dimensional open filament;
 * overdamped dynamics on an isotropic dissipative substrate;
 * axial stretching and discrete bending energies;
-* optional node-level soft contact plus segment-intersection rejection;
+* finite-radius segment penalty contact plus legacy node-level soft contact;
+* segment-intersection rejection;
 * exponential growth of the local reference lengths;
 * midpoint remeshing when a reference segment becomes too long.
 
@@ -32,6 +33,7 @@ from .geometry import (
     initial_geometry_diagnostic,
     minimum_nonlocal_segment_distance,
     nonlocal_intersection_pairs,
+    nonlocal_segment_contacts,
     nonlocal_segment_distances,
     segment_closest_points,
     segments_intersect,
@@ -444,6 +446,53 @@ def _bending_energy_and_forces(
     return bending, forces
 
 
+def _segment_penalty_contact_energy_and_forces(
+    positions: Array,
+    contact_stiffness: float,
+    diameter: float,
+) -> Tuple[float, Array]:
+    """Return finite-radius segment penalty energy and conservative forces.
+
+    For a non-local segment pair, ``s`` and ``u`` are the closest-point
+    parameters returned by :func:`nonlocal_segment_contacts`.  If
+    ``n = (x(s) - y(u)) / d`` points from segment ``j`` to segment ``i`` and
+    ``delta = max(0, D - d)``, the pair force on segment ``i`` is
+    ``k_c * delta * n``.  Its nodal contribution is scattered with the
+    bilinear shape weights ``(1-s, s)``; segment ``j`` receives the opposite
+    force with weights ``(1-u, u)``.
+
+    The energy remains defined at a centerline intersection, but the geometry
+    contract intentionally provides no arbitrary normal there.  Such a pair
+    therefore contributes energy but no force; the model's initial/topology
+    validation rejects these configurations before dynamics starts.
+    """
+
+    forces = np.zeros_like(positions)
+    if contact_stiffness <= 0.0 or diameter <= 0.0:
+        return 0.0, forces
+
+    contact_energy = 0.0
+    for contact in nonlocal_segment_contacts(positions, diameter):
+        penetration = float(contact.penetration)
+        if penetration <= 0.0:
+            continue
+        contact_energy += 0.5 * contact_stiffness * penetration**2
+        if contact.normal is None:
+            continue
+
+        normal = np.asarray(contact.normal, dtype=float)
+        pair_force = contact_stiffness * penetration * normal
+        i = contact.segment_i
+        j = contact.segment_j
+        s = contact.parameter_i
+        u = contact.parameter_j
+        forces[i] += (1.0 - s) * pair_force
+        forces[i + 1] += s * pair_force
+        forces[j] -= (1.0 - u) * pair_force
+        forces[j + 1] -= u * pair_force
+    return float(contact_energy), forces
+
+
 class OverdampedGrowingFilament:
     """Energy-based overdamped simulator for a single open filament."""
 
@@ -623,14 +672,21 @@ class OverdampedGrowingFilament:
             self.parameters.bending_stiffness,
         )
 
-        contact = 0.0
+        contact, _ = _segment_penalty_contact_energy_and_forces(
+            p,
+            self.parameters.contact_stiffness,
+            self.parameters.diameter,
+        )
+        # Keep the historical node-only term for backwards compatibility with
+        # existing parameter files and three-node fixtures.  Segment contact
+        # is now always included above and is the standard non-local response.
         if self.parameters.contact_stiffness > 0.0 and self.parameters.diameter > 0.0:
             for i in range(len(p)):
                 for j in range(i + 2, len(p)):
                     distance = float(np.linalg.norm(p[i] - p[j]))
                     overlap = self.parameters.diameter - distance
                     if overlap > 0.0:
-                        contact += 0.5 * self.parameters.contact_stiffness * overlap ** 2
+                        contact += 0.5 * self.parameters.contact_stiffness * overlap**2
         return {"stretch": float(axial), "bend": float(bending), "contact": float(contact)}
 
     def energy(self, positions: Optional[Array] = None,
@@ -664,6 +720,17 @@ class OverdampedGrowingFilament:
         )
         forces += bending_forces
 
+        _, segment_contact_forces = _segment_penalty_contact_energy_and_forces(
+            p,
+            self.parameters.contact_stiffness,
+            self.parameters.diameter,
+        )
+        forces += segment_contact_forces
+
+        # Preserve the historical node-only response for compatibility.  It is
+        # additive rather than a replacement: non-local segment pairs receive
+        # the finite-radius segment response above, while old node fixtures
+        # retain their established threshold law.
         if self.parameters.contact_stiffness > 0.0 and self.parameters.diameter > 0.0:
             for i in range(len(p)):
                 for j in range(i + 2, len(p)):

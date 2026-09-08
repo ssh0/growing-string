@@ -1,9 +1,9 @@
 """Finite-radius and swept geometry diagnostics for open polylines.
 
-The simulator still uses node-level soft contact as its only contact force.  The
-functions in this module are deliberately force-free diagnostics: they measure
-non-local segment separation and detect topological intersections without
-adding segment repulsion, friction, or adhesion.
+The functions in this module provide the method-independent geometry used by
+both diagnostics and the segment penalty contact law.  They measure non-local
+segment separation and detect topological intersections without adding
+friction, adhesion, or a contact solver.
 """
 
 from __future__ import annotations
