@@ -87,14 +87,19 @@ class PresentationDataArtifactTests(unittest.TestCase):
                     )
 
     def test_artifact_hashes_match_committed_compact_files(self):
+        revisions = set()
         for relative in ("dense_buckling/manifest.json", "contact_snapshots/manifest.json", "video_gray5/manifest.json"):
             manifest_path = self.PRESENTATION / relative
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            revisions.add(manifest.get("source_revision"))
             for name, artifact in manifest.get("artifacts", {}).items():
-                artifact_path = manifest_path.parent / name
+                artifact_path = manifest_path.parent / artifact.get("path", name)
                 self.assertTrue(artifact_path.is_file(), str(artifact_path))
                 self.assertEqual(artifact["bytes"], artifact_path.stat().st_size)
                 self.assertEqual(artifact["sha256"], self._sha256(artifact_path))
+        self.assertEqual(len(revisions), 1)
+        aggregate = json.loads((self.PRESENTATION / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(aggregate["source_revision"], next(iter(revisions)))
 
     def test_missing_video_export_is_explicit_and_deterministic(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -105,6 +110,8 @@ class PresentationDataArtifactTests(unittest.TestCase):
             second_result = run_export(missing, second)
             self.assertEqual(first_result["status"], "input_missing")
             self.assertFalse(first_result["raw_centerline_available"])
+            self.assertEqual(first_result["input"]["path"], "img/gray5.mp4")
+            self.assertNotIn(str(directory), (first / "video_presentation.json").read_text(encoding="utf-8"))
             self.assertEqual(
                 (first / "video_presentation.json").read_bytes(),
                 (second / "video_presentation.json").read_bytes(),

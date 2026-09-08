@@ -150,9 +150,9 @@ ffmpeg -hide_banner -encoders | grep 264
 
 ## 現在のpresentation-data成果物
 
-`benchmarks/video_presentation_export.py` は、抽出済み中心線を発表用に再構成する入口である。入力がある場合は、`video_presentation.json` に代表フレームの生の `x,y`、`length_timeseries`、弧長方向の `curvature_profile` を保存し、元の `centerline.csv` と `observation_summary.csv` のmanifestを保持する。入力がない場合は、`status=input_missing` と `raw_centerline_available=false` を保存するだけで、観測データを作らない。
+`benchmarks/video_presentation_export.py` は、抽出済み中心線を発表用に再構成する入口である。入力がある場合は、`video_presentation.json` に代表フレームの生の `x,y`、`length_timeseries`、弧長方向の `curvature_profile` を保存し、元の `centerline.csv` と `observation_summary.csv` のmanifestを保持する。入力がない場合は、`status=input_missing` と `raw_centerline_available=false` を保存するだけで、観測データを作らない。入力がある場合は、`status=extracted`、代表中心線、`length_timeseries`、`curvature_profile` を保存する。
 
-このworktreeには `img/gray5.mp4` が存在しないため、`results/presentation_data/video_gray5/` は `input_missing` である。これは抽出失敗と観測中心線の未同定を混同しないための明示的な状態であり、動画本体を提供できる環境で同じCLIを再実行する必要がある。既存の `results/video_comparison/gray5_manifest.json` は過去環境のcompact provenanceであり、現在のworktreeに生中心線が存在する根拠としては扱わない。
+今回の `results/presentation_data/video_gray5/` は、承認済みのローカル入力を読み取り元として抽出した。ただし、そのローカル絶対パスは成果物へ保存せず、入力識別子は `img/gray5.mp4` に正規化した。実行時の参照HEAD SHAは各manifestの `source_revision` に保存している。既存の `results/video_comparison/gray5_manifest.json` は過去環境のcompact provenanceであり、今回の生中心線成果物とは別である。
 
 ## 検証記録（実装時点）
 

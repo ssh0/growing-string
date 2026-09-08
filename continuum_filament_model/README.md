@@ -232,7 +232,7 @@ python continuum_filament_model/benchmarks/dense_buckling_heatmap.py \
 
 有限径接触については、U字自己接触とS字接触・折りたたみの代表ケースを `t0/t_mid/t_end` で抽出し、接触点、最近接点、法線、貫入量、ペナルティ法線力を `results/presentation_data/contact_snapshots/` に保存します。全ステップ座標や動画は保存しません。
 
-実観察動画の抽出入口は `benchmarks/video_presentation_export.py` です。`img/gray5.mp4` が存在する環境では、既存のPIL/imageio/skimage互換パイプラインを使って生中心線CSV、代表中心線JSON、`L(t)`、曲率プロファイルを生成できます。`--model` と任意の `--registration` を追加すると、同じ出力先に既存の比較CSV/JSONも生成します。このworktreeには動画本体がないため、今回のcompact成果物は `status=input_missing` として記録し、観測中心線を推測・生成していません。動画を提供した場合は同じコマンドを再実行してください。
+実観察動画の抽出入口は `benchmarks/video_presentation_export.py` です。`img/gray5.mp4` が存在する環境では、既存のPIL/imageio/skimage互換パイプラインを使って生中心線CSV、代表中心線JSON、`L(t)`、曲率プロファイルを生成できます。`--model` と任意の `--registration` を追加すると、同じ出力先に既存の比較CSV/JSONも生成します。動画本体はこのworktreeには含めず、承認済みのローカル入力から抽出しました。今回のcompact成果物は論理ID `img/gray5.mp4`、`status=extracted` として記録し、代表6フレームの中心線、24サンプルの `L(t)`、1,089点の曲率プロファイルを保存しています。入力動画が別環境にある場合も同じコマンドで再生成できます。
 
 ## 三角格子モデルとの関係
 
