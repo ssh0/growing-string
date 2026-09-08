@@ -173,6 +173,22 @@ class FilamentState:
         )
 
     def validate(self, eps: float = 1.0e-12) -> None:
+        try:
+            finite_time = bool(np.isfinite(self.time))
+        except (TypeError, ValueError):
+            finite_time = False
+        if not finite_time:
+            raise ModelError(f"time must be finite: {self.time!r}")
+        if isinstance(self.step, (bool, np.bool_)):
+            raise ModelError(f"step must be an integer: {self.step!r}")
+        try:
+            finite_step = bool(np.isfinite(self.step))
+            integer_step = int(self.step) == self.step
+        except (TypeError, ValueError, OverflowError):
+            finite_step = False
+            integer_step = False
+        if not finite_step or not integer_step:
+            raise ModelError(f"step must be a finite integer: {self.step!r}")
         if self.positions.ndim != 2 or self.positions.shape[1] != 2:
             raise ModelError("positions must have shape (N, 2)")
         if self.n_nodes < 3:
