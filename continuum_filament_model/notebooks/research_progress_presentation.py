@@ -24,10 +24,31 @@ def _():
     from pathlib import Path
 
     import marimo as mo
+    import matplotlib
+    import matplotlib.font_manager as fm
     import matplotlib.pyplot as plt
     import numpy as np
 
-    return Path, csv, json, mo, np, plt
+    _jp_font_candidates = [
+        "Hiragino Sans",
+        "Hiragino Maru Gothic Pro",
+        "YuGothic",
+        "AppleGothic",
+        "Noto Sans CJK JP",
+        "IPAexGothic",
+        "TakaoGothic",
+    ]
+    _available_fonts = {font.name for font in fm.fontManager.ttflist}
+    _matched_jp_fonts = [font for font in _jp_font_candidates if font in _available_fonts]
+    if _matched_jp_fonts:
+        matplotlib.rcParams["font.family"] = "sans-serif"
+        matplotlib.rcParams["font.sans-serif"] = _matched_jp_fonts + [
+            font for font in matplotlib.rcParams.get("font.sans-serif", []) if font not in _matched_jp_fonts
+        ]
+    matplotlib.rcParams["axes.unicode_minus"] = False
+    jp_font_name = _matched_jp_fonts[0] if _matched_jp_fonts else "matplotlib default (Japanese fallback unavailable)"
+
+    return Path, csv, json, jp_font_name, mo, np, plt
 
 
 @app.cell
@@ -102,7 +123,7 @@ def _(Path, csv, json):
 
 
 @app.cell
-def _(mo, p1b2_manifest, p1b2_map, result_paths, video_summary):
+def _(jp_font_name, mo, p1b2_manifest, p1b2_map, result_paths, video_summary):
     report_lines = [
         f"- P1B.2 非接触 suite: **{p1b2_manifest['run_count']} run**、seed `{p1b2_manifest['seed_set']}`、3×3 grid",
         f"- P1B.2 regime map: `{result_paths['p1b2_map'].relative_to(result_paths['p1b2_map'].parents[2])}`（各cellは5 seed trial）",
@@ -114,6 +135,7 @@ def _(mo, p1b2_manifest, p1b2_map, result_paths, video_summary):
         + "\n".join(report_lines)
         + "\n\n"
         + f"P1B.2 のregime分類は `{len(p1b2_map['rows'])}` cellを対象にし、動画側のcompact reportは `{len(video_summary['reports'])}` 入力を記録しています。"
+        + f"\n\nMatplotlib Japanese font: `{jp_font_name}`"
     )
     return
 
@@ -178,44 +200,43 @@ def _(mo, np, plt):
 
 @app.cell
 def _(mo, np, plt):
-    mo.md(
+    _formulation_md = mo.md(
         r"""
         ## 2. 連続体フィラメントの定式化
 
-        開曲線を節点位置 \\(\mathbf{x}_i\in\mathbb{R}^2\\) と線分ごとの局所参照長
-        \\(a_i>0\\) で表す。現在の線分長は
-        \\(l_i=\lVert\mathbf{x}_{i+1}-\mathbf{x}_i\rVert\\)、単位接線は
-        \\(\mathbf{t}_i=(\mathbf{x}_{i+1}-\mathbf{x}_i)/l_i\\) である。
+        開曲線を節点位置 $\mathbf{x}_i\in\mathbb{R}^2$ と線分ごとの局所参照長
+        $a_i>0$ で表す。現在の線分長は $l_i=\lVert\mathbf{x}_{i+1}-\mathbf{x}_i\rVert$、
+        単位接線は $\mathbf{t}_i=(\mathbf{x}_{i+1}-\mathbf{x}_i)/l_i$ である。
 
         ### エネルギーと運動方程式
 
-        \\
+        $$
         E_s=\sum_i\frac{EA}{2a_i}(l_i-a_i)^2,
         \qquad
         E_b=\sum_i\frac{EI}{2h_i}\lVert\mathbf{t}_i-\mathbf{t}_{i-1}\rVert^2,
         \quad h_i=\frac{a_{i-1}+a_i}{2}.
-        \\
+        $$
 
-        参照長は一様な指数成長
-        \\(\dot a_i=g a_i\\)（実装上は \\(a_i(t+\Delta t)=a_i(t)e^{g\Delta t}\\)）に従う。
-        参照長が閾値を超えたら線分を中点で二分し、総参照長・端点・幾何学的輪郭長を
-        保存する。これは物理的な分裂ではなく、空間解像度を保つ再メッシュである。
+        参照長は一様な指数成長 $\dot a_i=g a_i$（実装上は
+        $a_i(t+\Delta t)=a_i(t)e^{g\Delta t}$）に従う。参照長が閾値を超えたら線分を
+        中点で二分し、総参照長・端点・幾何学的輪郭長を保存する。これは物理的な分裂
+        ではなく、空間解像度を保つ再メッシュである。
 
         過減衰ダイナミクスは
-        \\
+        $$
         \boldsymbol{\Gamma}\dot{\mathbf{x}}
         =-\frac{\partial(E_s+E_b+E_c)}{\partial\mathbf{x}},
         \qquad
         \boldsymbol{\Gamma}_i=\zeta w_i\mathbf{I},
-        \\
-        とする。有限径接触は、線分間距離 \\(d_{ij}\\)、径 \\(D\\) に対して
-        \\(\delta_{ij}=[D-d_{ij}]_+\\)、
-        \\(E_{c,ij}=k_c\delta_{ij}^2/2\\) とし、反発力を最近接点の双線形形状関数で
-        4端点へ散布する。中心線交差では法線を作らず、試行を棄却する。
+        $$
+        とする。有限径接触は、線分間距離 $d_{ij}$、径 $D$ に対して
+        $\delta_{ij}=[D-d_{ij}]_+$、$E_{c,ij}=k_c\delta_{ij}^2/2$ とし、反発力を
+        最近接点の双線形形状関数で4端点へ散布する。中心線交差では法線を作らず、
+        試行を棄却する。
 
         ### 形態を整理する無次元量
 
-        \\
+        $$
         \chi=\frac{EI}{EA L^2},\qquad
         G_b=g\tau_b,
         \quad \tau_b=\frac{\zeta L^4}{EI\pi^4},
@@ -223,10 +244,10 @@ def _(mo, np, plt):
         G_s=\frac{g\zeta L^2}{EA},
         \qquad
         \Pi_c=\frac{k_cD^2}{EI}.
-        \\
+        $$
 
-        \\(G_b\\) は成長と曲げ緩和の競合、\\(G_s\\) は成長と伸長緩和の競合、
-        \\(\Pi_c\\) は penalty 接触の相対的な硬さを表す。ただし、これらが普遍的な
+        $G_b$ は成長と曲げ緩和の競合、$G_s$ は成長と伸長緩和の競合、
+        $\Pi_c$ は penalty 接触の相対的な硬さを表す。ただし、これらが普遍的な
         相図を保証するわけではなく、境界条件・初期摂動・時間刻み・解像度も残る。
         """
     )
@@ -245,7 +266,7 @@ def _(mo, np, plt):
     _axis.set_title("節点位置・参照長・局所接線差分")
     _axis.set_aspect("equal", adjustable="datalim")
     _axis.set_axis_off()
-    mo.vstack([mo.md("**離散化の直感**：曲げは角度そのものではなく、隣接接線の差を局所参照長で重み付けする。"), _figure])
+    mo.vstack([_formulation_md, mo.md("**離散化の直感**：曲げは角度そのものではなく、隣接接線の差を局所参照長で重み付けする。"), _figure])
     return
 
 
@@ -449,31 +470,46 @@ def _(map_chi_control, map_gb_control, mo, p1b2_map, plt, result_paths):
 
 @app.cell
 def _(mo, p1b2_convergence):
-    convergence_lines = []
-    for _record in p1b2_convergence["representatives"]:
-        convergence_lines.append(
-            f"| {_record['pilot_role']} | `{_record['status']}` | {_record['n_runs']} | {_record['labels']} |"
-        )
-    convergence_table = "\n".join(convergence_lines)
-    mo.md(
-        f"""
-        ### P1B.2 の読み方：傾向は見えたが、境界域は未解決
+    convergence_rows = [
+        {
+            "代表点": _record["pilot_role"],
+            "判定": _record["status"],
+            "run数": _record["n_runs"],
+            "ラベル": ", ".join(_record["labels"]),
+        }
+        for _record in p1b2_convergence["representatives"]
+    ]
+    convergence_table = mo.ui.table(
+        convergence_rows,
+        pagination=False,
+        selection=None,
+        show_data_types=False,
+        show_download=False,
+        label="P1B.2 convergence summary",
+    )
+    mo.vstack(
+        [
+            mo.md(
+                """
+                ### P1B.2 の読み方：傾向は見えたが、境界域は未解決
 
-        保存済み suite は **87 run**（pilot、解像度・刻み幅の収束、3×3 grid、サイズ比較）
-        で構成される。3×3 gridでは、各 cell に5 seedの初期imperfection trialを置いた。
-        中央付近には `trial-mixed` が現れ、成長数・剛性比が同じでも初期条件と有限時間の
-        影響を無視できないことが分かる。
-
-        | 代表点 | 判定 | run数 | ラベル |
-        |---|---|---:|---|
-        {convergence_table}
-
-        **物理的な解釈**：成長が速く、曲げ緩和が追いつかないほど、横変位が増えやすい
-        方向の傾向はある。ただし、boundary-near と buckled-single の代表点は解像度・
-        `dt` に対して分類が安定せず、臨界曲線や普遍性はまだ主張できない。ここで重要な
-        成果は「座屈境界を決めた」ことではなく、「どこが数値的に解像できていないかを
-        明示できた」ことである。
-        """
+                保存済み suite は **87 run**（pilot、解像度・刻み幅の収束、3×3 grid、サイズ比較）
+                で構成される。3×3 gridでは、各 cell に5 seedの初期imperfection trialを置いた。
+                中央付近には `trial-mixed` が現れ、成長数・剛性比が同じでも初期条件と有限時間の
+                影響を無視できないことが分かる。
+                """
+            ),
+            convergence_table,
+            mo.md(
+                """
+                **物理的な解釈**：成長が速く、曲げ緩和が追いつかないほど、横変位が増えやすい
+                方向の傾向はある。ただし、boundary-near と buckled-single の代表点は解像度・
+                `dt` に対して分類が安定せず、臨界曲線や普遍性はまだ主張できない。ここで重要な
+                成果は「座屈境界を決めた」ことではなく、「どこが数値的に解像できていないかを
+                明示できた」ことである。
+                """
+            ),
+        ]
     )
     return
 
@@ -511,7 +547,7 @@ def _(mo, plt, video_control, video_summary):
             ]
         ),
         va="top",
-        family="monospace",
+        family="sans-serif",
     )
     mo.vstack(
         [
@@ -521,8 +557,8 @@ def _(mo, plt, video_control, video_summary):
 
                 観察側では、動画から中心線を抽出した後、分岐・ループ・視野外・追跡飛び・
                 skeleton loss を **censor** として残す。適格フレームの輪郭長に対して、
-                指数モデル \\(\log L=\log L_0+gt\\) と線形モデルをHuber回帰し、選択モデルの
-                \\(g\\) と回帰残差ベースの95%区間を出す。形状の比較は、明示的なpixel/model
+                指数モデル $\log L=\log L_0+gt$ と線形モデルをHuber回帰し、選択モデルの
+                $g$ と回帰残差ベースの95%区間を出す。形状の比較は、明示的なpixel/model
                 登録がある場合だけ、弧長再サンプリングした離散Fréchet距離と曲率残差を使う。
 
                 しかし、**保存済みの `gray5` / `original` artifactには中心線本体が含まれていない**。
@@ -599,8 +635,8 @@ def _(contact_case_control, contact_rows, mo, plt, result_paths):
                 ## 6. Phase 2：有限径接触と折りたたみ
 
                 節点間距離だけの接触から、線分間最近接距離に基づく有限径 penalty へ進めた。
-                線分対 \\(i,j\\) の貫入を \\(\delta=[D-d_{ij}]_+\\)、接触エネルギーを
-                \\(E_c=k_c\delta^2/2\\) とし、法線力を最近接パラメータ \\(s,u\\) で4端点へ
+                線分対 $(i,j)$ の貫入を $\delta=[D-d_{ij}]_+$、接触エネルギーを
+                $E_c=k_c\delta^2/2$ とし、法線力を最近接パラメータ $(s,u)$ で4端点へ
                 双線形 scatter する。これにより、径を持つ中心線が接触したまま成長する
                 ケースを、接触時刻・接触pair・接触長proxy・貫入・仕事の収支で追跡できる。
                 """
