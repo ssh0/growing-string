@@ -214,7 +214,7 @@ python continuum_filament_model/video_compare.py extract \
 
 `centerline.csv` は `time, filament_id, point_id, x, y, quality` を含み、`metadata.json` と `manifest.json` に座標系、設定、品質検査、入力hashを保存します。scale/time calibrationが未指定ならpixel/model-unitを別表示し、定量metricは抑制します。ROI、複数component、飛び、欠損、skeleton不良は `events.csv`、`quality_flags`、`censor` に残します。入力動画、full mask、per-frame大量データ、比較動画は `/tmp` 等へ出力し、Gitへ追加しません。
 
-詳細なschema、登録式、限界、再実行コマンドは `notes/video_comparison.md` を参照してください。
+詳細なschema、登録式、lineage/censor、依存version、output budget、限界、再実行コマンドは `notes/video_comparison.md` を参照してください。入力動画本体はライセンス・再配布条件を確認できないためGitへ含めず、`results/video_comparison/` にcompact run manifestだけを置きます。
 
 ## 三角格子モデルとの関係
 

@@ -48,13 +48,15 @@ def _(mo):
     output_input = mo.ui.text(value="/tmp/growing-string-gray5", label="artifact directory")
     frame_input = mo.ui.slider(0, 10000, value=0, step=1, label="frame")
     roi_input = mo.ui.text(value="", label="ROI x0,y0,x1,y1 (再実行設定の記録)")
-    scale_input = mo.ui.text(value="", label="pixel_per_model_unit (空欄=未校正)")
-    controls = mo.vstack([output_input, frame_input, roi_input, scale_input])
-    return controls, frame_input, np, output_input, roi_input, scale_input
+    scale_input = mo.ui.text(value="", label="pixel_per_model_unit (表示用; 空欄=未校正)")
+    model_input = mo.ui.text(value="", label="model trajectory/centerline path")
+    registration_input = mo.ui.text(value="", label="registration JSON (scale/time/offset)")
+    controls = mo.vstack([output_input, frame_input, roi_input, scale_input, model_input, registration_input])
+    return controls, frame_input, model_input, np, output_input, registration_input, roi_input, scale_input
 
 
 @app.cell
-def _(controls, frame_input, mo, np, output_input, roi_input, scale_input):
+def _(controls, frame_input, model_input, mo, np, output_input, registration_input, roi_input, scale_input):
     import csv
     import json
     import sys
@@ -65,7 +67,15 @@ def _(controls, frame_input, mo, np, output_input, roi_input, scale_input):
     source_dir = Path.cwd() / "continuum_filament_model" / "src"
     if str(source_dir) not in sys.path:
         sys.path.insert(0, str(source_dir))
-    from growing_filament.video_comparison import SegmentationConfig, iter_video_frames, probe_video, segment_mask
+    from growing_filament.video_comparison import (
+        RegistrationConfig,
+        SegmentationConfig,
+        iter_video_frames,
+        load_model_output,
+        match_model_frame,
+        probe_video,
+        segment_mask,
+    )
 
     output = Path(output_input.value).expanduser()
     metadata_path = output / "metadata.json"
@@ -112,7 +122,17 @@ def _(controls, frame_input, mo, np, output_input, roi_input, scale_input):
             else:
                 observation_config = SegmentationConfig.from_mapping(metadata["segmentation"])
                 mask, _ = segment_mask(frame_image, observation_config)
-                figure, axes = plt.subplots(1, 3, figsize=(18, 5), constrained_layout=True)
+                try:
+                    registration_value = RegistrationConfig.from_mapping(json.loads(registration_input.value)) if registration_input.value.strip() else RegistrationConfig()
+                    model_frames = load_model_output(Path(model_input.value).expanduser()) if model_input.value.strip() else []
+                    model_match = match_model_frame(model_frames, registration_value.model_time(float(selected_summary[0]["time"])), registration_value.max_time_error_s)
+                except Exception as exc:
+                    registration_value = RegistrationConfig()
+                    model_match = None
+                    model_error = f"model読出し失敗: {type(exc).__name__}: {exc}"
+                else:
+                    model_error = None
+                figure, axes = plt.subplots(1, 4, figsize=(23, 5), constrained_layout=True)
                 axes[0].imshow(frame_image, cmap="gray")
                 axes[0].set_title(f"observed pixel / frame={selected}")
                 for filament_id, values in points.items():
@@ -122,6 +142,9 @@ def _(controls, frame_input, mo, np, output_input, roi_input, scale_input):
                     axes[0].legend(loc="best", fontsize=7)
                 axes[0].set_xlim(0, frame_image.shape[1])
                 axes[0].set_ylim(frame_image.shape[0], 0)
+                if model_match is not None and registration_value.calibrated:
+                    axes[0].plot(*registration_value.model_to_pixel(model_match.frame.points).T, linewidth=2, color="cyan", label="registered model")
+                    axes[0].legend(loc="best", fontsize=7)
                 axes[1].imshow(mask, cmap="gray")
                 axes[1].set_title("segmentation mask")
                 for filament_id, values in points.items():
@@ -130,13 +153,22 @@ def _(controls, frame_input, mo, np, output_input, roi_input, scale_input):
                 axes[1].set_xlim(0, frame_image.shape[1])
                 axes[1].set_ylim(frame_image.shape[0], 0)
 
+                if model_match is not None:
+                    axes[2].plot(model_match.frame.points[:, 0], model_match.frame.points[:, 1], linewidth=2, color="tab:blue")
+                    axes[2].set_title(f"model-unit t={model_match.frame.time_s:.4f}s")
+                    axes[2].set_aspect("equal", adjustable="datalim")
+                else:
+                    axes[2].set_title("model-unit: no matched frame")
+                if model_error:
+                    axes[2].text(0.02, 0.9, model_error, transform=axes[2].transAxes, wrap=True)
+
                 comparison_path = output / "comparison.csv"
                 if comparison_path.exists():
                     with comparison_path.open(encoding="utf-8", newline="") as handle:
                         comparison_rows = list(csv.DictReader(handle))
                 else:
                     comparison_rows = []
-                axes[2].axis("off")
+                axes[3].axis("off")
                 selected_row = selected_summary[0]
                 lines = [
                     f"frame={selected}",
@@ -145,6 +177,7 @@ def _(controls, frame_input, mo, np, output_input, roi_input, scale_input):
                     f"quality={selected_row['quality']}",
                     f"flags={selected_row['quality_flags']}",
                     f"censor={selected_row['censor']}",
+                    f"candidate_count={len(selected_summary)}",
                     "",
                     "model / comparison",
                 ]
@@ -156,14 +189,24 @@ def _(controls, frame_input, mo, np, output_input, roi_input, scale_input):
                         f"reason={row['metric_reason']}",
                         f"endpoint_distance_px={row.get('endpoint_distance_px', '')}",
                         f"shape_rmse_px={row.get('shape_rmse_px', '')}",
+                        f"model_time={row.get('model_time', '')}",
+                        f"time_error_s={row.get('time_error_s', '')}",
+                        f"time_method={row.get('time_match_method', '')}",
+                        f"censor_reason={row.get('metric_reason', '')}",
                     ])
                 else:
                     lines.append("comparison.csv not found; model panel is unavailable")
-                if scale_input.value.strip():
-                    lines.append(f"UI scale={scale_input.value.strip()} (rerun compare to apply)")
+                if model_match is not None and not registration_value.calibrated:
+                    lines.append("overlay=suppressed (uncalibrated)")
+                if scale_input.value.strip() and not registration_input.value.strip():
+                    lines.append(f"UI scale={scale_input.value.strip()} (registration JSON preferred)")
+                if model_input.value.strip():
+                    lines.append(f"model={Path(model_input.value).name}")
+                if registration_input.value.strip():
+                    lines.append(f"registration={registration_input.value.strip()}")
                 if roi_input.value.strip():
                     lines.append(f"UI ROI={roi_input.value.strip()} (rerun extract to apply)")
-                axes[2].text(0.02, 0.98, "\n".join(lines), va="top", family="monospace")
+                axes[3].text(0.02, 0.98, "\n".join(lines), va="top", family="monospace")
                 result = mo.vstack([
                     controls,
                     mo.md(f"**selected frame:** `{selected}` / available `{available_frames[0]}..{available_frames[-1]}`"),

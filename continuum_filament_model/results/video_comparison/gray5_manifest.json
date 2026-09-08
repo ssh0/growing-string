@@ -1,0 +1,339 @@
+{
+  "comparison": {
+    "comparison_manifest.json": {
+      "artifacts": {
+        "comparison_csv": {
+          "bytes": 6220,
+          "path": "comparison.csv",
+          "sha256": "782940c3ca47a0dcc1d3db6818f43ba8c35d152112d41aa702c89a8ae7bedd61"
+        },
+        "comparison_json": {
+          "bytes": 961,
+          "path": "comparison.json",
+          "sha256": "2ceeb3d1cc1f800ccf0ecb2303baf90d05be48fd85ecb8990843f22bf453c740"
+        }
+      },
+      "calibration_status": "not_calibrated_metrics_suppressed",
+      "eligible_rows": 0,
+      "excluded_from_metric_denominator": 17,
+      "model_logical_id": "trajectory.npz",
+      "observation_logical_id": "review-gray5-final-a",
+      "registration": {
+        "endpoint_order": "auto",
+        "max_time_error_s": 0.2,
+        "pixel_per_model_unit": null,
+        "rotation_deg": 0.0,
+        "time_offset": 0.0,
+        "time_scale": 1.0,
+        "x_offset_px": 0.0,
+        "y_offset_px": 0.0
+      },
+      "schema_version": "continuum-filament-observation-0.1"
+    },
+    "render_manifest.json": {
+      "artifacts": {
+        "comparison_csv": {
+          "bytes": 6220,
+          "path": "comparison.csv",
+          "sha256": "782940c3ca47a0dcc1d3db6818f43ba8c35d152112d41aa702c89a8ae7bedd61"
+        },
+        "comparison_json": {
+          "bytes": 961,
+          "path": "comparison.json",
+          "sha256": "2ceeb3d1cc1f800ccf0ecb2303baf90d05be48fd85ecb8990843f22bf453c740"
+        },
+        "comparison_manifest": {
+          "bytes": 714,
+          "path": "comparison_manifest.json",
+          "sha256": "2039be135c03f418acf6c49fa2905b95a501119729a045a51aceec75fb1f99de"
+        },
+        "comparison_video": {
+          "bytes": 1169372,
+          "path": "comparison.mp4",
+          "sha256": "f683e0312e8eaee3198786855f3d6f632a59e885e08766f682400822e63c94ab"
+        },
+        "representative_frames": {
+          "frame_000000.png": {
+            "bytes": 265644,
+            "path": "frame_000000.png",
+            "sha256": "2a04c19fd9dfaa978161922856fc3d7f41d1af27bf676c82887a5eac976651dc"
+          },
+          "frame_000075.png": {
+            "bytes": 235038,
+            "path": "frame_000075.png",
+            "sha256": "119737d46ae8c40ac31f4f91a5b7d9fb6f51fa8a878cdc2425df8d0470289eb0"
+          },
+          "frame_000150.png": {
+            "bytes": 272491,
+            "path": "frame_000150.png",
+            "sha256": "9f881467e99c8ce866878a337051ea683242a581b7a2e711fbc701b346db4a81"
+          },
+          "frame_000315.png": {
+            "bytes": 414075,
+            "path": "frame_000315.png",
+            "sha256": "1d975e712dd8d30b41c570c64d4a18c7cf8b43ebf315095ad61744d75bf013fa"
+          }
+        }
+      },
+      "calibration_status": "not_calibrated_metrics_suppressed",
+      "coverage": "full_period",
+      "frames_written": 24,
+      "max_video_frames": null,
+      "output_budget": {
+        "artifact_bytes": 2364515,
+        "bytes": null,
+        "status": "not_configured"
+      },
+      "representative_frames": [
+        0,
+        75,
+        150,
+        315
+      ],
+      "runtime": {
+        "PIL": "10.4.0",
+        "ffmpeg": {
+          "available": true,
+          "version": "ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers"
+        },
+        "ffprobe": {
+          "available": true,
+          "version": "ffprobe version 8.1.2 Copyright (c) 2007-2026 the FFmpeg developers"
+        },
+        "imageio": "2.36.0",
+        "libx264": {
+          "available": true
+        },
+        "marimo": "0.23.6",
+        "numpy": "2.2.6",
+        "opencv_used": false,
+        "python": "3.11.5",
+        "skimage": "0.24.0"
+      },
+      "schema_version": "continuum-filament-observation-0.1",
+      "video_logical_id": "gray5.mp4"
+    },
+    "summary": {
+      "calibration_status": "not_calibrated_metrics_suppressed",
+      "censored_rows": 17,
+      "computed_rows": 0,
+      "eligible_rows": 0,
+      "excluded_from_metric_denominator": 17,
+      "filament_id": "filament-0000",
+      "limitations": [
+        "registration is configuration, not an inferred calibration",
+        "a selected candidate is not proof of single-filament tracking"
+      ],
+      "model_bytes": 442324,
+      "model_logical_id": "trajectory.npz",
+      "model_sha256": "7477c42d14ee00977d7ffb7ca0a30470c105602be31c68b2420568aabd3fa2a6",
+      "not_computed_reason_counts": {
+        "model_time_unmatched_or_centerline_unavailable": 16,
+        "quality_censor_flag": 1
+      },
+      "registration": {
+        "endpoint_order": "auto",
+        "max_time_error_s": 0.2,
+        "pixel_per_model_unit": null,
+        "rotation_deg": 0.0,
+        "time_offset": 0.0,
+        "time_scale": 1.0,
+        "x_offset_px": 0.0,
+        "y_offset_px": 0.0
+      },
+      "rows": 17,
+      "schema_version": "continuum-filament-observation-0.1"
+    }
+  },
+  "configuration": {
+    "config_sha256": "e309e06e77322f1e066f134be21a0dd286c4a4eb2e61511293a22c248ee1e343",
+    "segmentation_config": {
+      "background": "local_median",
+      "background_value": 0.0,
+      "boundary_margin_px": 2,
+      "contrast": "percentile",
+      "contrast_high": 99.0,
+      "contrast_low": 1.0,
+      "frame_stride": 15,
+      "max_centerline_points": 200,
+      "max_components": 1,
+      "max_jump_px": 80.0,
+      "min_component_size": 30,
+      "min_quality": 0.2,
+      "output_budget_bytes": 104857600,
+      "polarity": "dark",
+      "roi": [
+        280,
+        150,
+        420,
+        320
+      ],
+      "skeleton": true,
+      "threshold": "absolute",
+      "threshold_percentile": 12.0,
+      "threshold_value": 0.8
+    }
+  },
+  "full_period_run": {
+    "artifacts": {
+      "centerline": {
+        "bytes": 32332,
+        "path": "centerline.csv",
+        "sha256": "c8edda76534b01cb2c4ba85793a5415cd22bfe0e150de5ce6174a3c1d22f1216"
+      },
+      "events": {
+        "bytes": 7079,
+        "path": "events.csv",
+        "sha256": "a7f86bd9b927996aca1a3dfbec1efe9382cddd598c69cb9463dea44768a04d72"
+      },
+      "lineage": {
+        "bytes": 1759,
+        "path": "lineage.csv",
+        "sha256": "ea5629fc93e99e38040ec82e1e42913fc817ca3091f3e1a1bf49a575539eb27e"
+      },
+      "metadata": {
+        "bytes": 1533,
+        "path": "metadata.json",
+        "sha256": "9454d82ed7a524b309fae0af51b8d4905ea452e2d455d6d790d701fc74cf3148"
+      },
+      "observation_summary": {
+        "bytes": 4561,
+        "path": "observation_summary.csv",
+        "sha256": "1850450192494245889c8fd2ae315a6d7678dc0f05c60f5b074d83e5c8c72eb9"
+      }
+    },
+    "candidate_censor_count": 20,
+    "candidate_count": 20,
+    "component_count_summary": {
+      "max": 25,
+      "mean": 8.958333333333334
+    },
+    "output_budget": {
+      "artifact_bytes": 47264,
+      "bytes": 104857600,
+      "status": "within_budget"
+    },
+    "processed_frames": 24,
+    "run": {
+      "coverage": "full_period",
+      "frame_range": {
+        "count": 24,
+        "coverage": "full_period",
+        "first": 0,
+        "last": 345,
+        "stride": 15
+      },
+      "max_frames": null
+    },
+    "runtime": {
+      "PIL": "10.4.0",
+      "ffmpeg": {
+        "available": true,
+        "version": "ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers"
+      },
+      "ffprobe": {
+        "available": true,
+        "version": "ffprobe version 8.1.2 Copyright (c) 2007-2026 the FFmpeg developers"
+      },
+      "imageio": "2.36.0",
+      "libx264": {
+        "available": true
+      },
+      "marimo": "0.23.6",
+      "numpy": "2.2.6",
+      "opencv_used": false,
+      "python": "3.11.5",
+      "skimage": "0.24.0"
+    },
+    "validation": {
+      "errors": [],
+      "finite_coordinates": true,
+      "n_filaments": 2,
+      "n_rows": 213,
+      "time_monotonic": true,
+      "valid": true,
+      "warnings": []
+    }
+  },
+  "input": {
+    "bytes": 4104980,
+    "ffprobe": {
+      "codec": "h264",
+      "duration_s": 23.266667,
+      "fps": 15.0,
+      "frame_count": 349,
+      "height": 512,
+      "pixel_format": "yuv420p",
+      "width": 680
+    },
+    "logical_id": "gray5.mp4",
+    "sha256": "25eea9e9f439beb0476841f8269d421569fc011e548c3ea85741dea5cfd1072e",
+    "source_note": "local Dropbox-derived input; license/redistribution terms not verified; video not committed"
+  },
+  "limitations": [
+    "candidate extraction is not proof of single-filament lineage",
+    "scale/time calibration was not supplied; quantitative comparison denominator is zero",
+    "no parameter identification, physical validation, contact/friction inference, or universality claim"
+  ],
+  "reproducibility": {
+    "note": "gray5 full-period extraction repeated with normalized input/output variables; CSV/metadata/manifest hashes matched",
+    "same_config_repeated": true
+  },
+  "schema_version": "continuum-filament-observation-run-0.1",
+  "smoke_run": {
+    "artifacts": {
+      "centerline": {
+        "bytes": 6856,
+        "path": "centerline.csv",
+        "sha256": "6de6a7cc900e6cfeeecd8cfea045eeab6ece94d8cdf64257e40c0722d4533dec"
+      },
+      "events": {
+        "bytes": 811,
+        "path": "events.csv",
+        "sha256": "5d864c1040da60f683826e888ccf3ae4606fb9179b8ba479f1aecc033e3db7b8"
+      },
+      "lineage": {
+        "bytes": 148,
+        "path": "lineage.csv",
+        "sha256": "2a5615fa7b1041a8e65eb38bc0d1fd5af79f7a0622ea407ab1881e9b7570e7fa"
+      },
+      "metadata": {
+        "bytes": 1541,
+        "path": "metadata.json",
+        "sha256": "4d4c305f508b545c7d2c38521c439ec8c681a19cb86c5ee338475a5b2d3da1b3"
+      },
+      "observation_summary": {
+        "bytes": 829,
+        "path": "observation_summary.csv",
+        "sha256": "8e4458d61428c811f031ab230227d35f008d228ffec71521cd6a262ec1c9d305"
+      }
+    },
+    "candidate_count": 3,
+    "output_budget": {
+      "artifact_bytes": 10185,
+      "bytes": 10485760,
+      "status": "within_budget"
+    },
+    "processed_frames": 3,
+    "run": {
+      "coverage": "partial_max_frames",
+      "frame_range": {
+        "count": 3,
+        "coverage": "partial_max_frames",
+        "first": 0,
+        "last": 60,
+        "stride": 30
+      },
+      "max_frames": 3
+    },
+    "validation": {
+      "errors": [],
+      "finite_coordinates": true,
+      "n_filaments": 1,
+      "n_rows": 51,
+      "time_monotonic": true,
+      "valid": true,
+      "warnings": []
+    }
+  }
+}

@@ -32,9 +32,10 @@ PY
 
 ```bash
 PYTHONPATH=continuum_filament_model/src \
+OBS_VIDEO=${OBS_VIDEO:?set input video path} \
 python continuum_filament_model/video_compare.py extract \
-  --video /Users/fujimotoshotaro/Workspace/growing-string/img/gray5.mp4 \
-  --output /tmp/growing-string-gray5 \
+  --video "$OBS_VIDEO" \
+  --output "${OBS_OUTPUT:-/tmp/growing-string-gray5}" \
   --polarity dark --background median --threshold otsu \
   --frame-stride 5 --min-component-size 12
 ```
@@ -65,10 +66,12 @@ endpoint distance、shape RMSE、length difference等の定量metricを計算し
 
 ```bash
 PYTHONPATH=continuum_filament_model/src \
+OBS_VIDEO=${OBS_VIDEO:?set input video path} \
+MODEL_OUTPUT=${MODEL_OUTPUT:?set model trajectory path} \
 python continuum_filament_model/video_compare.py all \
-  --video /Users/fujimotoshotaro/Workspace/growing-string/img/gray5.mp4 \
-  --output /tmp/growing-string-gray5 \
-  --model /tmp/model/trajectory.npz
+  --video "$OBS_VIDEO" \
+  --output "${OBS_OUTPUT:-/tmp/growing-string-gray5}" \
+  --model "$MODEL_OUTPUT"
 
 # 校正値を使用する場合だけ --registration を追加する
 # --registration /tmp/registration.json
@@ -97,9 +100,12 @@ marimo edit continuum_filament_model/notebooks/video_comparison.py
 - `observation_summary.csv`: length、endpoint distance、curvature summary、quality/censor
 - `events.csv`: missing、ambiguous、large jump、skeleton loss等
 - `metadata.json`: video metadata、設定、座標系、validation、限界
-- `manifest.json`: 入力SHA-256、設定SHA-256、実装情報、検査結果
-- `comparison.csv/json`: model time、model-unit metric、metric status/reason
+- `manifest.json`: 入力logical ID/SHA-256/size、設定・command SHA-256、runtime、frame coverage、lineage、artifact hash/size、budget
+- `lineage.csv`: matched/new/reconnected/missingを含む追跡lineage（欠損区間を削除しない）
+- `comparison.csv/json`: model time/error、nearest-frame matching、両endpoint対応、model-unit metric、metric status/reason
+- `comparison_manifest.json`: comparison CSV/JSONのSHA-256とbyte size、eligible/excluded denominator
 - `comparison.mp4`, `frames/`: 左=観測pixel、右=model-unit。大容量のためGit管理しない
+- `results/video_comparison/{gray5,original}_manifest.json`: 動画本体を含めず、入力hash/size/ffprobe、short smoke/full-period run、comparison artifact hash/sizeだけをcompactに保存
 
 同じ入力・同じ設定では、生成時刻をmetadataへ入れず、CSV/JSONの順序・数値書式を固定しているため、
 manifestとcompact comparisonの再現性を検査できます。Python/NumPy/ffmpegの実装差は別途考慮してください。
@@ -107,12 +113,35 @@ manifestとcompact comparisonの再現性を検査できます。Python/NumPy/ff
 ## 品質判定と限界
 
 - `quality` は面積と抽出中心線点数からなる決定的な候補スコアで、物理的な確率ではありません。
-- `ambiguous_components`、`large_jump`、`short_centerline`、`skeleton_loss`、`low_quality` は通常censorです。
+- `ambiguous_components`、`components_truncated`、`branched_component`、`loop_component`、`large_jump`、`short_centerline`、`skeleton_loss`、`out_of_view`、`roi_clipped`、`new_lineage`、`reconnected_after_missing`、`low_quality` は通常censorです。loopはcenterline.csvへ開曲線として出力しません。
 - ROI外、欠損、時間対応不能も比較をcensorします。
 - 入力動画に複数輪郭・接触・折りたたみがある場合、候補を黙って一本へ結合しません。
 - pixel→physical calibration、実験真値、パラメータ同定、接触/摩擦/有限径の物理則、普遍性・臨界指数は、
   このpipelineから主張しません。
 - `model summary`だけで中心線がない場合は、geometry metricを作らず理由を出します。
+
+## 依存関係・出力budget
+
+必須はPython >=3.10、NumPy >=1.23、ffmpeg/ffprobe >=4.4です。`imageio >=2.25`、Pillow >=9、
+scikit-image >=0.19、SciPy >=1.8、marimo >=0.23はoptionalです。OpenCVは使用しません。
+scikit-imageがない場合はconnected components/skeletonにNumPy fallbackを使います。比較動画の生成には
+ffmpegの`libx264` encoderが必要です。今回の実行環境はPython 3.11.5、NumPy 2.2.6、ffmpeg/ffprobe 8.1.2、
+imageio 2.36.0、Pillow 10.4.0、scikit-image 0.24.0、marimo 0.23.6でした。
+
+```bash
+python --version
+ffmpeg -version
+ffprobe -version
+ffmpeg -hide_banner -encoders | grep 264
+```
+
+`--output-budget-mb N` をextract/allへ指定すると、metadata/CSV/events/lineageの生成物budgetをmanifestへ
+記録します。render manifestはcomparison動画、代表frame、comparison CSV/JSONのhash/sizeとfull/partial statusを記録します。
+`--max-frames` はpartial runとなり、指定しないrunだけをfull-periodと記録します。
+
+入力動画はローカルに提供されたDropbox由来ファイルでしたが、リポジトリ内にライセンス・再配布条件を確認できる
+出典資料がないため、サイズ（gray5 3.9 MB、原動画 13 MB）とSHA-256だけをmanifest/noteへ記録し、動画本体はGitへ
+含めていません。これは再配布許諾や実験データの公開を主張するものではありません。
 
 ## 検証記録（実装時点）
 
@@ -121,12 +150,14 @@ manifestとcompact comparisonの再現性を検査できます。Python/NumPy/ff
 `max_components=1` で通しました。ffprobe metadataは gray5 が 680x512、15 fps、349 frames、
 23.266667 s、原動画が 680x512、30 fps、698 frames、23.266 s でした。どちらも metadata、centerline、
 events、代表frame、side-by-side comparison videoを生成できました。segment候補は動画全体で安定した
-単一lineageにはならず、gray5では21候補・3つのcandidate ID（6候補がcensor）、原動画では24候補・
-2つのcandidate ID（7候補がcensor）が生じました。これは完全自動追跡の成功とは扱わず、large
-jump/missing/censorを比較可能区間の境界として残しています。
+単一lineageにはならず、frame_stride=15のfull-period runではgray5が24 processed frames・20候補・
+2つのcandidate ID（20候補がcensor、branched/loop flagsを含む）、原動画が24 processed frames・22候補・
+2つのcandidate ID（22候補がcensor）となりました。これは完全自動追跡の成功とは扱わず、large jump、
+missing、topology、censorを比較可能区間の境界として残しています。
 
-同じ gray5 設定を2回実行した `centerline.csv`、`observation_summary.csv`、`events.csv`、
-`metadata.json`、`manifest.json` のSHA-256は一致しました。P1B runnerの一時trajectoryを読み、
+同じ gray5 設定を2回実行した `centerline.csv`、`observation_summary.csv`、`events.csv`、`lineage.csv`、
+`metadata.json`、`manifest.json` のSHA-256は一致しました。短いsmoke（max_frames=3）はpartial、full-period
+runはmax_frames未指定としてmanifestへ記録しました。P1B runnerの一時trajectoryを読み、
 scale未指定で比較したケースでは `calibration_status=not_calibrated_metrics_suppressed` となり、
 model時間が未対応の行も `model_time_unmatched_or_centerline_unavailable` としてcensorされました。
 これらは観察の品質・自動追跡・モデルの物理整合を証明する結果ではありません。
@@ -145,4 +176,5 @@ marimo check continuum_filament_model/notebooks/video_comparison.py
 ```
 
 実動画を検証するときは `/tmp` などへ出力し、`metadata.json`、代表frame、`centerline.csv`、
-`events.csv`、`comparison.mp4` を確認します。full mask、per-frame大量データ、動画はcommitしません。
+`events.csv`、`comparison.mp4` を確認します。今回のfull-period runはframe_stride=15（入力全期間を24 sampled framesで処理）
+です。動画本体、full mask、per-frame大量データはcommitしません。compact run manifestだけをGit管理します。
