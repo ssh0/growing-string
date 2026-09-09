@@ -125,10 +125,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "noise_fraction": 0.25,
     },
     "video": DEFAULT_VIDEO_CONFIG,
-    "output_policy": {
-        "save_trajectories": False,
-        "max_output_bytes": 120_000_000,
-    },
 }
 
 
@@ -776,7 +772,70 @@ def _compact_comparison_summary(summary: Mapping[str, Any], output: Path, artifa
     return value
 
 
-def _model_inadequacy_assessment(rows: Sequence[Mapping[str, Any]], registration: RegistrationConfig) -> dict[str, Any]:
+NUMERICAL_REFINEMENT_THRESHOLDS: dict[str, float] = {
+    "onset_time_abs": 0.1,
+    "peak_amplitude_relative": 0.2,
+}
+
+
+def _numerical_unresolved_assessment(results: Sequence[Mapping[str, Any]], video_case: str) -> dict[str, Any]:
+    selected = next((result for result in results if result.get("run_name") == video_case), None)
+    refinements = [
+        result for result in results
+        if result.get("run_kind") == "numerical_refinement" and result.get("base_fixture") == video_case
+    ]
+    reasons: set[str] = set()
+    if selected is None:
+        reasons.add("video_model_case_missing")
+    else:
+        classification = selected.get("classification", {})
+        if selected.get("failure_reason") is not None:
+            reasons.add("selected_model_failure")
+        if classification.get("unresolved_reason_category") == "numerical_nonconvergence" or classification.get("label") == "numerically-unresolved":
+            reasons.add("selected_model_numerically_unresolved")
+    for result in refinements:
+        classification = result.get("classification", {})
+        if result.get("failure_reason") is not None:
+            reasons.add("refinement_run_failure")
+        if classification.get("unresolved_reason_category") == "numerical_nonconvergence" or classification.get("label") == "numerically-unresolved":
+            reasons.add("refinement_numerically_unresolved")
+    if selected is not None:
+        baseline = selected.get("classification", {})
+        baseline_onset = baseline.get("onset_time")
+        baseline_peak = baseline.get("peak_max_transverse_amplitude")
+        baseline_label = baseline.get("label")
+        for result in refinements:
+            classification = result.get("classification", {})
+            refinement_onset = classification.get("onset_time")
+            if (baseline_onset is None) != (refinement_onset is None) or (
+                baseline_onset is not None
+                and refinement_onset is not None
+                and abs(float(baseline_onset) - float(refinement_onset)) > NUMERICAL_REFINEMENT_THRESHOLDS["onset_time_abs"]
+            ):
+                reasons.add("refinement_onset_disagreement")
+            if baseline_label != classification.get("label"):
+                reasons.add("refinement_classification_disagreement")
+            refinement_peak = classification.get("peak_max_transverse_amplitude")
+            if baseline_peak is not None and refinement_peak is not None:
+                scale = max(abs(float(baseline_peak)), abs(float(refinement_peak)), 1.0e-15)
+                if abs(float(baseline_peak) - float(refinement_peak)) / scale > NUMERICAL_REFINEMENT_THRESHOLDS["peak_amplitude_relative"]:
+                    reasons.add("refinement_peak_disagreement")
+    return {
+        "status": "numerically_unresolved" if reasons else "numerically_resolved",
+        "category": "numerical_nonconvergence" if reasons else None,
+        "reasons": sorted(reasons),
+        "model_run": video_case,
+        "refinement_runs": [result.get("run_name") for result in refinements],
+        "thresholds": dict(NUMERICAL_REFINEMENT_THRESHOLDS),
+    }
+
+
+def _model_inadequacy_assessment(
+    rows: Sequence[Mapping[str, Any]],
+    registration: RegistrationConfig,
+    registration_explicit: bool,
+    numerical_status: Mapping[str, Any],
+) -> dict[str, Any]:
     thresholds = dict(MODEL_INADEQUACY_THRESHOLDS)
     conditions = [
         "registration.calibrated",
@@ -784,7 +843,7 @@ def _model_inadequacy_assessment(rows: Sequence[Mapping[str, Any]], registration
         "shape_rmse_px > 5.0 or abs(length_difference_px) / model_length_px > 0.25",
     ]
     result: dict[str, Any] = {
-        "status": "not_assessed_uncalibrated",
+        "status": "not_assessed_unregistered",
         "category": "model_inadequacy",
         "thresholds": thresholds,
         "conditions": conditions,
@@ -792,7 +851,13 @@ def _model_inadequacy_assessment(rows: Sequence[Mapping[str, Any]], registration
         "candidates": [],
         "scope": "eligible calibrated comparison rows only; input quality/censor and numerical status remain separate",
     }
+    if numerical_status.get("status") == "numerically_unresolved":
+        result["status"] = "not_assessed_numerical_unresolved"
+        return result
+    if not registration_explicit:
+        return result
     if not registration.calibrated:
+        result["status"] = "not_assessed_uncalibrated"
         return result
     eligible = [row for row in rows if row.get("metric_status") == "computed" and not row.get("censor")]
     if not eligible:
@@ -838,7 +903,18 @@ def _video_failure_category(exc: BaseException) -> tuple[str, str]:
     return "analysis_failure", "analysis"
 
 
-def _holdout_status(usable: bool, registration: RegistrationConfig, summary: Mapping[str, Any], reasons: Sequence[str]) -> str:
+def _holdout_status(
+    usable: bool,
+    registration: RegistrationConfig,
+    registration_explicit: bool,
+    summary: Mapping[str, Any],
+    reasons: Sequence[str],
+    numerical_status: Mapping[str, Any],
+) -> str:
+    if numerical_status.get("status") == "numerically_unresolved":
+        return "numerical_unresolved"
+    if not registration_explicit:
+        return "comparison_only_unregistered" if usable else "censored"
     if not registration.calibrated:
         return "comparison_only_uncalibrated" if usable else "censored"
     if int(summary.get("eligible_rows", 0)) > 0:
@@ -850,7 +926,38 @@ def _holdout_status(usable: bool, registration: RegistrationConfig, summary: Map
     return "calibrated_no_eligible_rows"
 
 
-def run_video_comparison(video_path: str | Path, output: Path, model_path: Path, config: Mapping[str, Any], registration: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def _unregistered_comparison_summary(
+    extraction: Mapping[str, Any],
+    model_path: Path,
+    registration: Mapping[str, Any],
+    missing_fields: Sequence[str],
+) -> dict[str, Any]:
+    population_rows = len(extraction.get("summary_rows", []))
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "calibration_status": "registration_incomplete_metrics_suppressed",
+        "registration": dict(registration),
+        "registration_missing_fields": list(missing_fields),
+        "model_logical_id": model_path.name,
+        "rows": population_rows,
+        "eligible_rows": 0,
+        "computed_rows": 0,
+        "censored_rows": population_rows,
+        "population_rows": population_rows,
+        "excluded_from_metric_denominator": population_rows,
+        "excluded_from_metric_reasons": ["explicit_pixel_and_time_registration_required"],
+        "comparison_performed": False,
+    }
+
+
+def run_video_comparison(
+    video_path: str | Path,
+    output: Path,
+    model_path: Path,
+    config: Mapping[str, Any],
+    registration: Mapping[str, Any] | None = None,
+    numerical_status: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """Run the existing video pipeline and return a compact QC-only record.
 
     No registration is inferred.  When it is absent, the pipeline's observed
@@ -886,11 +993,26 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
         video_cfg = dict(DEFAULT_VIDEO_CONFIG)
         video_cfg.update(dict(config.get("video", {})))
         extraction = run_pipeline(source, artifact_dir, SegmentationConfig.from_mapping(video_cfg), command_line=["stage2", "extract", "${INPUT_VIDEO}", "${OUTPUT_DIR}"])
-        registration_value = RegistrationConfig.from_mapping(registration)
-        comparison = compare_with_model(artifact_dir, model_path, registration_value, output_dir=artifact_dir)
+        registration_mapping = dict(registration or {})
+        required_registration_fields = ("pixel_per_model_unit", "time_scale", "time_offset")
+        missing_registration_fields = [
+            field for field in required_registration_fields
+            if field not in registration_mapping or registration_mapping[field] is None
+        ]
+        registration_explicit = not missing_registration_fields
+        registration_value = RegistrationConfig.from_mapping(registration_mapping)
+        if registration_explicit:
+            comparison = compare_with_model(artifact_dir, model_path, registration_value, output_dir=artifact_dir)
+            comparison_summary = comparison["summary"]
+            comparison_rows = comparison.get("rows", [])
+        else:
+            comparison = {"rows": []}
+            comparison_summary = _unregistered_comparison_summary(
+                extraction, model_path, registration_mapping, missing_registration_fields
+            )
+            comparison_rows = []
         video_manifest = extraction["manifest"]
         validation = extraction["validation"]
-        comparison_summary = comparison["summary"]
         usable = bool(validation.get("valid")) and bool(extraction.get("summary_rows"))
         reasons: list[str] = []
         if not validation.get("valid"):
@@ -899,8 +1021,15 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
             reasons.append("no_centerline_candidates")
         if int(video_manifest.get("candidate_censor_count", 0)) > 0:
             reasons.append("candidate_quality_censor_present")
-        calibration_status = "configured_not_fitted" if registration_value.calibrated else "not_available_metrics_suppressed"
-        model_inadequacy = _model_inadequacy_assessment(comparison.get("rows", []), registration_value)
+        numerical_status_value = dict(numerical_status or {
+            "status": "not_assessed_no_suite_context",
+            "category": None,
+            "reasons": [],
+        })
+        calibration_status = "configured_not_fitted" if registration_explicit else "not_registered_metrics_suppressed"
+        model_inadequacy = _model_inadequacy_assessment(
+            comparison_rows, registration_value, registration_explicit, numerical_status_value
+        )
         record = {
             "schema_version": SCHEMA_VERSION,
             "status": "extracted" if usable else "unusable",
@@ -925,7 +1054,14 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
                 "parameter_identification": "suppressed; registration is not an inferred fit",
             },
             "holdout": {
-                "status": _holdout_status(usable, registration_value, comparison_summary, reasons),
+                "status": _holdout_status(
+                    usable,
+                    registration_value,
+                    registration_explicit,
+                    comparison_summary,
+                    reasons,
+                    numerical_status_value,
+                ),
                 "model_logical_id": model_path.name,
                 "comparison": _compact_comparison_summary(
                     comparison_summary, output, artifact_dir, model_path
@@ -933,11 +1069,12 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
                 "supported_observables": ["observed_length_px", "observed_endpoint_distance_px", "observed_curvature_mean_px_inv", "observed_curvature_max_px_inv", "temporal_frame_coverage"],
                 "quantitative_model_overlay": (
                     "available_for_eligible_registered_rows"
-                    if registration_value.calibrated and int(comparison_summary.get("eligible_rows", 0)) > 0
-                    else "suppressed_without_registered_eligible_centerline"
+                    if registration_explicit and int(comparison_summary.get("eligible_rows", 0)) > 0
+                    else "suppressed_without_explicit_registration"
                 ),
             },
             "model_inadequacy": model_inadequacy,
+            "numerical_unresolved": numerical_status_value,
             "quantitative_fitting": "suppressed",
             "lineage_censor_preserved": True,
             "legacy_video_substitution": False,
@@ -962,6 +1099,11 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
                 "category": "model_inadequacy",
                 "thresholds": dict(MODEL_INADEQUACY_THRESHOLDS),
                 "candidates": [],
+            },
+            "numerical_unresolved": {
+                "status": "not_assessed_pipeline_error",
+                "category": "numerical_nonconvergence",
+                "reasons": [],
             },
             "quantitative_fitting": "suppressed",
             "legacy_video_substitution": False,
@@ -1009,6 +1151,7 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         "large_artifacts": "_runs and _video_artifacts are external-style artifacts; commit only compact summary/manifest files",
     }
     if video_path is not None:
+        numerical_status = _numerical_unresolved_assessment(results, video_case)
         selected = next((result for result in results if result["run_name"] == video_case), None)
         trajectory_value = selected.get("trajectory_path") if selected is not None else None
         if not trajectory_value:
@@ -1016,9 +1159,19 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         trajectory_path = Path(str(trajectory_value))
         if trajectory_path.is_absolute():
             raise Stage2Error("video trajectory path must be output-relative")
-        summary["video_comparison"] = run_video_comparison(video_path, output, output / trajectory_path, effective, registration)
+        summary["video_comparison"] = run_video_comparison(
+            video_path,
+            output,
+            output / trajectory_path,
+            effective,
+            registration,
+            numerical_status=numerical_status,
+        )
     _write_json(output / "compact_summary.json", summary)
     _write_json(output / "effective_config.json", effective)
+    artifact_paths = [output / "summary.csv", output / "compact_summary.json", output / "effective_config.json"]
+    if video_path is not None:
+        artifact_paths.append(output / "video_comparison_manifest.json")
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "benchmark": "stage2_free_free_growth_relaxation_buckling",
@@ -1033,7 +1186,7 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         "dimensionless_group_definition": _dimensionless_groups(effective["base"])["definition"],
         "contact_enabled": False,
         "phase_boundary_claim": False,
-        "artifacts": {path.name: {"bytes": path.stat().st_size, "sha256": sha256_file(path)} for path in (output / "summary.csv", output / "compact_summary.json", output / "effective_config.json")},
+        "artifacts": {path.name: {"bytes": path.stat().st_size, "sha256": sha256_file(path)} for path in artifact_paths},
         "video_comparison": summary["video_comparison"],
     }
     _write_json(output / "compact_manifest.json", manifest)

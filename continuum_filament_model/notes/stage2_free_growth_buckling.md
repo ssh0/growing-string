@@ -103,9 +103,11 @@ metadata、抽出候補数、lineage/censor、calibration/holdout の状態を c
 入力が存在しない・読めない・中心線契約を満たさない場合は、`input_missing` または
 `unusable` とし、legacy triangular-lattice videoで代用しない。
 
-pixel per model unit と time registration は推測しない。登録値が無い場合は、動画が
-支持する pixel の `L(t)`、endpoint distance、curvature、frame coverage を観測 QC として
-保持するが、model/pixel の定量 overlay と parameter fitting は抑制する。登録値があっても
+pixel per model unit と time registration は推測しない。定量比較には
+`pixel_per_model_unit`、`time_scale`、`time_offset` の3値を明示する。いずれかが無い場合は
+モデル時刻照合を実行せず、動画が支持する pixel の `L(t)`、endpoint distance、curvature、
+frame coverage を観測 QC として保持するが、model/pixel の定量 overlay と parameter fitting は
+抑制する。登録値があっても
 品質 censor、new/reconnected lineage、missing、branch/loop は比較母集団から除外し、
 calibration と holdout の records を混同しない。入力中心線が censored のとき、見た目の
 overlayからモデル不足・入力品質・数値未収束を区別せずに結論を出してはならない。
@@ -114,7 +116,10 @@ overlayからモデル不足・入力品質・数値未収束を区別せずに�
 これは候補条件であり、接触物理やモデル不足の確定診断ではない。候補は入力品質/censorと
 別フィールドに保存し、候補行がない・未校正・eligible行がない状態も区別する。動画処理の
 失敗は `missing_ffmpeg`、`decode_or_corrupt_input`、`invalid_format`、`analysis_failure`
-の安定したカテゴリで保存し、絶対パスや例外詳細はcompact成果物へ出さない。
+の安定したカテゴリで保存し、絶対パスや例外詳細はcompact成果物へ出さない。選択した
+モデルrunのfailure・numerically-unresolved分類、または refinement 間の onset/peak/分類の
+不一致は `numerical_nonconvergence` を優先し、動画の観測差を `model_inadequacy` として
+評価しない。
 
 ## 結果の解釈
 
@@ -129,29 +134,26 @@ overlayからモデル不足・入力品質・数値未収束を区別せずに�
 
 ## 実行済み探索の要約
 
-`results/stage2_free_free/` は contrast 拡張前に保存した18 runのbaseline artifactであり、
-下記の記述には今回追加した4つの `parameter_contrast` の実行結果を含めない。拡張後の
-既定設定を再実行すると、決定論的 fixture/refinement 9 run、parameter contrast 4 run、
-seed付き replicate 9 runの計22 runが新しいcompact summaryへ保存される。
-
 `results/stage2_free_free/` は、source revision
-`187434c4e18a21f3d3bdfc33fb133b7f25570c37`、`t_end=4.0` の18 run（決定論的 fixture・
-refinement 9 run、seed付き replicate 9 run）を compact に保存する。全 run は
+`6c7446afb01ae1af6db7f54c4c1a12cbe053462c`、`t_end=4.0` の22 run（決定論的 fixture 5、
+refinement 4、parameter contrast 4、seed付き replicate 9）をcompactに保存する。全runは
 `contact_enabled=false`、失敗0、拒否0であった。決定論的な fast-growth/low-bend 条件は
 `t≈3.30` に定義した onset を通過し、`n_nodes=9,13` と `dt=0.002,0.001` の4 refinement
 でも onset は `3.298--3.316`、peak transverse amplitude は約 `0.0876--0.0894` であった。
-slow-growth/low-bend は閾値未満で、high-bend は同じ fast growth でも閾値未満だった。
+追加したcontrastでは、soft axialのonsetは約3.634、stiff axialは約3.132、high dragは
+約2.842で、low dragは閾値未満だった。これらは成長率、曲げ剛性、初期 imperfection、
+`dt`、空間解像度を固定した限定的な対照であり、相境界・臨界値・実験パラメータ同定ではない。
 fast-growth/low-bend replicate は3本中2本が candidate、1本が閾値未満であり、これは
-初期 imperfection の探索的な感度としてのみ扱う。したがって、この結果は「free/freeで
-成長・drag・伸長・曲げの競合により非接触の座屈候補が現れ得る」ことの bounded evidence
-であり、相境界・臨界成長率・実験パラメータ同定ではない。
+初期 imperfection の探索的な感度としてのみ扱う。
 
 `gray5.mp4` の full-period・frame stride 15 抽出は24 sampled frames、20 candidate、
 selected lineageを含む2 lineage、candidate censor 20で、centerline contract自体はvalid
-だった。一方、pixel/model scale・time registrationは未指定で、比較母集団24行の定量metric
-eligibleは0行となった。従って動画側の `L(t)`、endpoint distance、curvature候補、lineage/
-censorはQC用に保存したが、モデル overlay、onset matching、parameter fittingは抑制した。
-これは入力品質/censorと未校正を数値未収束やモデル不足と混同しないための結果である。
+だった。pixel/model scale・time registrationは明示していないため、現行manifestは
+`comparison_only_unregistered`、eligible行0、`model_inadequacy=not_assessed_unregistered`
+としている。動画側の `L(t)`、endpoint distance、curvature候補、lineage/censorはQC用に
+保存したが、モデル時刻照合、定量overlay、onset matching、parameter fittingは抑制した。
+refinementと選択モデルの数値状態は `numerical_resolved` として別記録し、未校正を数値未収束や
+モデル不足と混同しない。
 
 この段階の compact result だけから、実動画のパラメータ同定、接触・摩擦・折りたたみの
 再現、臨界値、普遍性を主張しない。

@@ -51,9 +51,5 @@
     "min_component_size": 30,
     "max_components": 1,
     "roi": [280, 150, 420, 320]
-  },
-  "output_policy": {
-    "save_trajectories": false,
-    "max_output_bytes": 120000000
   }
 }
