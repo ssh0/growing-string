@@ -144,12 +144,14 @@ python continuum_filament_model/benchmarks/free_end_benchmark.py \
 `benchmarks/free_growth_buckling_stage2.py` は、既存の非接触 free/free solver を使った
 探索的な bounded experiment です。既定設定は
 `benchmarks/configs/stage2_free_free.json`、仕様と解釈の制約は
-`notes/stage2_free_growth_buckling.md` に記録します。成長率、曲げ/伸長比、初期
-imperfection、時間刻み、空間解像度を変え、deterministic fixture/refinement と
-seed付き exploratory replicate を分けて保存します。endpoint trajectory、参照長・輪郭長、
+`notes/stage2_free_growth_buckling.md` に記録します。成長率、曲げ/伸長比、基板drag、初期
+imperfection、時間刻み、空間解像度を探索し、axial stiffness と drag density の独立した
+parameter contrast を deterministic fixture/refinement、seed付き exploratory replicate と
+分けて保存します。endpoint trajectory、参照長・輪郭長、
 axial-force proxy、endpoint force/moment residual、transverse amplitude、曲率 RMS、
-mode fraction、energy/work/dissipation、accepted/rejected `dt`、events、provenance を
-compact summary へ出力します。`buckling-candidate` は観測ラベルであり、相境界ではありません。
+mode fraction、energy/work/dissipation、accepted/rejected `dt`、無次元量、events、
+provenance を compact summary へ出力します。`buckling-candidate` は観測ラベルであり、
+相境界ではありません。
 接触、摩擦、接着、折りたたみは無効のまま維持します。
 
 ```bash

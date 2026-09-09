@@ -25,6 +25,12 @@
     {"name": "fast_growth_large_imperfection", "overrides": {"growth_rate": 0.20, "bending_stiffness": 0.02, "amplitude": 0.05}},
     {"name": "fast_growth_small_imperfection", "overrides": {"growth_rate": 0.20, "bending_stiffness": 0.02, "amplitude": 0.01}}
   ],
+  "contrast_conditions": [
+    {"name": "fast_growth_low_bend_soft_axial", "base_fixture": "fast_growth_low_bend", "factor": "axial_stiffness", "overrides": {"axial_stiffness": 2.5}},
+    {"name": "fast_growth_low_bend_stiff_axial", "base_fixture": "fast_growth_low_bend", "factor": "axial_stiffness", "overrides": {"axial_stiffness": 10.0}},
+    {"name": "fast_growth_low_bend_low_drag", "base_fixture": "fast_growth_low_bend", "factor": "drag_density", "overrides": {"drag_density": 0.5}},
+    {"name": "fast_growth_low_bend_high_drag", "base_fixture": "fast_growth_low_bend", "factor": "drag_density", "overrides": {"drag_density": 2.0}}
+  ],
   "refinement": {
     "base_fixture": "fast_growth_low_bend",
     "n_nodes": [9, 13],

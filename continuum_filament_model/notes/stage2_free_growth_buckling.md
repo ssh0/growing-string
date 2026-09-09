@@ -10,14 +10,39 @@ Stage 2 は、マージ済みの free/free 端点診断を使い、非接触の�
 - 時間刻みと空間解像度
 - 基板 drag
 
-の因果関係を探索する bounded experiment である。入口は
+の因果関係を探索する bounded experiment である。伸長剛性と基板 drag は、
+`fast_growth_low_bend` を基準にした独立の `parameter_contrast` として明示する。
+入口は
 `benchmarks/free_growth_buckling_stage2.py`、既定設定は
 `benchmarks/configs/stage2_free_free.json` である。既存の solver 式や legacy
 model directory は変更しない。
 
 この段階では `contact_stiffness=0`、`diameter=0`、free/free とし、接触、摩擦、
-接着、折りたたみ、局所成長、パラメータ同定は行わない。`buckling-candidate` は
-定義した観測閾値を超えた形態ラベルであり、臨界値・相境界・相転移を意味しない。
+接着、折りたたみ、局所成長、パラメータ同定は行わない。`buckling-candidate` は定義した観測閾値を超えた形態ラベルであり、臨界値・相境界・
+相転移を意味しない。
+
+## 因果 contrast の設計
+
+既定設定では `fast_growth_low_bend` の `growth_rate=0.20`、
+`bending_stiffness=0.02`、`amplitude=0.02`、`n_nodes=9`、`dt=0.002` を固定し、
+次の4条件だけを追加する。
+
+| 条件 | 変更因子 | 値 | 基準値 |
+| --- | --- | ---: | ---: |
+| `fast_growth_low_bend_soft_axial` | `axial_stiffness` | 2.5 | 5.0 |
+| `fast_growth_low_bend_stiff_axial` | `axial_stiffness` | 10.0 | 5.0 |
+| `fast_growth_low_bend_low_drag` | `drag_density` | 0.5 | 1.0 |
+| `fast_growth_low_bend_high_drag` | `drag_density` | 2.0 | 1.0 |
+
+runner は各条件を `run_kind=parameter_contrast` として基準fixture・refinement・
+seed付きreplicateから分離し、条件名、基準fixture、変更因子・値、入力hash、Git revision、
+初期・終状態hash、イベント列hashを保存する。接触剛性・径は全条件で0、境界はfree/free
+のままであり、接触物理は追加しない。
+
+各runには `tau_b=zeta L^4/(EI pi^4)`、`tau_s=zeta L^2/EA`、
+`G_b=growth_rate*tau_b`、`G_s=growth_rate*tau_s`、`chi=EI/(EA L^2)`、
+`dt/tau_b`、`dt/tau_s`、初期mesh比を保存する。これらは次元の異なる入力値を
+比較するための記録量であり、臨界値や同定結果ではない。
 
 ## 再現コマンド
 
@@ -32,8 +57,8 @@ python continuum_filament_model/benchmarks/free_growth_buckling_stage2.py \
   --output "$TMP_DIR"
 ```
 
-既定デザインは、決定論的 fixture、`n_nodes` と `dt` の refinement、seed付きの
-exploratory replicate を別々に実行する。`compact_summary.json` には endpoint
+既定デザインは、決定論的 fixture、独立した parameter contrast、`n_nodes` と `dt` の
+refinement、seed付きの exploratory replicate を別々に実行する。`compact_summary.json` には endpoint
 trajectory と sampled time-series が含まれ、`summary.csv` は比較しやすい1行/実験で
 ある。`compact_manifest.json` は config hash、source revision、各 run の provenance
 を保持する。deterministic fixture/refinement と seeded replicate を同じ統計へ混ぜない。
@@ -93,8 +118,15 @@ overlayからモデル不足・入力品質・数値未収束を区別せずに�
 - `numerical_nonconvergence`：accepted/rejected dt、refinement、event、run failure の問題。
 - fixture と replicate の形態差：seed付き初期 imperfection の分布として保存し、実験ノイズ
   の同定や相境界の証拠とはしない。
+- parameter contrast の形態差：成長率、曲げ剛性、初期 imperfection、`dt`、空間解像度を
+  固定した限定的な因果対照として保存し、他の未探索要因へ一般化しない。
 
 ## 実行済み探索の要約
+
+`results/stage2_free_free/` は contrast 拡張前に保存した18 runのbaseline artifactであり、
+下記の記述には今回追加した4つの `parameter_contrast` の実行結果を含めない。拡張後の
+既定設定を再実行すると、決定論的 fixture/refinement 9 run、parameter contrast 4 run、
+seed付き replicate 9 runの計22 runが新しいcompact summaryへ保存される。
 
 `results/stage2_free_free/` は、source revision
 `187434c4e18a21f3d3bdfc33fb133b7f25570c37`、`t_end=4.0` の18 run（決定論的 fixture・

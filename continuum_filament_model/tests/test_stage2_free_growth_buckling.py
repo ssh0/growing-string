@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from continuum_filament_model.benchmarks.free_growth_buckling_stage2 import (
+    load_config,
     load_config_from_mapping,
     run_suite,
 )
@@ -34,6 +35,25 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             },
             "video_model_case": "fixture",
         }
+
+    def test_default_config_has_independent_axial_and_drag_contrasts(self):
+        config = load_config(
+            Path(__file__).resolve().parents[1] / "benchmarks" / "configs" / "stage2_free_free.json"
+        )
+        conditions = config["contrast_conditions"]
+        self.assertEqual({item["factor"] for item in conditions}, {"axial_stiffness", "drag_density"})
+        self.assertEqual(len(conditions), 4)
+        fixture = next(item for item in config["fixtures"] if item["name"] == "fast_growth_low_bend")
+        baseline = dict(config["base"])
+        baseline.update(fixture["overrides"])
+        controlled = ("growth_rate", "bending_stiffness", "amplitude", "n_nodes", "dt")
+        for condition in conditions:
+            effective = dict(baseline)
+            effective.update(condition["overrides"])
+            self.assertEqual(condition["base_fixture"], "fast_growth_low_bend")
+            self.assertEqual(set(condition["overrides"]), {condition["factor"]})
+            for key in controlled:
+                self.assertEqual(effective[key], baseline[key])
 
     def test_suite_keeps_free_free_diagnostics_and_replicates_separate(self):
         config = load_config_from_mapping(self._config())
@@ -67,7 +87,44 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             ):
                 self.assertIn(key, observable)
             self.assertIn("event_sequence_hash", run_summary["events"])
+            self.assertIn("dimensionless_groups", run_summary)
+            self.assertGreater(run_summary["dimensionless_groups"]["G_s"], 0.0)
             self.assertTrue((Path(directory) / "compact_manifest.json").is_file())
+
+    def test_axial_and_drag_contrasts_preserve_other_experiment_axes(self):
+        config = self._config()
+        config["contrast_conditions"] = [
+            {
+                "name": "soft_axial",
+                "base_fixture": "fixture",
+                "factor": "axial_stiffness",
+                "overrides": {"axial_stiffness": 2.0},
+            },
+            {
+                "name": "high_drag",
+                "base_fixture": "fixture",
+                "factor": "drag_density",
+                "overrides": {"drag_density": 2.0},
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_suite(config, Path(directory))
+            self.assertEqual(report["parameter_contrast_count"], 2)
+            contrasts = [row for row in report["records"] if row["run_kind"] == "parameter_contrast"]
+            self.assertEqual({row["run_name"] for row in contrasts}, {"soft_axial", "high_drag"})
+            for row in contrasts:
+                self.assertFalse(row["phase_boundary_claim"])
+                self.assertEqual(row["n_nodes"], 5)
+                self.assertEqual(row["dt"], 0.001)
+                self.assertEqual(row["growth_rate"], 0.02)
+                self.assertEqual(row["bending_stiffness"], 0.1)
+                result = next(item for item in report["results"] if item["run_name"] == row["run_name"])
+                self.assertEqual(result["contrast_factor"], row["contrast_factor"])
+                self.assertEqual(result["contrast_value"], row["contrast_value"])
+                self.assertEqual(result["provenance"]["base_fixture"], "fixture")
+                self.assertIn("chi", result["dimensionless_groups"])
+                self.assertIn("G_b", result["dimensionless_groups"])
+                self.assertFalse(result["contact_enabled"])
 
     def test_missing_video_is_censored_without_substitution_or_fit(self):
         config = load_config_from_mapping(self._config())

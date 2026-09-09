@@ -2,10 +2,11 @@
 
 This runner is intentionally an experiment harness around the existing
 ``OverdampedGrowingFilament`` API.  It does not add contact, friction, or a
-second solver.  The default design varies growth rate, bending/axial ratio,
+second solver.  The default design varies growth rate, bending/axial ratio, substrate drag,
 initial imperfection, time step, spatial resolution, and seeded initial
-imperfections.  Deterministic fixtures and exploratory replicates are kept in
-separate tables; labels are morphology observations, not phase boundaries.
+imperfections.  Deterministic fixtures, parameter contrasts, and exploratory
+replicates are kept in separate tables; labels are morphology observations, not
+phase boundaries.
 
 Large model trajectories and the raw video-analysis artifacts belong in a
 caller-provided temporary directory.  The suite summary contains only
@@ -96,6 +97,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         {"name": "fast_growth_large_imperfection", "overrides": {"growth_rate": 0.20, "bending_stiffness": 0.02, "amplitude": 0.05}},
         {"name": "fast_growth_small_imperfection", "overrides": {"growth_rate": 0.20, "bending_stiffness": 0.02, "amplitude": 0.01}},
     ],
+    "contrast_conditions": [
+        {"name": "fast_growth_low_bend_soft_axial", "base_fixture": "fast_growth_low_bend", "factor": "axial_stiffness", "overrides": {"axial_stiffness": 2.5}},
+        {"name": "fast_growth_low_bend_stiff_axial", "base_fixture": "fast_growth_low_bend", "factor": "axial_stiffness", "overrides": {"axial_stiffness": 10.0}},
+        {"name": "fast_growth_low_bend_low_drag", "base_fixture": "fast_growth_low_bend", "factor": "drag_density", "overrides": {"drag_density": 0.5}},
+        {"name": "fast_growth_low_bend_high_drag", "base_fixture": "fast_growth_low_bend", "factor": "drag_density", "overrides": {"drag_density": 2.0}},
+    ],
     "refinement": {
         "base_fixture": "fast_growth_low_bend",
         "n_nodes": [9, 13],
@@ -126,6 +133,8 @@ class RunSpec:
     seed: int | None = None
     trial: int = 0
     base_fixture: str | None = None
+    contrast_factor: str | None = None
+    contrast_value: float | None = None
 
 
 def _jsonable(value: Any) -> Any:
@@ -171,6 +180,8 @@ def _merge_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
                 value[key] = merged
             else:
                 value[key] = item
+        if "fixtures" in config and "contrast_conditions" not in config:
+            value["contrast_conditions"] = []
     return value
 
 
@@ -197,6 +208,29 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         raise Stage2Error("fixture names must be unique")
     if len(names) != len(fixtures):
         raise Stage2Error("every fixture requires a name")
+    contrast_conditions = config.get("contrast_conditions", [])
+    if not isinstance(contrast_conditions, list):
+        raise Stage2Error("contrast_conditions must be a list")
+    fixture_names = set(names)
+    condition_names: set[str] = set()
+    allowed_factors = {"axial_stiffness", "drag_density"}
+    for condition in contrast_conditions:
+        if not isinstance(condition, Mapping):
+            raise Stage2Error("contrast conditions require objects")
+        name = str(condition.get("name", ""))
+        base_fixture = str(condition.get("base_fixture", ""))
+        factor = str(condition.get("factor", ""))
+        overrides = condition.get("overrides")
+        if not name or name in fixture_names or name in condition_names:
+            raise Stage2Error("contrast condition names must be unique and not reuse fixture names")
+        if base_fixture not in fixture_names:
+            raise Stage2Error(f"contrast condition references unknown fixture: {base_fixture}")
+        if factor not in allowed_factors or not isinstance(overrides, Mapping) or set(overrides) != {factor}:
+            raise Stage2Error("contrast conditions must vary exactly axial_stiffness or drag_density")
+        value = float(overrides[factor])
+        if not math.isfinite(value) or value <= 0.0:
+            raise Stage2Error(f"contrast {name}.{factor} must be positive and finite")
+        condition_names.add(name)
     refinement = config.get("refinement", {})
     if len(refinement.get("n_nodes", [])) < 2 or len(refinement.get("dt_values", [])) < 2:
         raise Stage2Error("refinement requires at least two spatial resolutions and two time steps")
@@ -225,9 +259,39 @@ def _fixture_specs(config: Mapping[str, Any]) -> list[RunSpec]:
     return result
 
 
+def _contrast_specs(config: Mapping[str, Any], fixtures: Sequence[RunSpec]) -> list[RunSpec]:
+    by_name = {item.name: item for item in fixtures}
+    result: list[RunSpec] = []
+    controlled = ("growth_rate", "bending_stiffness", "amplitude", "n_nodes", "dt")
+    for item in config.get("contrast_conditions", []):
+        name = str(item["name"])
+        base_fixture = str(item["base_fixture"])
+        factor = str(item["factor"])
+        value = float(item["overrides"][factor])
+        base_overrides = dict(by_name[base_fixture].overrides)
+        overrides = {**base_overrides, factor: value}
+        baseline = dict(config["base"])
+        baseline.update(base_overrides)
+        effective = dict(baseline)
+        effective.update({factor: value})
+        for key in controlled:
+            if effective.get(key) != baseline.get(key):
+                raise Stage2Error(f"contrast {name} changes controlled parameter {key}")
+        result.append(RunSpec(
+            name,
+            "parameter_contrast",
+            overrides,
+            base_fixture=base_fixture,
+            contrast_factor=factor,
+            contrast_value=value,
+        ))
+    return result
+
+
 def _all_specs(config: Mapping[str, Any]) -> list[RunSpec]:
     fixtures = _fixture_specs(config)
     result = list(fixtures)
+    result.extend(_contrast_specs(config, fixtures))
     by_name = {item.name: item for item in fixtures}
     refinement = config["refinement"]
     base_name = str(refinement["base_fixture"])
@@ -267,6 +331,8 @@ def _effective(base: Mapping[str, Any], spec: RunSpec) -> dict[str, Any]:
     value["trial"] = spec.trial
     value["run_kind"] = spec.kind
     value["base_fixture"] = spec.base_fixture or spec.name
+    value["contrast_factor"] = spec.contrast_factor
+    value["contrast_value"] = spec.contrast_value
     if value["n_nodes"] < 3 or value["dt"] <= 0.0 or value["t_end"] <= 0.0:
         raise Stage2Error(f"invalid run values for {spec.name}")
     return value
@@ -479,8 +545,34 @@ def _classify(rows: Sequence[Mapping[str, Any]], config: Mapping[str, Any], fail
     }
 
 
+def _dimensionless_groups(config: Mapping[str, Any]) -> dict[str, float | str]:
+    length = float(config["length"])
+    ei = float(config["bending_stiffness"])
+    ea = float(config["axial_stiffness"])
+    zeta = float(config["drag_density"])
+    growth = float(config.get("growth_rate", 0.0))
+    tau_b = zeta * length**4 / (ei * np.pi**4)
+    tau_s = zeta * length**2 / ea
+    chi = ei / (ea * length**2)
+    return {
+        "tau_b": float(tau_b),
+        "tau_s": float(tau_s),
+        "G_b": float(growth * tau_b),
+        "G_s": float(growth * tau_s),
+        "chi": float(chi),
+        "bending_to_axial_ratio": float(chi),
+        "mesh_ratio_initial_dx_over_L": float(1.0 / (int(config["n_nodes"]) - 1)),
+        "dt_over_tau_b": float(float(config["dt"]) / tau_b),
+        "dt_over_tau_s": float(float(config["dt"]) / tau_s),
+        "t_end_over_tau_b": float(float(config["t_end"]) / tau_b),
+        "initial_amplitude_over_L": float(float(config.get("amplitude", 0.0)) / length),
+        "definition": "tau_b=zeta*L^4/(EI*pi^4); tau_s=zeta*L^2/EA; G_b=growth_rate*tau_b; G_s=growth_rate*tau_s; chi=EI/(EA*L^2)",
+    }
+
+
 def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revision: str | None, save_trajectory_file: bool = False) -> dict[str, Any]:
     config = _effective(base_config, spec)
+    groups = _dimensionless_groups(config)
     state = _initial_state(config, spec.seed)
     spacing = float(config["length"]) / (int(config["n_nodes"]) - 1)
     params = ModelParameters(
@@ -527,6 +619,8 @@ def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revisi
         "benchmark": "stage2_free_free_growth_relaxation_buckling",
         "run_kind": spec.kind,
         "base_fixture": spec.base_fixture or spec.name,
+        "contrast_factor": spec.contrast_factor,
+        "contrast_value": spec.contrast_value,
         "seed": spec.seed,
         "trial": spec.trial,
         "boundary": "free/free",
@@ -537,6 +631,8 @@ def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revisi
         "mode_fraction_definition": "squared piecewise-linear arc-length sine coefficients divided by sum of modes 1..6",
         "growth_work_definition": "E(r_before,a_before grown)-E(r_before,a_before)",
         "dissipation_definition": "accepted dt * sum_i(zeta*w_i*|v_i|^2), Euler trajectory estimate",
+        "dimensionless_groups": groups,
+        "contrast_controlled_parameters": ["growth_rate", "bending_stiffness", "amplitude", "n_nodes", "dt"],
         "failure_reason": failure_reason,
     }
     manifest = build_manifest(params, state, final_state=final_state, events=(simulator.event_log if simulator else []), metadata=metadata, input_data=config, git_revision=revision)
@@ -555,6 +651,8 @@ def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revisi
         "run_name": spec.name,
         "run_kind": spec.kind,
         "base_fixture": spec.base_fixture or spec.name,
+        "contrast_factor": spec.contrast_factor,
+        "contrast_value": spec.contrast_value,
         "seed": spec.seed,
         "trial": spec.trial,
         "effective_config": config,
@@ -562,6 +660,7 @@ def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revisi
         "contact_enabled": False,
         "failure_reason": failure_reason,
         "classification": classification,
+        "dimensionless_groups": groups,
         "accepted_steps": int(simulator.accepted_steps) if simulator else 0,
         "rejected_steps": int(simulator.rejected_steps) if simulator else 0,
         "accepted_dt_values": sorted({float(value) for value in (simulator.accepted_dts if simulator else [])}),
@@ -576,6 +675,11 @@ def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revisi
             "event_sequence_hash": compact_events.get("event_sequence_hash"),
             "python_version": manifest.get("python_version"),
             "numpy_version": manifest.get("numpy_version"),
+            "run_kind": spec.kind,
+            "base_fixture": spec.base_fixture or spec.name,
+            "contrast_factor": spec.contrast_factor,
+            "contrast_value": spec.contrast_value,
+            "dimensionless_groups": groups,
         },
         "endpoint_trajectory": endpoint_trajectory,
         "observables": stored_rows,
@@ -601,11 +705,7 @@ def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revisi
 
 def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
     config = result["effective_config"]
-    groups = {
-        "tau_b": float(config["drag_density"] * config["length"] ** 4 / (config["bending_stiffness"] * np.pi**4)),
-        "growth_bending_number": float(config["growth_rate"] * config["drag_density"] * config["length"] ** 4 / (config["bending_stiffness"] * np.pi**4)),
-        "bending_to_axial_ratio": float(config["bending_stiffness"] / (config["axial_stiffness"] * config["length"] ** 2)),
-    }
+    groups = result["dimensionless_groups"]
     classification = result["classification"]
     peak = max(result["observables"], key=lambda row: float(row["max_transverse_amplitude"])) if result["observables"] else {}
     final = result["observables"][-1] if result["observables"] else {}
@@ -613,13 +713,25 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
         "run_name": result["run_name"],
         "run_kind": result["run_kind"],
         "base_fixture": result["base_fixture"],
+        "contrast_factor": result.get("contrast_factor"),
+        "contrast_value": result.get("contrast_value"),
         "seed": result["seed"],
         "trial": result["trial"],
         "growth_rate": config.get("growth_rate"),
         "bending_stiffness": config.get("bending_stiffness"),
         "axial_stiffness": config.get("axial_stiffness"),
+        "drag_density": config.get("drag_density"),
+        "tau_b": groups["tau_b"],
+        "tau_s": groups["tau_s"],
+        "G_b": groups["G_b"],
+        "G_s": groups["G_s"],
+        "chi": groups["chi"],
         "bending_to_axial_ratio": groups["bending_to_axial_ratio"],
-        "growth_bending_number": groups["growth_bending_number"],
+        "growth_bending_number": groups["G_b"],
+        "dt_over_tau_b": groups["dt_over_tau_b"],
+        "dt_over_tau_s": groups["dt_over_tau_s"],
+        "mesh_ratio_initial_dx_over_L": groups["mesh_ratio_initial_dx_over_L"],
+        "initial_amplitude_over_L": groups["initial_amplitude_over_L"],
         "n_nodes": config.get("n_nodes"),
         "dt": config.get("dt"),
         "t_end": config.get("t_end"),
@@ -746,7 +858,8 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         results.append(run_case(spec, effective["base"], output, revision, save_trajectory_file=bool(video_path and spec.name == video_case)))
     rows = [_summary_row(result) for result in results]
     _write_csv(output / "summary.csv", rows)
-    deterministic = [row for row in rows if row["run_kind"] != "exploratory_replicate"]
+    deterministic = [row for row in rows if row["run_kind"] in {"deterministic_fixture", "numerical_refinement"}]
+    contrasts = [row for row in rows if row["run_kind"] == "parameter_contrast"]
     replicates = [row for row in rows if row["run_kind"] == "exploratory_replicate"]
     summary = {
         "schema_version": SCHEMA_VERSION,
@@ -757,10 +870,14 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         "contact_enabled": False,
         "deterministic_fixture_count": len(deterministic),
         "exploratory_replicate_count": len(replicates),
+        "parameter_contrast_count": len(contrasts),
+        "controlled_contrast_parameters": ["growth_rate", "bending_stiffness", "amplitude", "n_nodes", "dt"],
+        "dimensionless_group_definition": _dimensionless_groups(effective["base"])["definition"],
         "records": rows,
         "deterministic_fixtures": deterministic,
+        "parameter_contrasts": contrasts,
         "exploratory_replicates": replicates,
-        "separation_rule": "deterministic_fixture and numerical_refinement rows are never pooled with seeded exploratory_replicate rows",
+        "separation_rule": "deterministic fixtures/refinement, parameter contrasts, and seeded exploratory replicates remain separate populations",
         "classification_scope": "onset and morphology labels only; no phase-boundary claim",
         "unresolved_categories": ["input_quality", "censor", "model_inadequacy", "numerical_nonconvergence"],
         "results": results,
@@ -783,6 +900,9 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         "run_names": [result["run_name"] for result in results],
         "deterministic_fixture_count": len(deterministic),
         "exploratory_replicate_count": len(replicates),
+        "parameter_contrast_count": len(contrasts),
+        "controlled_contrast_parameters": ["growth_rate", "bending_stiffness", "amplitude", "n_nodes", "dt"],
+        "dimensionless_group_definition": _dimensionless_groups(effective["base"])["definition"],
         "contact_enabled": False,
         "phase_boundary_claim": False,
         "artifacts": {path.name: {"bytes": path.stat().st_size, "sha256": sha256_file(path)} for path in (output / "summary.csv", output / "compact_summary.json", output / "effective_config.json")},
