@@ -111,6 +111,28 @@ python continuum_filament_model/benchmarks/time_integration.py
 `dt`、棄却理由を出力します。成長なしの試行はエネルギー非増加を受理条件としますが、
 成長ありでは成長がエネルギーを注入し得るため、単調減少を要求しません。
 
+## Free/free 端点力学ゲート
+
+実験整合を主目的とする境界条件は `free/free` です。端点を固定しない自然境界の
+保存力残差、離散曲げモーメント、shear-equivalent residual は
+`OverdampedGrowingFilament.endpoint_diagnostics()` で取得できます。固定端は既存
+ベンチマークの比較controlとしてのみ扱います。符号規約と受入条件は
+`notes/free_end_dynamics.md` に記録しています。
+
+focused test と bounded benchmark は次で実行します。benchmark は全節点軌跡を保存せず、
+endpoint trajectory、work/dissipation、residual、時間・空間 refinement のcompact summary
+だけを指定した一時ディレクトリへ出力します。接触はこの段階では無効です。
+
+```bash
+PYTHONPATH=continuum_filament_model/src \
+python -m unittest continuum_filament_model.tests.test_free_end_dynamics -v
+
+TMP_DIR=$(mktemp -d /tmp/growing-string-free-end.XXXXXX)
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/benchmarks/free_end_benchmark.py \
+  --output "$TMP_DIR"
+```
+
 ## P0-B：線形mode・時間／空間数値ゲート
 
 現行の非接触モデルについて、端点の**位置だけを固定し、接線は自由**とした離散線形化を検証します。これはクランプ端（位置と接線を固定）ではありません。
