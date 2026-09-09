@@ -60,9 +60,9 @@ python continuum_filament_model/benchmarks/free_growth_buckling_stage2.py \
 
 既定デザインは、決定論的 fixture、独立した parameter contrast、`n_nodes` と `dt` の
 refinement、seed付きの exploratory replicate を別々に実行する。`compact_summary.json` には endpoint
-trajectory と sampled time-series が含まれ、`summary.csv` は比較しやすい1行/実験で
-ある。`compact_manifest.json` は config hash、source revision、各 run の provenance
-を保持する。deterministic fixture/refinement と seeded replicate を同じ統計へ混ぜない。
+trajectory と sampled time-series、各 run の provenance が含まれ、`summary.csv` は比較しやすい
+1行/実験である。`compact_manifest.json` は suite-level の config hash、source revision、run名と
+件数を保持する。deterministic fixture/refinement と seeded replicate を同じ統計へ混ぜない。
 
 ## 記録する観測量
 
@@ -103,7 +103,8 @@ python continuum_filament_model/benchmarks/free_growth_buckling_stage2.py \
 に出力され、Gitへ追加しない。`video_comparison_manifest.json` は入力 hash、ffprobe
 metadata、抽出候補数、lineage/censor、calibration/holdout の状態を compact に記録する。
 入力が存在しない・読めない・中心線契約を満たさない場合は、`input_missing` または
-`unusable` とし、legacy triangular-lattice videoで代用しない。
+`unusable` とし、デコードが完了しない場合も `unusable` として校正済み比較を抑制する。
+legacy triangular-lattice videoで代用しない。
 
 pixel per model unit と time registration は推測しない。定量比較には
 `pixel_per_model_unit`、`time_scale`、`time_offset` の3値を明示する。いずれかが無い場合は
@@ -116,9 +117,11 @@ overlayからモデル不足・入力品質・数値未収束を区別せずに�
 校正済みで `metric_status=computed` の行だけを対象に、`shape_rmse_px > 5.0` または
 `abs(length_difference_px) / model_length_px > 0.25` を `model_inadequacy` 候補として記録する。
 これは候補条件であり、接触物理やモデル不足の確定診断ではない。候補は入力品質/censorと
-別フィールドに保存し、候補行がない・未校正・eligible行がない状態も区別する。動画処理の
-失敗は `missing_ffmpeg`、`decode_or_corrupt_input`、`invalid_format`、`analysis_failure`
-の安定したカテゴリで保存し、絶対パスや例外詳細はcompact成果物へ出さない。選択した
+別フィールドに保存し、候補行がない・未校正・eligible行がない状態も区別する。
+動画処理の失敗は `failure.category` と `failure.domain` に分け、`missing_ffmpeg`、
+`missing_dependency`、`command_execution_failure`、`decode_or_corrupt_input`、
+`invalid_format`、`analysis_failure` などの安定したカテゴリで保存する。絶対パスや例外詳細は
+compact成果物へ出さない。選択した
 モデルrunのfailure・numerically-unresolved分類、または refinement 間の onset/peak/分類の
 不一致は `numerical_nonconvergence` を優先し、動画の観測差を `model_inadequacy` として
 評価しない。
@@ -126,6 +129,7 @@ overlayからモデル不足・入力品質・数値未収束を区別せずに�
 ## 結果の解釈
 
 - `input_quality` / `censor`：動画抽出、lineage、ROI、branch、missing、品質フラグの問題。
+- `execution_environment` / `analysis`：動画pipelineの依存、コマンド実行、解析処理の失敗。
 - `model_inadequacy`：非接触 free/free の仮定で観測差が残る場合。接触が必要だと推測して
   接触 solver をこの Stage 2 に追加せず、観測差を証拠として follow-up に残す。
 - `numerical_nonconvergence`：accepted/rejected dt、refinement、event、run failure の問題。

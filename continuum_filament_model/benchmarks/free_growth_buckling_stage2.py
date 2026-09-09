@@ -950,7 +950,6 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
     config = result["effective_config"]
     groups = result["dimensionless_groups"]
     classification = result["classification"]
-    peak = max(result["observables"], key=lambda row: float(row["max_transverse_amplitude"])) if result["observables"] else {}
     final = result["observables"][-1] if result["observables"] else {}
     return {
         "run_name": result["run_name"],
