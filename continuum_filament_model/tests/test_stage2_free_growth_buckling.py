@@ -100,6 +100,9 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertIn("chi", run_summary["dimensionless_groups"])
             self.assertNotIn("bending_to_axial_ratio", run_summary["dimensionless_groups"])
             persisted = json.loads((Path(directory) / "compact_summary.json").read_text(encoding="utf-8"))
+            summary_fields = (Path(directory) / "summary.csv").read_text(encoding="utf-8").splitlines()[0].split(",")
+            self.assertIn("G_b", summary_fields)
+            self.assertNotIn("growth_bending_number", summary_fields)
             persisted_run = next(item for item in persisted["results"] if item["run_name"] == "fixture")
             self.assertNotIn("observables", persisted_run)
             self.assertLessEqual(len(persisted_run["endpoint_trajectory"]), 32)
@@ -416,13 +419,15 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
         self.assertEqual(status["status"], "numerically_unresolved")
         self.assertIn("video_model_refinement_missing", status["reasons"])
 
-    def test_fractional_replicate_seed_is_rejected_before_conversion(self):
-        config = self._config()
-        config["replicates"]["seeds"] = [1.5, 2]
-        with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaises(ValueError):
-                run_suite(config, Path(directory))
-            self.assertFalse((Path(directory) / "_runs").exists())
+    def test_unsupported_replicate_seed_is_rejected_before_conversion(self):
+        for seeds in ([1.5, 2], [-1, 2], [2**32, 2]):
+            with self.subTest(seeds=seeds):
+                config = self._config()
+                config["replicates"]["seeds"] = list(seeds)
+                with tempfile.TemporaryDirectory() as directory:
+                    with self.assertRaises(ValueError):
+                        run_suite(config, Path(directory))
+                    self.assertFalse((Path(directory) / "_runs").exists())
 
     def test_invalid_refinement_nodes_are_rejected_before_spec_generation(self):
         config = self._config()
@@ -527,6 +532,21 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
                 self.assertEqual(record["error"], category)
                 self.assertIsNone(record["numerical_unresolved"]["category"])
                 self.assertNotIn(str(root.resolve()), json.dumps(record))
+
+    def test_video_failure_hashing_is_best_effort(self):
+        from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            video = root / "input.mp4"
+            video.write_bytes(b"video")
+            with patch.object(stage2, "run_pipeline", side_effect=RuntimeError("analysis failed")), patch.object(
+                stage2, "sha256_file", side_effect=OSError("input became unreadable")
+            ):
+                record = stage2.run_video_comparison(video, root / "output", root / "model.npz", self._config())
+            self.assertEqual(record["failure"], {"category": "analysis_failure", "domain": "analysis"})
+            self.assertIsNone(record["input_sha256"])
+            self.assertEqual(record["status"], "unusable")
 
     def test_missing_video_is_censored_without_substitution_or_fit(self):
         config = load_config_from_mapping(self._config())

@@ -180,6 +180,13 @@ def _validate_integer_at_least(value: Any, minimum: int, context: str) -> int:
     return number
 
 
+def _validate_seed(value: Any, context: str) -> int:
+    seed = _validate_integer(value, context)
+    if not 0 <= seed < 2**32:
+        raise Stage2Error(f"{context} must be in [0, 2**32)")
+    return seed
+
+
 def _validate_positive_finite(value: Any, context: str) -> float:
     try:
         number = float(value)
@@ -411,7 +418,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     for index, dt in enumerate(refinement["dt_values"]):
         _validate_positive_finite(dt, f"refinement.dt_values[{index}]")
     rep = config.get("replicates", {})
-    seeds = [_validate_integer(seed, f"replicates.seeds[{index}]") for index, seed in enumerate(rep.get("seeds", []))]
+    seeds = [_validate_seed(seed, f"replicates.seeds[{index}]") for index, seed in enumerate(rep.get("seeds", []))]
     if len(seeds) != len(set(seeds)):
         raise Stage2Error("replicate seeds must be unique")
     if not 0.0 <= float(rep.get("noise_fraction", 0.0)) <= 1.0:
@@ -955,7 +962,6 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
         "G_b": groups["G_b"],
         "G_s": groups["G_s"],
         "chi": groups["chi"],
-        "growth_bending_number": groups["G_b"],
         "dt_over_tau_b": groups["dt_over_tau_b"],
         "dt_over_tau_s": groups["dt_over_tau_s"],
         "mesh_ratio_initial_dx_over_L": groups["mesh_ratio_initial_dx_over_L"],
@@ -1126,6 +1132,13 @@ def _model_inadequacy_assessment(
     result["candidates"] = candidates[:64]
     result["candidate_rows_truncated"] = len(candidates) > 64
     return result
+
+
+def _best_effort_file_hash(path: Path) -> str | None:
+    try:
+        return sha256_file(path)
+    except (OSError, ValueError):
+        return None
 
 
 def _video_failure_category(exc: BaseException) -> tuple[str, str]:
@@ -1368,7 +1381,7 @@ def run_video_comparison(
             "schema_version": SCHEMA_VERSION,
             "status": "unusable",
             "input_logical_id": source.name,
-            "input_sha256": sha256_file(source),
+            "input_sha256": _best_effort_file_hash(source),
             "data_quality": {
                 "usable": False,
                 "censor": True,

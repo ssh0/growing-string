@@ -46,8 +46,9 @@ seed付きreplicateから分離し、条件名、基準fixture、変更因子・
 
 ## 再現コマンド
 
-リポジトリルートで実行する。全 run の節点軌跡、イベント、動画中間生成物は指定した
-出力ディレクトリに置かれるため、通常は `/tmp` を使う。
+リポジトリルートで実行する。通常実行では各runのmetrics.csv・events・manifestとcompact結果を指定した
+出力ディレクトリに置き、`--video` 指定時だけ選択した `video_model_case` の節点軌跡を保存する。
+動画中間生成物と軌跡は大きいため、通常は `/tmp` を使う。
 
 ```bash
 TMP_DIR=$(mktemp -d /tmp/growing-string-stage2.XXXXXX)
@@ -136,7 +137,7 @@ overlayからモデル不足・入力品質・数値未収束を区別せずに�
 ## 実行済み探索の要約
 
 `results/stage2_free_free/` は、source revision
-`0f7ebc54e357e7b73102b1bcb3b788258a7f17a7`、`t_end=4.0` の22 run（決定論的 fixture 5、
+`70b775ffb89a42a19eb2f3c508e284a8a67c5c8e`、`t_end=4.0` の22 run（決定論的 fixture 5、
 refinement 4、parameter contrast 4、seed付き replicate 9）をcompactに保存する。全runは
 `contact_enabled=false`、失敗0、拒否0であった。決定論的な fast-growth/low-bend 条件は
 `t≈3.30` に定義した onset を通過し、`n_nodes=9,13` と `dt=0.002,0.001` の4 refinement
