@@ -847,7 +847,6 @@ class OverdampedGrowingFilament:
                 "outward_tangent": outward_tangent.tolist(),
                 "outward_normal": outward_normal.tolist(),
                 "force_residual": force.tolist(),
-                "internal_force": force.tolist(),
                 "force_residual_norm": float(np.linalg.norm(force)),
                 "stretch_force": stretch_forces[index].tolist(),
                 "bending_force": bending_forces[index].tolist(),
