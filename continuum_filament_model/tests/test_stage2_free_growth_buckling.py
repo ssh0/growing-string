@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from continuum_filament_model.benchmarks.free_growth_buckling_stage2 import (
     load_config,
@@ -155,6 +157,55 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertFalse(video["legacy_video_substitution"])
             self.assertEqual(video["calibration"]["runs"], [])
             self.assertEqual(video["holdout"]["runs"], [])
+            trajectory = next(item for item in report["results"] if item.get("trajectory_path"))
+            self.assertFalse(Path(trajectory["trajectory_path"]).is_absolute())
+
+    def test_video_compact_record_normalizes_external_paths(self):
+        from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "output"
+            video = root / "source" / "input.mp4"
+            video.parent.mkdir()
+            video.write_bytes(b"video")
+            artifact_dir = output / "_video_artifacts"
+            model_path = output / "_runs" / "fixture" / "trajectory.npz"
+            extraction = {
+                "manifest": {
+                    "input": {
+                        "metadata": {"path": str(video.resolve()), "width": 10, "height": 10},
+                    },
+                    "processed_frames": 1,
+                    "candidate_count": 1,
+                    "candidate_censor_count": 0,
+                    "selected_filament_id": "filament-0000",
+                },
+                "validation": {"valid": True},
+                "summary_rows": [{"frame": 0}],
+            }
+            comparison = {
+                "summary": {
+                    "observation_dir": str(artifact_dir.resolve()),
+                    "model_path": str(model_path.resolve()),
+                    "model_logical_id": model_path.name,
+                    "rows": 1,
+                },
+            }
+            with patch.object(stage2, "run_pipeline", return_value=extraction), patch.object(
+                stage2, "compare_with_model", return_value=comparison
+            ), patch.object(stage2, "sha256_file", return_value="hash"):
+                record = stage2.run_video_comparison(video, output, model_path, self._config())
+            serialized = json.dumps(record)
+            persisted = (output / "video_comparison_manifest.json").read_text(encoding="utf-8")
+            self.assertNotIn(str(root.resolve()), serialized)
+            self.assertNotIn(str(root.resolve()), persisted)
+            self.assertEqual(record["video_metadata"]["path"], video.name)
+            self.assertEqual(record["holdout"]["comparison"]["observation_dir"], "_video_artifacts")
+            self.assertEqual(
+                record["holdout"]["comparison"]["model_path"],
+                "_runs/fixture/trajectory.npz",
+            )
 
 
 if __name__ == "__main__":

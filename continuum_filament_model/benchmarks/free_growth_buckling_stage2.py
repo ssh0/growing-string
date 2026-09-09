@@ -692,7 +692,7 @@ def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revisi
     if save_trajectory_file and simulator is not None:
         save_trajectory(run_dir / "trajectory.npz", trajectory, params, metadata=metadata, events=simulator.event_log, manifest=manifest, input_data=config)
         result["trajectory_saved"] = True
-        result["trajectory_path"] = str((run_dir / "trajectory.npz").resolve())
+        result["trajectory_path"] = str((run_dir / "trajectory.npz").relative_to(output))
         _write_json(run_dir / "summary.json", result)
     return result
 
@@ -748,6 +748,30 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _output_relative_path(path: str | Path, output: Path) -> str:
+    candidate = Path(path).expanduser()
+    try:
+        return candidate.resolve().relative_to(output.expanduser().resolve()).as_posix()
+    except (OSError, ValueError):
+        return candidate.name
+
+
+def _compact_video_metadata(metadata: Mapping[str, Any] | None, logical_id: str) -> dict[str, Any]:
+    value = dict(metadata or {})
+    if "path" in value:
+        value["path"] = logical_id
+    return value
+
+
+def _compact_comparison_summary(summary: Mapping[str, Any], output: Path, artifact_dir: Path, model_path: Path) -> dict[str, Any]:
+    value = dict(summary)
+    if "observation_dir" in value:
+        value["observation_dir"] = _output_relative_path(artifact_dir, output)
+    if "model_path" in value:
+        value["model_path"] = _output_relative_path(model_path, output)
+    return value
+
+
 def run_video_comparison(video_path: str | Path, output: Path, model_path: Path, config: Mapping[str, Any], registration: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Run the existing video pipeline and return a compact QC-only record.
 
@@ -798,7 +822,9 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
             "input_logical_id": source.name,
             "input_sha256": sha256_file(source),
             "input_bytes": source.stat().st_size,
-            "video_metadata": video_manifest.get("input", {}).get("metadata"),
+            "video_metadata": _compact_video_metadata(
+                video_manifest.get("input", {}).get("metadata"), source.name
+            ),
             "extraction": {
                 "processed_frames": video_manifest.get("processed_frames"),
                 "candidate_count": video_manifest.get("candidate_count"),
@@ -816,7 +842,9 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
             "holdout": {
                 "status": "comparison_only_uncalibrated" if usable else "censored",
                 "model_logical_id": model_path.name,
-                "comparison": comparison_summary,
+                "comparison": _compact_comparison_summary(
+                    comparison_summary, output, artifact_dir, model_path
+                ),
                 "supported_observables": ["observed_length_px", "observed_endpoint_distance_px", "observed_curvature_mean_px_inv", "observed_curvature_max_px_inv", "temporal_frame_coverage"],
                 "quantitative_model_overlay": "suppressed_without_pixel_per_model_unit_or_uncensored_centerline",
             },
@@ -835,7 +863,7 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
             "holdout": {"status": "not_run_pipeline_error", "runs": []},
             "quantitative_fitting": "suppressed",
             "legacy_video_substitution": False,
-            "error": str(exc),
+            "error": type(exc).__name__,
         }
     _write_json(compact_path, record)
     return record
@@ -880,9 +908,13 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
     }
     if video_path is not None:
         selected = next((result for result in results if result["run_name"] == video_case), None)
-        if selected is None or not selected.get("trajectory_path"):
+        trajectory_value = selected.get("trajectory_path") if selected is not None else None
+        if not trajectory_value:
             raise Stage2Error(f"video_model_case has no saved trajectory: {video_case}")
-        summary["video_comparison"] = run_video_comparison(video_path, output, Path(selected["trajectory_path"]), effective, registration)
+        trajectory_path = Path(str(trajectory_value))
+        if trajectory_path.is_absolute():
+            raise Stage2Error("video trajectory path must be output-relative")
+        summary["video_comparison"] = run_video_comparison(video_path, output, output / trajectory_path, effective, registration)
     _write_json(output / "compact_summary.json", summary)
     _write_json(output / "effective_config.json", effective)
     manifest = {
