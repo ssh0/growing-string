@@ -915,15 +915,6 @@ class OverdampedGrowingFilament:
         )
         return endpoint_values
 
-    def boundary_diagnostics(
-        self,
-        positions: Optional[Array] = None,
-        rest_lengths: Optional[Array] = None,
-    ) -> Dict[str, object]:
-        """Alias for :meth:`endpoint_diagnostics` used by benchmark reports."""
-
-        return self.endpoint_diagnostics(positions, rest_lengths)
-
     def _apply_boundary_conditions(self, positions: Array, velocities: Array) -> None:
         if self.parameters.fixed_left:
             positions[0] = self.left_anchor
