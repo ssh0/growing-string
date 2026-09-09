@@ -1275,7 +1275,8 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         results.append(run_case(spec, effective["base"], output, revision, save_trajectory_file=bool(video_path and spec.name == video_case)))
     rows = [_summary_row(result) for result in results]
     _write_csv(output / "summary.csv", rows)
-    deterministic = [row for row in rows if row["run_kind"] in {"deterministic_fixture", "numerical_refinement"}]
+    deterministic_fixtures = [row for row in rows if row["run_kind"] == "deterministic_fixture"]
+    numerical_refinements = [row for row in rows if row["run_kind"] == "numerical_refinement"]
     contrasts = [row for row in rows if row["run_kind"] == "parameter_contrast"]
     replicates = [row for row in rows if row["run_kind"] == "exploratory_replicate"]
     summary = {
@@ -1285,13 +1286,15 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         "config_sha256": hashlib.sha256(canonical_json_bytes(effective)).hexdigest(),
         "boundary": "free/free",
         "contact_enabled": False,
-        "deterministic_fixture_count": len(deterministic),
+        "deterministic_fixture_count": len(deterministic_fixtures),
+        "numerical_refinement_count": len(numerical_refinements),
         "exploratory_replicate_count": len(replicates),
         "parameter_contrast_count": len(contrasts),
         "controlled_contrast_parameters": ["growth_rate", "bending_stiffness", "amplitude", "n_nodes", "dt"],
         "dimensionless_group_definition": _dimensionless_groups(effective["base"])["definition"],
         "records": rows,
-        "deterministic_fixtures": deterministic,
+        "deterministic_fixtures": deterministic_fixtures,
+        "numerical_refinements": numerical_refinements,
         "parameter_contrasts": contrasts,
         "exploratory_replicates": replicates,
         "separation_rule": "deterministic fixtures/refinement, parameter contrasts, and seeded exploratory replicates remain separate populations",
@@ -1334,7 +1337,8 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         "config_sha256": summary["config_sha256"],
         "run_count": len(results),
         "run_names": [result["run_name"] for result in results],
-        "deterministic_fixture_count": len(deterministic),
+        "deterministic_fixture_count": len(deterministic_fixtures),
+        "numerical_refinement_count": len(numerical_refinements),
         "exploratory_replicate_count": len(replicates),
         "parameter_contrast_count": len(contrasts),
         "controlled_contrast_parameters": ["growth_rate", "bending_stiffness", "amplitude", "n_nodes", "dt"],
