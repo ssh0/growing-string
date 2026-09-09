@@ -1310,12 +1310,16 @@ def run_video_comparison(
         extraction = run_pipeline(source, artifact_dir, SegmentationConfig.from_mapping(video_cfg), command_line=["stage2", "extract", "${INPUT_VIDEO}", "${OUTPUT_DIR}"])
         video_manifest = extraction["manifest"]
         validation = extraction["validation"]
-        usable = bool(validation.get("valid")) and bool(extraction.get("summary_rows"))
+        frame_range = (video_manifest.get("run") or {}).get("frame_range") or {}
+        decode_complete = bool(frame_range.get("decode_complete", True))
+        usable = bool(validation.get("valid")) and bool(extraction.get("summary_rows")) and decode_complete
         reasons: list[str] = []
         if not validation.get("valid"):
             reasons.append("centerline_contract_invalid")
         if not extraction.get("summary_rows"):
             reasons.append("no_centerline_candidates")
+        if not decode_complete:
+            reasons.append("decode_incomplete")
         if int(video_manifest.get("candidate_censor_count", 0)) > 0:
             reasons.append("candidate_quality_censor_present")
         registration_mapping, registration_value, missing_registration_fields, invalid_registration_fields = _parse_registration(registration)
@@ -1367,6 +1371,7 @@ def run_video_comparison(
                 "candidate_count": video_manifest.get("candidate_count"),
                 "candidate_censor_count": video_manifest.get("candidate_censor_count"),
                 "selected_filament_id": video_manifest.get("selected_filament_id"),
+                "decode_complete": decode_complete,
                 "validation": validation,
                 "artifact_dir_external": True,
                 "external_artifacts": _external_video_artifacts(artifact_dir, video_manifest),

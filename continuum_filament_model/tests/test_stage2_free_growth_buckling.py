@@ -327,6 +327,39 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertEqual(record["holdout"]["quantitative_model_overlay"], "suppressed_registered_input_quality")
             self.assertIn("centerline_contract_invalid", record["data_quality"]["reasons"])
 
+    def test_incomplete_decode_suppresses_calibrated_comparison(self):
+        from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "output"
+            video = root / "input.mp4"
+            video.write_bytes(b"video")
+            extraction = {
+                "manifest": {
+                    "input": {"metadata": {"path": str(video.resolve())}},
+                    "run": {"frame_range": {"decode_complete": False}},
+                    "candidate_censor_count": 0,
+                    "selected_filament_id": "filament-0000",
+                },
+                "validation": {"valid": True},
+                "summary_rows": [{"frame": 0}],
+            }
+            with patch.object(stage2, "run_pipeline", return_value=extraction), patch.object(
+                stage2, "compare_with_model", side_effect=AssertionError("incomplete decode must not be compared")
+            ):
+                record = stage2.run_video_comparison(
+                    video,
+                    output,
+                    output / "model.npz",
+                    self._config(),
+                    registration={"pixel_per_model_unit": 10.0, "time_scale": 1.0, "time_offset": 0.0},
+                )
+            self.assertEqual(record["holdout"]["status"], "calibrated_but_input_unusable")
+            self.assertEqual(record["model_inadequacy"]["status"], "not_assessed_no_eligible_rows")
+            self.assertIn("decode_incomplete", record["data_quality"]["reasons"])
+            self.assertEqual(record["extraction"]["decode_complete"], False)
+
     def test_missing_time_registration_suppresses_model_comparison(self):
         from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
 
