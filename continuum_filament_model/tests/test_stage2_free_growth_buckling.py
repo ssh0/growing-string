@@ -94,6 +94,12 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertGreater(run_summary["dimensionless_groups"]["G_s"], 0.0)
             self.assertIn("chi", run_summary["dimensionless_groups"])
             self.assertNotIn("bending_to_axial_ratio", run_summary["dimensionless_groups"])
+            persisted = json.loads((Path(directory) / "compact_summary.json").read_text(encoding="utf-8"))
+            persisted_run = next(item for item in persisted["results"] if item["run_name"] == "fixture")
+            self.assertNotIn("observables", persisted_run)
+            self.assertLessEqual(len(persisted_run["endpoint_trajectory"]), 32)
+            self.assertGreaterEqual(len(persisted_run["diagnostic_observations"]), 2)
+            self.assertLessEqual(len(persisted_run["diagnostic_observations"]), 3)
             self.assertTrue((Path(directory) / "compact_manifest.json").is_file())
 
     def test_axial_and_drag_contrasts_preserve_other_experiment_axes(self):

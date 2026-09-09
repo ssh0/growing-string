@@ -468,6 +468,45 @@ def _sample_rows(rows: Sequence[Mapping[str, Any]], maximum: int) -> list[dict[s
     return [dict(rows[index]) for index in sorted(indices)]
 
 
+def _downsample_rows(rows: Sequence[Mapping[str, Any]], maximum: int) -> list[dict[str, Any]]:
+    """Downsample a compact sequence without assuming metric columns."""
+
+    if len(rows) <= maximum:
+        return [dict(row) for row in rows]
+    indices = sorted(set(np.linspace(0, len(rows) - 1, maximum, dtype=int).tolist()))
+    return [dict(rows[index]) for index in indices]
+
+
+def _compact_persisted_result(result: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep Git-facing suite JSON bounded while retaining diagnostic evidence."""
+
+    value = {key: item for key, item in result.items() if key != "observables"}
+    endpoint = result.get("endpoint_trajectory", [])
+    value["endpoint_trajectory"] = _downsample_rows(endpoint, 32)
+    observations = list(result.get("observables", []))
+    if observations:
+        selected = [observations[0], max(observations, key=lambda row: float(row["max_transverse_amplitude"])), observations[-1]]
+        unique: list[dict[str, Any]] = []
+        seen_times: set[float] = set()
+        for row in selected:
+            time_value = float(row["time"])
+            if time_value not in seen_times:
+                unique.append(dict(row))
+                seen_times.add(time_value)
+        value["diagnostic_observations"] = unique
+    else:
+        value["diagnostic_observations"] = []
+    value["persistence_policy"] = "full observables remain in external _runs metrics.csv; Git compact summary keeps first/peak/final diagnostic observations and max 32 endpoint rows"
+    return value
+
+
+def _compact_persisted_summary(summary: Mapping[str, Any]) -> dict[str, Any]:
+    value = dict(summary)
+    value["results"] = [_compact_persisted_result(result) for result in summary.get("results", [])]
+    value["persistence_policy"] = "Git-facing compact summary; full per-run observables/events/trajectories remain external"
+    return value
+
+
 def _compact_events(events: Sequence[Mapping[str, Any]], model: OverdampedGrowingFilament) -> dict[str, Any]:
     rejections = [event for event in events if event.get("event_type") == "step_attempt" and event.get("accepted") is False]
     rejection_counts = Counter(str(event.get("reason")) for event in rejections)
@@ -1201,7 +1240,7 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         video_record["config_sha256"] = summary["config_sha256"]
         summary["video_comparison"] = video_record
         _write_json(output / "video_comparison_manifest.json", video_record)
-    _write_json(output / "compact_summary.json", summary)
+    _write_json(output / "compact_summary.json", _compact_persisted_summary(summary))
     _write_json(output / "effective_config.json", effective)
     artifact_paths = [output / "summary.csv", output / "compact_summary.json", output / "effective_config.json"]
     if video_path is not None:
