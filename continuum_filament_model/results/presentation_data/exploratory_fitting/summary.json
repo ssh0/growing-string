@@ -206,6 +206,13 @@
       "time_unit": "selected observation time"
     }
   },
+  "boundary_diagnostics": {
+    "G_b_lower": 0.2,
+    "G_b_upper": 2.5,
+    "best_at_G_b_lower": false,
+    "best_at_G_b_upper": true,
+    "interpretation": "A best candidate on either G_b boundary requires expanding the search range before physical interpretation."
+  },
   "data_quality": {
     "all_selected_frames_censored": true,
     "censored_frame_count": 2,

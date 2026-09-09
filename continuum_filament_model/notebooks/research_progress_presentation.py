@@ -928,7 +928,10 @@ def _(exploratory_summary, mo, plt, result_paths):
                 特徴量損失の減少は **{_improvement['feature_loss_reduction']:.4g}** である。
                 `n_nodes` は **{exploratory_summary['search']['n_nodes']}**、固定最良パラメータでの
                 mesh感度確認は **{[row['n_nodes'] for row in _resolution]}** であり、各解像度での
-               独立再最適化や収束証明ではない。
+                独立再最適化や収束証明ではない。`G_b` 探索の最良候補は範囲端点
+                （下限=`{exploratory_summary['boundary_diagnostics']['best_at_G_b_lower']}`、
+                上限=`{exploratory_summary['boundary_diagnostics']['best_at_G_b_upper']}`）であり、
+                範囲外の探索なしに物理的な最適値とは解釈しない。
 
                 選択フレームの `censor` は **{_target['censor']}**、選択フレームの
                 **{_quality['censored_frame_count']}/{_quality['selected_frame_count']}** がcensor付き、

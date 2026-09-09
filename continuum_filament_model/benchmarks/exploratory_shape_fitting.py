@@ -978,6 +978,13 @@ def run_exploratory_fit(
             "model_nondimensionalisation": "EA=1, zeta=1, EI=chi*EA*L^2; growth_rate=G_b/tau_b",
         },
         "resolution_sensitivity": resolution_rows,
+        "boundary_diagnostics": {
+            "G_b_lower": min(gb_values),
+            "G_b_upper": max(gb_values),
+            "best_at_G_b_lower": bool(abs(best.G_b - min(gb_values)) <= 1.0e-12),
+            "best_at_G_b_upper": bool(abs(best.G_b - max(gb_values)) <= 1.0e-12),
+            "interpretation": "A best candidate on either G_b boundary requires expanding the search range before physical interpretation.",
+        },
         "best_fit": {
             "G_b": best.G_b,
             "chi": best.chi,
