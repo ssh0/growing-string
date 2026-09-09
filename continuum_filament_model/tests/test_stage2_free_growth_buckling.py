@@ -304,6 +304,7 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
                     ({"pixel_per_model_unit": 10.0, "time_scale": "bad", "time_offset": 0.0}, "time_scale"),
                     ({"pixel_per_model_unit": 10.0, "time_scale": float("nan"), "time_offset": 0.0}, "time_scale"),
                     ({"pixel_per_model_unit": "bad", "time_scale": 1.0, "time_offset": 0.0}, "pixel_per_model_unit"),
+                    ({"pixel_per_model_unit": 10.0, "time_scale": 1.0, "time_offset": 0.0, "endpoint_order": []}, "endpoint_order"),
                 ):
                     with self.subTest(registration=registration):
                         record = stage2.run_video_comparison(
@@ -321,6 +322,14 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
                             field in comparison["registration_missing_fields"]
                             or field in comparison["registration_invalid_fields"]
                         )
+
+    def test_invalid_max_displacement_fraction_is_rejected_as_configuration_error(self):
+        config = self._config()
+        config["base"]["max_displacement_fraction"] = 2.0
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                run_suite(config, Path(directory))
+            self.assertFalse((Path(directory) / "_runs").exists())
 
     def test_generated_run_name_collisions_are_rejected_before_execution(self):
         config = self._config()

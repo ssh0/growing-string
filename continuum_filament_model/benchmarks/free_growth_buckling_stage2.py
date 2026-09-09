@@ -153,6 +153,16 @@ def _validate_run_name(name: str, context: str = "run") -> str:
     return name
 
 
+def _validate_max_displacement_fraction(value: Any, context: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise Stage2Error(f"{context}.max_displacement_fraction must be finite and in (0, 1]") from exc
+    if not math.isfinite(number) or not 0.0 < number <= 1.0:
+        raise Stage2Error(f"{context}.max_displacement_fraction must be finite and in (0, 1]")
+    return number
+
+
 def _registration_record(value: Mapping[str, Any] | None) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         return {}
@@ -201,7 +211,7 @@ def _parse_registration(
         normalized[field] = number
     if "endpoint_order" in registration:
         endpoint_order = registration["endpoint_order"]
-        if endpoint_order not in {"auto", "forward", "reverse"}:
+        if not isinstance(endpoint_order, str) or endpoint_order not in {"auto", "forward", "reverse"}:
             invalid.append("endpoint_order")
         else:
             normalized["endpoint_order"] = endpoint_order
@@ -291,8 +301,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
             raise Stage2Error(f"base.{key} must be positive")
     if base.get("rest_length_mode", "geometric_initial") not in {"geometric_initial", "projected_spacing"}:
         raise Stage2Error("base.rest_length_mode must be geometric_initial or projected_spacing")
-    if float(base.get("max_displacement_fraction", 1.0)) <= 0.0:
-        raise Stage2Error("base.max_displacement_fraction must be positive")
+    _validate_max_displacement_fraction(base.get("max_displacement_fraction", 1.0), "base")
     fixtures = config.get("fixtures", [])
     if not isinstance(fixtures, list) or not fixtures:
         raise Stage2Error("at least one deterministic fixture is required")
@@ -431,6 +440,9 @@ def _effective(base: Mapping[str, Any], spec: RunSpec) -> dict[str, Any]:
     value["n_nodes"] = int(value["n_nodes"])
     value["dt"] = float(value["dt"])
     value["t_end"] = float(value["t_end"])
+    value["max_displacement_fraction"] = _validate_max_displacement_fraction(
+        value.get("max_displacement_fraction", 1.0), f"run {spec.name}"
+    )
     value["seed"] = spec.seed
     value["trial"] = spec.trial
     value["run_kind"] = spec.kind
