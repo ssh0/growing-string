@@ -433,7 +433,9 @@ def _bending_boundary_data(
     local_reference_lengths = 0.5 * (rest_lengths[:-1] + rest_lengths[1:])
     jumps = tangents[1:] - tangents[:-1]
     left_vector = (bending_stiffness / local_reference_lengths[0]) * jumps[0]
-    right_vector = -(bending_stiffness / local_reference_lengths[-1]) * jumps[-1]
+    right_vector = (
+        -(bending_stiffness / local_reference_lengths[-1]) * jumps[-1]
+    )
     return (
         left_vector,
         right_vector,
@@ -804,12 +806,22 @@ class OverdampedGrowingFilament:
         boundary condition.
         """
 
-        p = self.state.positions if positions is None else np.asarray(positions, dtype=float)
-        a = self.state.rest_lengths if rest_lengths is None else np.asarray(rest_lengths, dtype=float)
+        p = (
+            self.state.positions
+            if positions is None
+            else np.asarray(positions, dtype=float)
+        )
+        a = (
+            self.state.rest_lengths
+            if rest_lengths is None
+            else np.asarray(rest_lengths, dtype=float)
+        )
         if p.shape != (len(a) + 1, 2):
             raise ModelError("incompatible positions and rest_lengths")
         if len(a) < 2:
-            raise ModelError("at least three nodes are required for endpoint diagnostics")
+            raise ModelError(
+                "at least three nodes are required for endpoint diagnostics"
+            )
 
         total_forces = self.forces(p, a)
         stretch_forces = np.zeros_like(p)
@@ -826,9 +838,12 @@ class OverdampedGrowingFilament:
             p, a, self.parameters.bending_stiffness
         )
         contact_forces = total_forces - stretch_forces - bending_forces
-        left_moment_vector, right_moment_vector, left_moment, right_moment = (
-            _bending_boundary_data(p, a, self.parameters.bending_stiffness)
-        )
+        (
+            left_moment_vector,
+            right_moment_vector,
+            left_moment,
+            right_moment,
+        ) = _bending_boundary_data(p, a, self.parameters.bending_stiffness)
 
         def endpoint(
             index: int,
@@ -836,7 +851,9 @@ class OverdampedGrowingFilament:
             moment_vector: Array,
             moment: float,
         ) -> dict[str, object]:
-            outward_tangent = material_tangent if index == len(p) - 1 else -material_tangent
+            outward_tangent = (
+                material_tangent if index == len(p) - 1 else -material_tangent
+            )
             outward_normal = np.asarray(
                 [-outward_tangent[1], outward_tangent[0]], dtype=float
             )
@@ -852,7 +869,9 @@ class OverdampedGrowingFilament:
                 "bending_force": bending_forces[index].tolist(),
                 "contact_force": contact_forces[index].tolist(),
                 "axial_force_residual": float(np.dot(force, outward_tangent)),
-                "shear_equivalent_residual": float(np.dot(force, outward_normal)),
+                "shear_equivalent_residual": float(
+                    np.dot(force, outward_normal)
+                ),
                 "bending_shear_equivalent": float(
                     np.dot(bending_forces[index], outward_normal)
                 ),
@@ -878,14 +897,22 @@ class OverdampedGrowingFilament:
         net_force = np.sum(total_forces, axis=0)
         origin = p[0]
         net_torque = float(
-            np.sum([_cross_z(position - origin, force)
-                    for position, force in zip(p, total_forces)])
+            np.sum(
+                [
+                    _cross_z(position - origin, force)
+                    for position, force in zip(p, total_forces)
+                ]
+            )
         )
         endpoint_values.update(
             {
                 "boundary_condition": {
-                    "left": "fixed" if self.parameters.fixed_left else "free",
-                    "right": "fixed" if self.parameters.fixed_right else "free",
+                    "left": (
+                        "fixed" if self.parameters.fixed_left else "free"
+                    ),
+                    "right": (
+                        "fixed" if self.parameters.fixed_right else "free"
+                    ),
                 },
                 "contact_enabled": bool(
                     self.parameters.contact_stiffness > 0.0
@@ -905,10 +932,22 @@ class OverdampedGrowingFilament:
                 ),
                 "contact_force_norm": float(np.linalg.norm(contact_forces)),
                 "definition": {
-                    "force_residual": "-dE/dr_endpoint; zero is the natural free-end force condition",
-                    "bending_moment": "signed transverse component of endpoint generalized force -dE/dtheta; left +(EI/h)*Delta_t and right -(EI/h)*Delta_t",
-                    "shear_equivalent_residual": "total endpoint force projected on the outward normal",
-                    "constraint_reaction": "negative force_residual for a fixed endpoint; null for a free endpoint",
+                    "force_residual": (
+                        "-dE/dr_endpoint; zero is the natural free-end "
+                        "force condition"
+                    ),
+                    "bending_moment": (
+                        "signed transverse component of endpoint generalized "
+                        "force -dE/dtheta; left +(EI/h)*Delta_t and right "
+                        "-(EI/h)*Delta_t"
+                    ),
+                    "shear_equivalent_residual": (
+                        "total endpoint force projected on the outward normal"
+                    ),
+                    "constraint_reaction": (
+                        "negative force_residual for a fixed endpoint; null "
+                        "for a free endpoint"
+                    ),
                 },
             }
         )

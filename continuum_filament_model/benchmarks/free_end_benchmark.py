@@ -72,7 +72,9 @@ def _jsonable(value: Any) -> Any:
         return [_jsonable(item) for item in value]
     if isinstance(value, float):
         if not np.isfinite(value):
-            raise BenchmarkError("benchmark result contains a non-finite float")
+            raise BenchmarkError(
+                "benchmark result contains a non-finite float"
+            )
         return float(value)
     return value
 
@@ -80,14 +82,24 @@ def _jsonable(value: Any) -> Any:
 def _write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(_jsonable(value), ensure_ascii=False, indent=2, sort_keys=True)
+        json.dumps(
+            _jsonable(value), ensure_ascii=False, indent=2, sort_keys=True
+        )
         + "\n",
         encoding="utf-8",
     )
 
 
 def validate_config(config: Mapping[str, Any]) -> None:
-    for key in ("length", "t_end", "axial_stiffness", "bending_stiffness", "drag_density", "bend_amplitude", "a_max_factor"):
+    for key in (
+        "length",
+        "t_end",
+        "axial_stiffness",
+        "bending_stiffness",
+        "drag_density",
+        "bend_amplitude",
+        "a_max_factor",
+    ):
         try:
             value = float(config[key])
         except (KeyError, TypeError, ValueError) as exc:
@@ -100,14 +112,20 @@ def validate_config(config: Mapping[str, Any]) -> None:
     if len(nodes) < 2 or any(value < 3 for value in nodes):
         raise BenchmarkError("n_nodes must contain at least two values >= 3")
     dts = tuple(float(value) for value in config.get("dt_values", ()))
-    if len(dts) < 2 or any(value <= 0.0 or not np.isfinite(value) for value in dts):
-        raise BenchmarkError("dt_values must contain at least two positive finite values")
+    if len(dts) < 2 or any(
+        value <= 0.0 or not np.isfinite(value) for value in dts
+    ):
+        raise BenchmarkError(
+            "dt_values must contain at least two positive finite values"
+        )
     max_rows = int(config.get("max_report_rows", 0))
     if max_rows < 2:
         raise BenchmarkError("max_report_rows must be at least 2")
 
 
-def _initial_state(case: str, n_nodes: int, length: float, amplitude: float) -> FilamentState:
+def _initial_state(
+    case: str, n_nodes: int, length: float, amplitude: float
+) -> FilamentState:
     x = np.linspace(0.0, length, n_nodes)
     if case == "growth":
         y = np.zeros_like(x)
@@ -120,17 +138,27 @@ def _initial_state(case: str, n_nodes: int, length: float, amplitude: float) -> 
     return FilamentState(positions, rest_lengths)
 
 
-def _endpoint_row(model: OverdampedGrowingFilament, state: FilamentState) -> dict[str, Any]:
-    diagnostics = model.endpoint_diagnostics(state.positions, state.rest_lengths)
+def _endpoint_row(
+    model: OverdampedGrowingFilament, state: FilamentState
+) -> dict[str, Any]:
+    diagnostics = model.endpoint_diagnostics(
+        state.positions, state.rest_lengths
+    )
     return {
         "time": float(state.time),
         "step": int(state.step),
         "n_nodes": int(state.n_nodes),
         "left": list(state.positions[0]),
         "right": list(state.positions[-1]),
-        "endpoint_distance": float(np.linalg.norm(state.positions[-1] - state.positions[0])),
-        "endpoint_force_residual_norm_max": float(diagnostics["endpoint_force_residual_norm_max"]),
-        "moment_residual_norm_max": float(diagnostics["moment_residual_norm_max"]),
+        "endpoint_distance": float(
+            np.linalg.norm(state.positions[-1] - state.positions[0])
+        ),
+        "endpoint_force_residual_norm_max": float(
+            diagnostics["endpoint_force_residual_norm_max"]
+        ),
+        "moment_residual_norm_max": float(
+            diagnostics["moment_residual_norm_max"]
+        ),
         "energy": float(model.energy(state.positions, state.rest_lengths)),
     }
 
@@ -156,19 +184,32 @@ def _work_diagnostics(
             model.parameters.growth_rate,
             dt,
         )
-        growth_increment = model.energy(before.positions, grown) - energy_before
+        growth_increment = (
+            model.energy(before.positions, grown) - energy_before
+        )
         growth_work += float(growth_increment)
         if before.positions.shape == after.positions.shape:
             velocity = (after.positions - before.positions) / dt
-            gamma = model.parameters.drag_density * _node_weights(before.rest_lengths)
-            dissipation_increment = dt * float(np.sum(gamma[:, None] * velocity * velocity))
+            gamma = model.parameters.drag_density * _node_weights(
+                before.rest_lengths
+            )
+            dissipation_increment = dt * float(
+                np.sum(gamma[:, None] * velocity * velocity)
+            )
             dissipation_work += dissipation_increment
         else:
             # This benchmark chooses a_max so remeshing should not occur.  Do
             # not silently interpret a variable-node transition as work.
-            raise BenchmarkError("unexpected remeshing in bounded free-end benchmark")
+            raise BenchmarkError(
+                "unexpected remeshing in bounded free-end benchmark"
+            )
         energy_after = model.energy(after.positions, after.rest_lengths)
-        balance_residual += float(energy_after - energy_before - growth_increment + dissipation_increment)
+        balance_residual += float(
+            energy_after
+            - energy_before
+            - growth_increment
+            + dissipation_increment
+        )
     initial_energy = model.energy(states[0].positions, states[0].rest_lengths)
     final_energy = model.energy(states[-1].positions, states[-1].rest_lengths)
     return rows, {
@@ -188,7 +229,9 @@ def run_case(
     dt: float,
 ) -> dict[str, Any]:
     length = float(config["length"])
-    state = _initial_state(case, n_nodes, length, float(config["bend_amplitude"]))
+    state = _initial_state(
+        case, n_nodes, length, float(config["bend_amplitude"])
+    )
     spacing = length / (n_nodes - 1)
     params = ModelParameters(
         axial_stiffness=float(config["axial_stiffness"]),
@@ -212,7 +255,8 @@ def run_case(
     rows, work = _work_diagnostics(model, trajectory)
     if len(rows) > int(config["max_report_rows"]):
         raise BenchmarkError(
-            f"endpoint report exceeded max_report_rows={config['max_report_rows']}"
+            f"endpoint report exceeded max_report_rows="
+            f"{config['max_report_rows']}"
         )
     initial = rows[0]
     final = rows[-1]
@@ -234,55 +278,105 @@ def run_case(
         "initial_endpoint_distance": initial_span,
         "final_endpoint_distance": final_span,
         "endpoint_distance_change": final_span - initial_span,
-        "endpoint_displacement_left": float(np.linalg.norm(trajectory[-1].positions[0] - trajectory[0].positions[0])),
-        "endpoint_displacement_right": float(np.linalg.norm(trajectory[-1].positions[-1] - trajectory[0].positions[-1])),
-        "final_endpoint_force_residual_norm_max": float(final_diagnostics["endpoint_force_residual_norm_max"]),
-        "final_moment_residual_norm_max": float(final_diagnostics["moment_residual_norm_max"]),
-        "max_endpoint_force_residual_norm": float(max(row["endpoint_force_residual_norm_max"] for row in rows)),
-        "max_moment_residual_norm": float(max(row["moment_residual_norm_max"] for row in rows)),
+        "endpoint_displacement_left": float(
+            np.linalg.norm(
+                trajectory[-1].positions[0] - trajectory[0].positions[0]
+            )
+        ),
+        "endpoint_displacement_right": float(
+            np.linalg.norm(
+                trajectory[-1].positions[-1] - trajectory[0].positions[-1]
+            )
+        ),
+        "final_endpoint_force_residual_norm_max": float(
+            final_diagnostics["endpoint_force_residual_norm_max"]
+        ),
+        "final_moment_residual_norm_max": float(
+            final_diagnostics["moment_residual_norm_max"]
+        ),
+        "max_endpoint_force_residual_norm": float(
+            max(row["endpoint_force_residual_norm_max"] for row in rows)
+        ),
+        "max_moment_residual_norm": float(
+            max(row["moment_residual_norm_max"] for row in rows)
+        ),
         **work,
         "endpoint_trajectory": rows,
     }
 
 
 def _relative_change(left: float, right: float, scale: float = 1.0) -> float:
-    return float(abs(left - right) / max(abs(left), abs(right), scale * 1.0e-12))
+    return float(
+        abs(left - right) / max(abs(left), abs(right), scale * 1.0e-12)
+    )
 
 
-def _refinement_reports(records: list[dict[str, Any]], config: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def _refinement_reports(
+    records: list[dict[str, Any]], config: Mapping[str, Any]
+) -> dict[str, list[dict[str, Any]]]:
     reports: dict[str, list[dict[str, Any]]] = {"time": [], "space": []}
     for case in ("growth", "bending_relaxation"):
         for boundary in ("free_free", "fixed_fixed"):
             for n_nodes in tuple(int(value) for value in config["n_nodes"]):
                 matching = sorted(
-                    (row for row in records if row["case"] == case and row["boundary"] == boundary and row["n_nodes"] == n_nodes),
+                    (
+                        row
+                        for row in records
+                        if row["case"] == case
+                        and row["boundary"] == boundary
+                        and row["n_nodes"] == n_nodes
+                    ),
                     key=lambda row: row["dt"],
                 )
                 for coarse, fine in zip(matching, matching[1:]):
-                    reports["time"].append({
-                        "case": case,
-                        "boundary": boundary,
-                        "n_nodes": n_nodes,
-                        "coarse_dt": coarse["dt"],
-                        "fine_dt": fine["dt"],
-                        "relative_final_energy_change": _relative_change(coarse["final_energy"], fine["final_energy"]),
-                        "relative_endpoint_distance_change": _relative_change(coarse["final_endpoint_distance"], fine["final_endpoint_distance"], scale=float(config["length"])),
-                    })
+                    reports["time"].append(
+                        {
+                            "case": case,
+                            "boundary": boundary,
+                            "n_nodes": n_nodes,
+                            "coarse_dt": coarse["dt"],
+                            "fine_dt": fine["dt"],
+                            "relative_final_energy_change": _relative_change(
+                                coarse["final_energy"], fine["final_energy"]
+                            ),
+                            # The long schema key is intentionally stable.
+                            "relative_endpoint_distance_change": _relative_change(  # noqa: E501
+                                coarse["final_endpoint_distance"],
+                                fine["final_endpoint_distance"],
+                                scale=float(config["length"]),
+                            ),
+                        }
+                    )
             for dt in tuple(float(value) for value in config["dt_values"]):
                 matching = sorted(
-                    (row for row in records if row["case"] == case and row["boundary"] == boundary and row["dt"] == dt),
+                    (
+                        row
+                        for row in records
+                        if row["case"] == case
+                        and row["boundary"] == boundary
+                        and row["dt"] == dt
+                    ),
                     key=lambda row: row["n_nodes"],
                 )
                 for coarse, fine in zip(matching, matching[1:]):
-                    reports["space"].append({
-                        "case": case,
-                        "boundary": boundary,
-                        "coarse_n_nodes": coarse["n_nodes"],
-                        "fine_n_nodes": fine["n_nodes"],
-                        "dt": dt,
-                        "relative_final_energy_change": _relative_change(coarse["final_energy"], fine["final_energy"]),
-                        "relative_endpoint_distance_change": _relative_change(coarse["final_endpoint_distance"], fine["final_endpoint_distance"], scale=float(config["length"])),
-                    })
+                    reports["space"].append(
+                        {
+                            "case": case,
+                            "boundary": boundary,
+                            "coarse_n_nodes": coarse["n_nodes"],
+                            "fine_n_nodes": fine["n_nodes"],
+                            "dt": dt,
+                            "relative_final_energy_change": _relative_change(
+                                coarse["final_energy"], fine["final_energy"]
+                            ),
+                            # The long schema key is intentionally stable.
+                            "relative_endpoint_distance_change": _relative_change(  # noqa: E501
+                                coarse["final_endpoint_distance"],
+                                fine["final_endpoint_distance"],
+                                scale=float(config["length"]),
+                            ),
+                        }
+                    )
     return reports
 
 
@@ -303,15 +397,39 @@ def run_benchmark(config: Mapping[str, Any] | None = None) -> dict[str, Any]:
             "primary_boundary": "free_free",
             "control_boundary": "fixed_fixed",
             "contact_enabled": False,
-            "excluded": ["friction", "adhesion", "anisotropic_drag", "localized_growth", "contact_solver"],
-            "trajectory_policy": "endpoint coordinates and residuals only; no full node trajectory is written",
+            "excluded": [
+                "friction",
+                "adhesion",
+                "anisotropic_drag",
+                "localized_growth",
+                "contact_solver",
+            ],
+            "trajectory_policy": (
+                "endpoint coordinates and residuals only; "
+                "no full node trajectory is written"
+            ),
         },
         "acceptance_criteria": {
-            "straight_free_free_equilibrium": "endpoint force and bending-moment residuals are zero within numerical tolerance",
-            "free_free_growth": "uniform growth moves both free endpoints; fixed_fixed control keeps endpoint positions fixed",
-            "free_free_relaxation": "growth-free bending relaxation lowers energy without imposing endpoint anchors",
-            "invariance": "translation and rotation preserve endpoint residual norms and rotate residual vectors covariantly",
-            "refinement": "time and space comparisons are reported separately; no experimental claim is made from this benchmark",
+            "straight_free_free_equilibrium": (
+                "endpoint force and bending-moment residuals are zero "
+                "within numerical tolerance"
+            ),
+            "free_free_growth": (
+                "uniform growth moves both free endpoints; "
+                "fixed_fixed control keeps endpoint positions fixed"
+            ),
+            "free_free_relaxation": (
+                "growth-free bending relaxation lowers energy without "
+                "imposing endpoint anchors"
+            ),
+            "invariance": (
+                "translation and rotation preserve endpoint residual "
+                "norms and rotate residual vectors covariantly"
+            ),
+            "refinement": (
+                "time and space comparisons are reported separately; no "
+                "experimental claim is made from this benchmark"
+            ),
         },
         "configuration": effective,
         "records": records,
@@ -322,12 +440,27 @@ def run_benchmark(config: Mapping[str, Any] | None = None) -> dict[str, Any]:
 def _write_csv(path: Path, records: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     columns = [
-        "case", "boundary", "n_nodes", "dt", "t_end", "accepted_steps", "rejected_steps",
-        "initial_endpoint_distance", "final_endpoint_distance", "endpoint_distance_change",
-        "endpoint_displacement_left", "endpoint_displacement_right",
-        "final_endpoint_force_residual_norm_max", "final_moment_residual_norm_max",
-        "max_endpoint_force_residual_norm", "max_moment_residual_norm",
-        "initial_energy", "final_energy", "growth_work", "dissipation_work", "mechanical_balance_residual",
+        "case",
+        "boundary",
+        "n_nodes",
+        "dt",
+        "t_end",
+        "accepted_steps",
+        "rejected_steps",
+        "initial_endpoint_distance",
+        "final_endpoint_distance",
+        "endpoint_distance_change",
+        "endpoint_displacement_left",
+        "endpoint_displacement_right",
+        "final_endpoint_force_residual_norm_max",
+        "final_moment_residual_norm_max",
+        "max_endpoint_force_residual_norm",
+        "max_moment_residual_norm",
+        "initial_energy",
+        "final_energy",
+        "growth_work",
+        "dissipation_work",
+        "mechanical_balance_residual",
     ]
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns)
@@ -338,8 +471,14 @@ def _write_csv(path: Path, records: list[dict[str, Any]]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, help="optional JSON config overriding defaults")
-    parser.add_argument("--output", type=Path, help="optional directory for compact summary.json/summary.csv")
+    parser.add_argument(
+        "--config", type=Path, help="optional JSON config overriding defaults"
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="optional directory for compact summary.json/summary.csv",
+    )
     args = parser.parse_args(argv)
     config: dict[str, Any] = {}
     if args.config is not None:
@@ -349,7 +488,11 @@ def main(argv: list[str] | None = None) -> int:
         args.output.mkdir(parents=True, exist_ok=True)
         _write_json(args.output / "summary.json", report)
         _write_csv(args.output / "summary.csv", report["records"])
-    print(json.dumps(_jsonable(report), ensure_ascii=False, indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            _jsonable(report), ensure_ascii=False, indent=2, sort_keys=True
+        )
+    )
     return 0
 
 

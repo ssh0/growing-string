@@ -4,7 +4,9 @@ import unittest
 
 import numpy as np
 
-from continuum_filament_model.benchmarks.free_end_benchmark import run_benchmark
+from continuum_filament_model.benchmarks.free_end_benchmark import (
+    run_benchmark,
+)
 from growing_filament.model import (
     FilamentState,
     ModelParameters,
@@ -21,30 +23,52 @@ class FreeEndDynamicsTest(unittest.TestCase):
         )
         diagnostics = model.endpoint_diagnostics()
 
-        self.assertEqual(diagnostics["boundary_condition"], {"left": "free", "right": "free"})
+        self.assertEqual(
+            diagnostics["boundary_condition"],
+            {"left": "free", "right": "free"},
+        )
         self.assertFalse(diagnostics["contact_enabled"])
-        np.testing.assert_allclose(diagnostics["net_force"], [0.0, 0.0], atol=1.0e-14)
+        np.testing.assert_allclose(
+            diagnostics["net_force"], [0.0, 0.0], atol=1.0e-14
+        )
         self.assertEqual(diagnostics["net_torque_about_left_endpoint"], 0.0)
         for side in ("left", "right"):
             endpoint = diagnostics[side]
-            np.testing.assert_allclose(endpoint["force_residual"], [0.0, 0.0], atol=1.0e-14)
+            np.testing.assert_allclose(
+                endpoint["force_residual"], [0.0, 0.0], atol=1.0e-14
+            )
             self.assertAlmostEqual(endpoint["bending_moment"], 0.0, places=14)
-            self.assertAlmostEqual(endpoint["shear_equivalent_residual"], 0.0, places=14)
-            np.testing.assert_allclose(endpoint["contact_force"], [0.0, 0.0], atol=1.0e-14)
+            self.assertAlmostEqual(
+                endpoint["shear_equivalent_residual"], 0.0, places=14
+            )
+            np.testing.assert_allclose(
+                endpoint["contact_force"], [0.0, 0.0], atol=1.0e-14
+            )
 
         initial = model.state.positions.copy()
         model.step()
-        np.testing.assert_allclose(model.state.positions, initial, atol=1.0e-14)
+        np.testing.assert_allclose(
+            model.state.positions, initial, atol=1.0e-14
+        )
 
-    def test_endpoint_diagnostics_are_rigid_translation_and_rotation_covariant(self):
+    def test_endpoint_diagnostics_are_rigid_translation_and_rotation_covariant(
+        self,
+    ):
         state = FilamentState(
             [[0.0, 0.0], [1.0, 0.3], [2.0, 0.0], [3.0, -0.2]],
-            np.linalg.norm(np.diff([[0.0, 0.0], [1.0, 0.3], [2.0, 0.0], [3.0, -0.2]], axis=0), axis=1),
+            np.linalg.norm(
+                np.diff(
+                    [[0.0, 0.0], [1.0, 0.3], [2.0, 0.0], [3.0, -0.2]], axis=0
+                ),
+                axis=1,
+            ),
         )
         params = ModelParameters(reference_length=1.0, reject_crossing=False)
         model = OverdampedGrowingFilament(state, params)
         translated = state.positions + np.asarray([3.0, -2.0])
-        translated_diagnostics = model.endpoint_diagnostics(translated, state.rest_lengths)
+        translated_diagnostics = model.endpoint_diagnostics(
+            translated, state.rest_lengths
+        )
         original = model.endpoint_diagnostics()
         for side in ("left", "right"):
             np.testing.assert_allclose(
@@ -63,7 +87,9 @@ class FreeEndDynamicsTest(unittest.TestCase):
             [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
         )
         rotated = state.positions @ rotation.T
-        rotated_diagnostics = model.endpoint_diagnostics(rotated, state.rest_lengths)
+        rotated_diagnostics = model.endpoint_diagnostics(
+            rotated, state.rest_lengths
+        )
         for side in ("left", "right"):
             np.testing.assert_allclose(
                 rotated_diagnostics[side]["force_residual"],
@@ -99,7 +125,9 @@ class FreeEndDynamicsTest(unittest.TestCase):
             a_max=2.0,
             reject_crossing=False,
         )
-        free = OverdampedGrowingFilament(FilamentState(positions, rest_lengths), ModelParameters(**common))
+        free = OverdampedGrowingFilament(
+            FilamentState(positions, rest_lengths), ModelParameters(**common)
+        )
         fixed = OverdampedGrowingFilament(
             FilamentState(positions, rest_lengths),
             ModelParameters(**common, fixed_left=True, fixed_right=True),
@@ -111,14 +139,22 @@ class FreeEndDynamicsTest(unittest.TestCase):
 
         self.assertLess(free.energy(), free_initial_energy)
         self.assertGreater(
-            float(np.linalg.norm(free.state.positions[[0, -1]] - free_initial_endpoints)),
+            float(
+                np.linalg.norm(
+                    free.state.positions[[0, -1]] - free_initial_endpoints
+                )
+            ),
             0.0,
         )
-        np.testing.assert_allclose(fixed.state.positions[[0, -1]], positions[[0, -1]])
+        np.testing.assert_allclose(
+            fixed.state.positions[[0, -1]], positions[[0, -1]]
+        )
         self.assertGreater(free.accepted_steps, 0)
         self.assertEqual(free.rejected_steps, 0)
 
-    def test_uniform_growth_has_first_step_free_end_response_and_no_contact_constraint(self):
+    def test_uniform_growth_has_first_step_free_end_response_and_no_contact_constraint(  # noqa: E501
+        self,
+    ):
         dt = 1.0e-4
         growth_rate = 0.5
         axial_stiffness = 4.0
@@ -136,7 +172,9 @@ class FreeEndDynamicsTest(unittest.TestCase):
         )
         before = model.state.positions.copy()
         grown = np.exp(growth_rate * dt)
-        expected_endpoint_speed = 2.0 * axial_stiffness * (grown - 1.0) / grown**2
+        expected_endpoint_speed = (
+            2.0 * axial_stiffness * (grown - 1.0) / grown**2
+        )
         model.step()
 
         displacement = model.state.positions - before
@@ -151,9 +189,13 @@ class FreeEndDynamicsTest(unittest.TestCase):
         )
         self.assertAlmostEqual(float(displacement[1, 0]), 0.0, places=14)
         self.assertFalse(model.endpoint_diagnostics()["contact_enabled"])
-        np.testing.assert_allclose(model.endpoint_diagnostics()["left"]["contact_force"], [0.0, 0.0])
+        np.testing.assert_allclose(
+            model.endpoint_diagnostics()["left"]["contact_force"], [0.0, 0.0]
+        )
 
-    def test_benchmark_reports_free_free_control_refinement_and_endpoint_trajectory(self):
+    def test_benchmark_reports_free_free_control_refinement_and_endpoint_trajectory(  # noqa: E501
+        self,
+    ):
         report = run_benchmark(
             {
                 "n_nodes": [5, 7],
@@ -171,12 +213,20 @@ class FreeEndDynamicsTest(unittest.TestCase):
             self.assertEqual(record["endpoint_trajectory"][0]["time"], 0.0)
 
         growth_free = next(
-            row for row in report["records"]
-            if row["case"] == "growth" and row["boundary"] == "free_free" and row["n_nodes"] == 5 and row["dt"] == 1.0e-4
+            row
+            for row in report["records"]
+            if row["case"] == "growth"
+            and row["boundary"] == "free_free"
+            and row["n_nodes"] == 5
+            and row["dt"] == 1.0e-4
         )
         growth_fixed = next(
-            row for row in report["records"]
-            if row["case"] == "growth" and row["boundary"] == "fixed_fixed" and row["n_nodes"] == 5 and row["dt"] == 1.0e-4
+            row
+            for row in report["records"]
+            if row["case"] == "growth"
+            and row["boundary"] == "fixed_fixed"
+            and row["n_nodes"] == 5
+            and row["dt"] == 1.0e-4
         )
         self.assertGreater(growth_free["endpoint_distance_change"], 0.0)
         self.assertEqual(growth_fixed["endpoint_distance_change"], 0.0)
