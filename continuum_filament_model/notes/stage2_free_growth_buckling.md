@@ -137,7 +137,7 @@ overlayからモデル不足・入力品質・数値未収束を区別せずに�
 ## 実行済み探索の要約
 
 `results/stage2_free_free/` は、source revision
-`b4c1b56fc168bdb5542157dfd3e2d38333864d3b`、`t_end=4.0` の22 run（決定論的 fixture 5、
+`0c0665672a9e9f21b3d239311b284e93a463a7b8`、`t_end=4.0` の22 run（決定論的 fixture 5、
 refinement 4、parameter contrast 4、seed付き replicate 9）をcompactに保存する。全runは
 `contact_enabled=false`、失敗0、拒否0であった。決定論的な fast-growth/low-bend 条件は
 `t≈3.30` に定義した onset を通過し、`n_nodes=9,13` と `dt=0.002,0.001` の4 refinement

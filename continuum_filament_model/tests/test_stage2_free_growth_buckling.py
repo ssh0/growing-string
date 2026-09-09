@@ -443,7 +443,7 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
         self.assertIn("video_model_refinement_missing", status["reasons"])
 
     def test_unsupported_replicate_seed_is_rejected_before_conversion(self):
-        for seeds in ([1.5, 2], [-1, 2], [2**32, 2], [True, 2]):
+        for seeds in ([1.5, 2], [-1, 2], [2**32, 2], [True, 2], ["101", 2]):
             with self.subTest(seeds=seeds):
                 config = self._config()
                 config["replicates"]["seeds"] = list(seeds)

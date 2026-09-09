@@ -183,7 +183,9 @@ def _validate_integer_at_least(value: Any, minimum: int, context: str) -> int:
 
 
 def _validate_seed(value: Any, context: str) -> int:
-    seed = _validate_integer(value, context)
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
+        raise Stage2Error(f"{context} must be a non-negative integer")
+    seed = int(value)
     if not 0 <= seed < 2**32:
         raise Stage2Error(f"{context} must be in [0, 2**32)")
     return seed
