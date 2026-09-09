@@ -74,6 +74,28 @@ F_i ≈ -[E(r_i + eps e) - E(r_i - eps e)] / (2 eps)
 
 時間刻みを変えて結果が変わる場合、パラメータ掃引を始めない。
 
+### 1.4 Free/free 端点の力学的検証
+
+実験との整合を目的とする主境界条件は `free/free` とする。`fixed/fixed` は従来の
+固定端ベンチマークを壊していないことを確認するための control であり、実験境界の
+根拠にはしない。端点では `F=-dE/dr` を natural force residual と定義し、離散曲げ
+エネルギーの最初・最後の接線差分から bending-moment residual を、全端点力の外向き
+法線成分から shear-equivalent residual を計算する。これらの規約は
+`notes/free_end_dynamics.md` に記録する。
+
+受入条件は次のとおりである。
+
+- 無伸長直線・接触なしの free/free で、端点 force、moment、shear residual が丸め誤差内でゼロ。
+- 平行移動で残差が不変、剛体回転で力ベクトルが共変し、残差ノルムと符号付き moment が保存。
+- 成長なしの曲げ緩和で free/free の端点が移動し、エネルギーが非増加。fixed/fixed control の端点は不動。
+- 3節点の一様成長で、最初の free-end 変位が成長後参照長を用いた離散伸長力の製造値に一致。
+- `contact_stiffness=0` かつ `diameter=0` では、endpoint diagnostics に接触力・接触拘束がない。
+- `benchmarks/free_end_benchmark.py` で、成長応答と曲げ緩和について free/free と fixed/fixed を
+  時間・空間解像度別に実行し、端点時系列、work/dissipation、residual、refinement を compact に報告。
+  このベンチマークから実験一致、座屈臨界値、有限径接触の結論は導かない。
+
+全節点の長い軌跡はGitへ保存せず、ベンチマーク出力は `/tmp` 等へ compact summary のみを置く。
+
 ### 1.3 接触
 
 - 排除径より離れた節点・線分には接触力が働かない。

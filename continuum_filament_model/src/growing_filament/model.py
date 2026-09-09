@@ -399,6 +399,49 @@ def _node_weights(rest_lengths: Array) -> Array:
     return weights
 
 
+def _cross_z(left: Array, right: Array) -> float:
+    """Return the scalar z component of a 2-D cross product."""
+
+    return float(left[0] * right[1] - left[1] * right[0])
+
+
+def _bending_boundary_data(
+    positions: Array,
+    rest_lengths: Array,
+    bending_stiffness: float,
+) -> tuple[Array, Array, float, float]:
+    """Return endpoint bending moment vectors and signed scalar moments.
+
+    The discrete bending energy has one tangent jump at each interior node.
+    Its first and last jumps provide the tangent-space conjugate at the two
+    open ends.  The returned vectors are the generalized forces
+    ``-dE/dt_endpoint``: ``+(EI / h) * Delta_t`` at the left end and
+    ``-(EI / h) * Delta_t`` at the right end.  The scalar values are their
+    signed components transverse to the corresponding material tangent.  This
+    is a diagnostic of the implemented discrete energy, not an extra boundary
+    force or a continuum curvature estimate.
+    """
+
+    if len(positions) < 3:
+        zero = np.zeros(positions.shape[1], dtype=float)
+        return zero, zero.copy(), 0.0, 0.0
+    edges = np.diff(positions, axis=0)
+    geometric_lengths = np.linalg.norm(edges, axis=1)
+    if np.any(geometric_lengths <= 1.0e-12):
+        raise ModelError("zero-length geometric segment")
+    tangents = edges / geometric_lengths[:, None]
+    local_reference_lengths = 0.5 * (rest_lengths[:-1] + rest_lengths[1:])
+    jumps = tangents[1:] - tangents[:-1]
+    left_vector = (bending_stiffness / local_reference_lengths[0]) * jumps[0]
+    right_vector = -(bending_stiffness / local_reference_lengths[-1]) * jumps[-1]
+    return (
+        left_vector,
+        right_vector,
+        _cross_z(tangents[0], left_vector),
+        _cross_z(tangents[-1], right_vector),
+    )
+
+
 def _bending_energy_and_forces(
     positions: Array,
     rest_lengths: Array,
@@ -742,6 +785,144 @@ class OverdampedGrowingFilament:
                         forces[i] += force
                         forces[j] -= force
         return forces
+
+    def endpoint_diagnostics(
+        self,
+        positions: Optional[Array] = None,
+        rest_lengths: Optional[Array] = None,
+    ) -> Dict[str, object]:
+        """Return natural-boundary residuals for both open endpoints.
+
+        ``force_residual`` is the conservative force acting on the endpoint,
+        namely ``-dE/dr_endpoint``.  It therefore vanishes at a free natural
+        boundary and is the negative of the constraint reaction at a fixed
+        endpoint.  ``bending_moment`` is the signed transverse component of
+        the tangent-space conjugate from the discrete bending energy.  The
+        endpoint ``shear_equivalent_residual`` is the transverse component of
+        the total force; ``bending_shear_equivalent`` isolates its bending
+        contribution.  These diagnostics do not add a force or impose a
+        boundary condition.
+        """
+
+        p = self.state.positions if positions is None else np.asarray(positions, dtype=float)
+        a = self.state.rest_lengths if rest_lengths is None else np.asarray(rest_lengths, dtype=float)
+        if p.shape != (len(a) + 1, 2):
+            raise ModelError("incompatible positions and rest_lengths")
+        if len(a) < 2:
+            raise ModelError("at least three nodes are required for endpoint diagnostics")
+
+        total_forces = self.forces(p, a)
+        stretch_forces = np.zeros_like(p)
+        edges = np.diff(p, axis=0)
+        lengths = np.linalg.norm(edges, axis=1)
+        if np.any(lengths <= 1.0e-12):
+            raise ModelError("zero-length geometric segment")
+        tangents = edges / lengths[:, None]
+        edge_force = self.parameters.axial_stiffness * (lengths - a) / a
+        for index, force_vector in enumerate(edge_force[:, None] * tangents):
+            stretch_forces[index] += force_vector
+            stretch_forces[index + 1] -= force_vector
+        _, bending_forces = _bending_energy_and_forces(
+            p, a, self.parameters.bending_stiffness
+        )
+        contact_forces = total_forces - stretch_forces - bending_forces
+        left_moment_vector, right_moment_vector, left_moment, right_moment = (
+            _bending_boundary_data(p, a, self.parameters.bending_stiffness)
+        )
+
+        def endpoint(
+            index: int,
+            material_tangent: Array,
+            moment_vector: Array,
+            moment: float,
+        ) -> dict[str, object]:
+            outward_tangent = material_tangent if index == len(p) - 1 else -material_tangent
+            outward_normal = np.asarray(
+                [-outward_tangent[1], outward_tangent[0]], dtype=float
+            )
+            force = total_forces[index]
+            return {
+                "position": p[index].tolist(),
+                "material_tangent": material_tangent.tolist(),
+                "outward_tangent": outward_tangent.tolist(),
+                "outward_normal": outward_normal.tolist(),
+                "force_residual": force.tolist(),
+                "internal_force": force.tolist(),
+                "force_residual_norm": float(np.linalg.norm(force)),
+                "stretch_force": stretch_forces[index].tolist(),
+                "bending_force": bending_forces[index].tolist(),
+                "contact_force": contact_forces[index].tolist(),
+                "axial_force_residual": float(np.dot(force, outward_tangent)),
+                "shear_equivalent_residual": float(np.dot(force, outward_normal)),
+                "bending_shear_equivalent": float(
+                    np.dot(bending_forces[index], outward_normal)
+                ),
+                "bending_moment_vector": moment_vector.tolist(),
+                "bending_moment": float(moment),
+                "constraint_reaction": (-force).tolist()
+                if (
+                    (index == 0 and self.parameters.fixed_left)
+                    or (index == len(p) - 1 and self.parameters.fixed_right)
+                )
+                else None,
+            }
+
+        endpoint_values = {
+            "left": endpoint(0, tangents[0], left_moment_vector, left_moment),
+            "right": endpoint(
+                len(p) - 1,
+                tangents[-1],
+                right_moment_vector,
+                right_moment,
+            ),
+        }
+        net_force = np.sum(total_forces, axis=0)
+        origin = p[0]
+        net_torque = float(
+            np.sum([_cross_z(position - origin, force)
+                    for position, force in zip(p, total_forces)])
+        )
+        endpoint_values.update(
+            {
+                "boundary_condition": {
+                    "left": "fixed" if self.parameters.fixed_left else "free",
+                    "right": "fixed" if self.parameters.fixed_right else "free",
+                },
+                "contact_enabled": bool(
+                    self.parameters.contact_stiffness > 0.0
+                    and self.parameters.diameter > 0.0
+                ),
+                "net_force": net_force.tolist(),
+                "net_force_norm": float(np.linalg.norm(net_force)),
+                "net_torque_about_left_endpoint": net_torque,
+                "endpoint_force_residual_norm_max": float(
+                    max(
+                        np.linalg.norm(total_forces[0]),
+                        np.linalg.norm(total_forces[-1]),
+                    )
+                ),
+                "moment_residual_norm_max": float(
+                    max(abs(left_moment), abs(right_moment))
+                ),
+                "contact_force_norm": float(np.linalg.norm(contact_forces)),
+                "definition": {
+                    "force_residual": "-dE/dr_endpoint; zero is the natural free-end force condition",
+                    "bending_moment": "signed transverse component of endpoint generalized force -dE/dtheta; left +(EI/h)*Delta_t and right -(EI/h)*Delta_t",
+                    "shear_equivalent_residual": "total endpoint force projected on the outward normal",
+                    "constraint_reaction": "negative force_residual for a fixed endpoint; null for a free endpoint",
+                },
+            }
+        )
+        return endpoint_values
+
+    def boundary_diagnostics(
+        self,
+        positions: Optional[Array] = None,
+        rest_lengths: Optional[Array] = None,
+    ) -> Dict[str, object]:
+        """Alias for :meth:`endpoint_diagnostics` used by benchmark reports."""
+
+        return self.endpoint_diagnostics(positions, rest_lengths)
 
     def _apply_boundary_conditions(self, positions: Array, velocities: Array) -> None:
         if self.parameters.fixed_left:

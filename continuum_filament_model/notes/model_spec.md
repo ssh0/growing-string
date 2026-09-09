@@ -229,8 +229,16 @@ dx/dt = -4(x-1), \qquad x(t)=1+0.25\exp(-4t)
 
 初期版は開曲線のみを対象とし、端点ごとに次を設定する。
 
-- `free`：力に従って移動
-- `fixed`：初期位置に固定
+- `free`：`F_i=-dE/dr_i` に従って移動する自然端点。位置・接線・端点速度を固定しない。
+- `fixed`：初期位置に固定する比較用の位置拘束。`constraint_reaction=-F_i` を診断できるが、実験再現の境界条件とは解釈しない。
+
+主モデルの境界条件は `free/free` とする。離散エネルギーに対する端点の力残差、
+曲げモーメント、shear-equivalent residual は `OverdampedGrowingFilament.endpoint_diagnostics()`
+で取得する。`force_residual` は保存力そのもので、free 端点の自然境界受入条件はゼロである。
+曲げモーメントは端点接線に関する一般化保存力 `-dE/dtheta`（左端は
+`+(EI/h) Delta_t`、右端は `-(EI/h) Delta_t`）の離散曲げエネルギーの接線共役、
+`shear_equivalent_residual` は全端点力の外向き法線成分である。診断は拘束や追加の力を
+適用しない。符号、外向き接線、受入条件の詳細は `notes/free_end_dynamics.md` に固定する。
 
 ピン端、外部押し込み、周期境界、閉曲線は初期版の対象外である。
 
