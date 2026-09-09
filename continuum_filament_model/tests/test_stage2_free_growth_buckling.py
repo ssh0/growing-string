@@ -126,6 +126,20 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
                 self.assertIn("G_b", result["dimensionless_groups"])
                 self.assertFalse(result["contact_enabled"])
 
+    def test_single_interior_replicate_noise_stays_bounded(self):
+        config = self._config()
+        config["base"]["n_nodes"] = 3
+        config["refinement"]["n_nodes"] = [3, 5]
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_suite(config, Path(directory))
+            replicate = next(
+                item for item in report["results"] if item["run_kind"] == "exploratory_replicate"
+            )
+            initial = replicate["observables"][0]
+            self.assertLess(initial["initial_transverse_amplitude"], 0.1)
+            self.assertLess(initial["contour_length"], 3.0)
+            self.assertFalse(replicate["contact_enabled"])
+
     def test_missing_video_is_censored_without_substitution_or_fit(self):
         config = load_config_from_mapping(self._config())
         with tempfile.TemporaryDirectory() as directory:

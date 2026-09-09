@@ -385,6 +385,7 @@ def dimensionless_groups(config: Mapping[str, Any]) -> dict[str, float | str]:
         # an alias so P1B.1 consumers remain compatible.
         "chi": chi,
         "bending_to_stretching": chi,
+        "bending_to_axial_ratio": chi,
         "mesh_ratio_initial_dx_over_L": float((length / (int(config["n_nodes"]) - 1)) / length),
         "dt_over_tau_b": float(float(config["dt"]) / tau_b),
         "diameter_over_L": 0.0,

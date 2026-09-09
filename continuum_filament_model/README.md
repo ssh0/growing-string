@@ -156,9 +156,9 @@ provenance を compact summary へ出力します。`buckling-candidate` は観�
 
 ```bash
 TMP_DIR=$(mktemp -d /tmp/growing-string-stage2.XXXXXX)
-PYTHONPATH=continuum_filament_model/src \\
-python continuum_filament_model/benchmarks/free_growth_buckling_stage2.py \\
-  --config continuum_filament_model/benchmarks/configs/stage2_free_free.json \\
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/benchmarks/free_growth_buckling_stage2.py \
+  --config continuum_filament_model/benchmarks/configs/stage2_free_free.json \
   --output "$TMP_DIR"
 ```
 

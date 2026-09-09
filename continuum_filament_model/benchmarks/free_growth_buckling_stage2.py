@@ -31,9 +31,16 @@ import numpy as np
 
 if __package__ in {None, ""}:  # pragma: no cover - direct-file entry point
     _HERE = Path(__file__).resolve()
-    _SRC = _HERE.parents[1] / "src"
-    if str(_SRC) not in sys.path:
-        sys.path.insert(0, str(_SRC))
+    _ROOT = _HERE.parents[1]
+    _SRC = _ROOT / "src"
+    for _path in (_ROOT, _SRC):
+        if str(_path) not in sys.path:
+            sys.path.insert(0, str(_path))
+
+if __package__ in {None, ""}:  # pragma: no cover - direct-file entry point
+    from benchmarks.buckling_benchmark import dimensionless_groups as _shared_dimensionless_groups  # noqa: E402
+else:
+    from .buckling_benchmark import dimensionless_groups as _shared_dimensionless_groups  # noqa: E402
 
 from growing_filament.io import save_trajectory  # noqa: E402
 from growing_filament.model import (  # noqa: E402
@@ -345,10 +352,10 @@ def _initial_state(config: Mapping[str, Any], seed: int | None) -> FilamentState
     x = np.linspace(0.0, length, n_nodes)
     y = amplitude * np.sin(np.pi * x / length)
     noise_fraction = float(config.get("noise_fraction", 0.0))
-    if seed is not None and noise_fraction:
+    if seed is not None and noise_fraction and n_nodes - 2 >= 2:
         rng = np.random.default_rng(int(seed))
         noise = rng.normal(size=n_nodes - 2)
-        noise /= max(float(np.std(noise)), 1.0e-15)
+        noise /= float(np.std(noise))
         y[1:-1] += amplitude * noise_fraction * noise
     positions = np.column_stack((x, y))
     projected = length / (n_nodes - 1)
@@ -390,7 +397,6 @@ def _metric_row(model: OverdampedGrowingFilament, state: FilamentState, initial_
     mode_total = float(np.sum(mode_power))
     curvature = discrete_curvature(state)
     components = model.energy_components(state.positions, state.rest_lengths)
-    forces = model.forces(state.positions, state.rest_lengths)
     diagnostics = model.endpoint_diagnostics(state.positions, state.rest_lengths)
     lengths = np.linalg.norm(np.diff(state.positions, axis=0), axis=1)
     axial_force = model.parameters.axial_stiffness * (lengths - state.rest_lengths) / state.rest_lengths
@@ -546,28 +552,16 @@ def _classify(rows: Sequence[Mapping[str, Any]], config: Mapping[str, Any], fail
 
 
 def _dimensionless_groups(config: Mapping[str, Any]) -> dict[str, float | str]:
+    groups = dict(_shared_dimensionless_groups(config))
+    tau_b = float(groups["tau_b"])
+    tau_s = float(groups["tau_s"])
     length = float(config["length"])
-    ei = float(config["bending_stiffness"])
-    ea = float(config["axial_stiffness"])
-    zeta = float(config["drag_density"])
-    growth = float(config.get("growth_rate", 0.0))
-    tau_b = zeta * length**4 / (ei * np.pi**4)
-    tau_s = zeta * length**2 / ea
-    chi = ei / (ea * length**2)
-    return {
-        "tau_b": float(tau_b),
-        "tau_s": float(tau_s),
-        "G_b": float(growth * tau_b),
-        "G_s": float(growth * tau_s),
-        "chi": float(chi),
-        "bending_to_axial_ratio": float(chi),
-        "mesh_ratio_initial_dx_over_L": float(1.0 / (int(config["n_nodes"]) - 1)),
-        "dt_over_tau_b": float(float(config["dt"]) / tau_b),
+    groups.update({
         "dt_over_tau_s": float(float(config["dt"]) / tau_s),
         "t_end_over_tau_b": float(float(config["t_end"]) / tau_b),
         "initial_amplitude_over_L": float(float(config.get("amplitude", 0.0)) / length),
-        "definition": "tau_b=zeta*L^4/(EI*pi^4); tau_s=zeta*L^2/EA; G_b=growth_rate*tau_b; G_s=growth_rate*tau_s; chi=EI/(EA*L^2)",
-    }
+    })
+    return groups
 
 
 def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revision: str | None, save_trajectory_file: bool = False) -> dict[str, Any]:
