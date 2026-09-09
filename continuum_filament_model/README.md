@@ -72,6 +72,12 @@ python -m unittest discover -s continuum_filament_model/tests -v
 
 テストが通ることは、物理モデルが実験を再現することを意味しません。数値ベンチマークと実験比較は `notes/validation_plan.md` に従って別々に確認します。
 
+### CI
+
+`.github/workflows/continuum-filament-tests.yml` が、`master` 向けのPull Request、`master` へのpush、および手動実行で、上記のテストコマンドを実行します。既存テストがimportする外部PythonパッケージはNumPyだけなので、CIでは、既存の検証記録に合わせて `numpy==2.2.6` だけをインストールします。動画fixtureのテストには `ffmpeg` が必要なため、Ubuntu runnerのaptパッケージを追加でインストールします。
+
+CIの実行環境は `ubuntu-24.04` とPython `3.11.5` に固定しています。これはPython `3.10以上`というモデルの想定範囲から選んだ代表環境であり、CIの成功はこのLinux環境での回帰スイートの成功だけを示します。macOS・Windowsや、他のPython・NumPy・ffmpegの組合せの互換性、物理モデルの実験再現性は、このworkflowでは保証しません。
+
 Gate 3 の幾何診断・イベント・再現性回帰を含むテストは、同じテストコマンドで実行します。
 各 `OverdampedGrowingFilament` は、初期形状診断、各試行の要求/試行/受理 `dt`、状態・エネルギー要約、
 理由別の棄却（`crossing_rejection`、`nonfinite`、`displacement_exceeded` など）を `events` に記録します。

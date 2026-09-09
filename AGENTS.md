@@ -257,7 +257,7 @@ triangular_lattice/results/
 
 ### 依存関係・互換性
 
-確認できる範囲では、ルートに `pyproject.toml`、`setup.py`、`setup.cfg`、`requirements.txt`、`environment.yml`、`Makefile`、標準的なCI設定はありません。依存関係は対象スクリプトのimportから確認してください。
+確認できる範囲では、ルートに `pyproject.toml`、`setup.py`、`setup.cfg`、`requirements.txt`、`environment.yml`、`Makefile` はありません。依存関係は対象スクリプトのimportから確認してください。`continuum_filament_model/` の回帰テストには `.github/workflows/continuum-filament-tests.yml` があり、対象範囲・Python・依存関係の前提は同READMEに記載しています。
 
 コードには、Python 2系を想定した構文・APIと、Python 3向けの記述が混在しています。例えば、古い `print` 文、`has_key()`、`iterkeys()` などが残っています。Pythonのバージョンや必要ライブラリを推測して環境手順に追加しないでください。
 
@@ -303,7 +303,7 @@ READMEの `python proto.py` はルート直下の現状のファイル配置と�
 
 ## 検証の方針
 
-このリポジトリには、標準的なテストスイート・lint設定・CI設定が確認できません。変更後は、実施したものだけを明示してください。
+このリポジトリには、標準的なlint設定や、全ディレクトリを対象とするテスト・CI設定は確認できません。`continuum_filament_model/` には既存テストを実行する限定的なGitHub Actions workflowがあります。変更後は、実施したものだけを明示してください。
 
 最低限、次を行います。
 
