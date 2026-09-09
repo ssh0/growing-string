@@ -621,7 +621,7 @@ def _metric_row(model: OverdampedGrowingFilament, state: FilamentState, initial_
         "energy_contact": float(components["contact"]),
         "mode_fractions": {str(index + 1): float(value) for index, value in enumerate(mode_fractions)},
         "first_mode_fraction": float(mode_fractions[0]) if len(mode_fractions) else 0.0,
-        "dominant_mode": int(np.argmax(mode_fractions) + 1) if len(mode_fractions) else None,
+        "dominant_mode": int(np.argmax(mode_fractions) + 1) if mode_total > 1.0e-30 else None,
         "growth_work_increment": 0.0,
         "growth_work_cumulative": 0.0,
         "dissipation_increment": 0.0,
@@ -802,7 +802,8 @@ def _run_with_partial_trajectory(
     t_end: float,
     trajectory: list[FilamentState],
 ) -> None:
-    while simulator.state.time < t_end - 1.0e-15:
+    end_tolerance = max(1.0e-15, 1.0e-12 * max(1.0, abs(float(t_end))))
+    while simulator.state.time < t_end - end_tolerance:
         simulator.step(min(simulator.parameters.dt, t_end - simulator.state.time))
         trajectory.append(simulator.state.copy())
 
@@ -1247,6 +1248,11 @@ def run_video_comparison(
     artifact_dir = output / "_video_artifacts"
     compact_path = output / "video_comparison_manifest.json"
     source = Path(video_path).expanduser()
+    numerical_status_value = dict(numerical_status or {
+        "status": "not_assessed_no_suite_context",
+        "category": None,
+        "reasons": [],
+    })
     if not source.is_file():
         record = {
             "schema_version": SCHEMA_VERSION,
@@ -1262,11 +1268,7 @@ def run_video_comparison(
                 "thresholds": dict(MODEL_INADEQUACY_THRESHOLDS),
                 "candidates": [],
             },
-            "numerical_unresolved": {
-                "status": "not_assessed_input_missing",
-                "category": None,
-                "reasons": [],
-            },
+            "numerical_unresolved": numerical_status_value,
             "quantitative_fitting": "suppressed",
             "legacy_video_substitution": False,
         }
@@ -1311,11 +1313,6 @@ def run_video_comparison(
                 invalid_registration_fields,
             )
             comparison_rows = []
-        numerical_status_value = dict(numerical_status or {
-            "status": "not_assessed_no_suite_context",
-            "category": None,
-            "reasons": [],
-        })
         calibration_status = (
             "configured_not_fitted"
             if registration_explicit and usable
@@ -1366,7 +1363,13 @@ def run_video_comparison(
                 "quantitative_model_overlay": (
                     "available_for_eligible_registered_rows"
                     if registration_explicit and int(comparison_summary.get("eligible_rows", 0)) > 0
-                    else "suppressed_without_explicit_registration"
+                    else (
+                        "suppressed_registered_input_quality"
+                        if registration_explicit and not usable
+                        else "suppressed_registered_censor"
+                        if registration_explicit
+                        else "suppressed_without_explicit_registration"
+                    )
                 ),
             },
             "model_inadequacy": model_inadequacy,
@@ -1396,11 +1399,7 @@ def run_video_comparison(
                 "thresholds": dict(MODEL_INADEQUACY_THRESHOLDS),
                 "candidates": [],
             },
-            "numerical_unresolved": {
-                "status": "not_assessed_pipeline_error",
-                "category": None,
-                "reasons": [],
-            },
+            "numerical_unresolved": numerical_status_value,
             "quantitative_fitting": "suppressed",
             "legacy_video_substitution": False,
             "error": failure_category,

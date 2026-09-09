@@ -78,6 +78,7 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertEqual(replicate["trial"], 1)
             run_summary = next(item for item in report["results"] if item["run_name"] == "fixture")
             self.assertGreaterEqual(len(run_summary["endpoint_trajectory"]), 2)
+            self.assertEqual(run_summary["accepted_steps"], 4)
             observable = run_summary["observables"][0]
             for key in (
                 "reference_length",
@@ -162,7 +163,18 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertEqual(result["classification"]["unresolved_reason_category"], "numerical_nonconvergence")
             self.assertEqual(len(result["observables"]), 1)
             self.assertEqual(report["video_comparison"]["status"], "input_missing")
-            self.assertEqual(report["video_comparison"]["numerical_unresolved"]["status"], "not_assessed_input_missing")
+            self.assertEqual(report["video_comparison"]["numerical_unresolved"]["status"], "numerically_unresolved")
+            self.assertEqual(report["video_comparison"]["numerical_unresolved"]["category"], "numerical_nonconvergence")
+
+    def test_zero_amplitude_has_no_dominant_mode(self):
+        config = self._config()
+        config["base"]["amplitude"] = 0.0
+        config["fixtures"][0]["overrides"]["amplitude"] = 0.0
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_suite(config, Path(directory))
+        result = next(item for item in report["results"] if item["run_name"] == "fixture")
+        self.assertIsNone(result["observables"][0]["dominant_mode"])
+        self.assertEqual(result["observables"][0]["first_mode_fraction"], 0.0)
 
     def test_single_interior_replicate_noise_stays_bounded(self):
         config = self._config()
@@ -302,6 +314,7 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertEqual(record["holdout"]["comparison"]["eligible_rows"], 0)
             self.assertFalse(record["holdout"]["comparison"]["comparison_performed"])
             self.assertEqual(record["model_inadequacy"]["status"], "not_assessed_no_eligible_rows")
+            self.assertEqual(record["holdout"]["quantitative_model_overlay"], "suppressed_registered_input_quality")
             self.assertIn("centerline_contract_invalid", record["data_quality"]["reasons"])
 
     def test_missing_time_registration_suppresses_model_comparison(self):
@@ -532,6 +545,29 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
                 self.assertEqual(record["error"], category)
                 self.assertIsNone(record["numerical_unresolved"]["category"])
                 self.assertNotIn(str(root.resolve()), json.dumps(record))
+
+    def test_video_pipeline_failure_preserves_numerical_status(self):
+        from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            video = root / "input.mp4"
+            video.write_bytes(b"video")
+            numerical_status = {
+                "status": "numerically_unresolved",
+                "category": "numerical_nonconvergence",
+                "reasons": ["selected_model_failure"],
+            }
+            with patch.object(stage2, "run_pipeline", side_effect=RuntimeError("analysis failed")):
+                record = stage2.run_video_comparison(
+                    video,
+                    root / "output",
+                    root / "model.npz",
+                    self._config(),
+                    numerical_status=numerical_status,
+                )
+            self.assertEqual(record["numerical_unresolved"], numerical_status)
+            self.assertEqual(record["failure"]["domain"], "analysis")
 
     def test_video_failure_hashing_is_best_effort(self):
         from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
