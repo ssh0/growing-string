@@ -142,6 +142,95 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertLess(initial["contour_length"], 3.0)
             self.assertFalse(replicate["contact_enabled"])
 
+    def test_calibrated_comparison_reports_model_inadequacy_candidates_separately(self):
+        from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "output"
+            video = root / "input.mp4"
+            video.write_bytes(b"video")
+            extraction = {
+                "manifest": {
+                    "input": {"metadata": {"path": str(video.resolve())}},
+                    "processed_frames": 2,
+                    "candidate_count": 2,
+                    "candidate_censor_count": 1,
+                    "selected_filament_id": "filament-0000",
+                },
+                "validation": {"valid": True},
+                "summary_rows": [{"frame": 0}, {"frame": 1}],
+            }
+            comparison = {
+                "rows": [
+                    {
+                        "frame": 0,
+                        "time": 0.0,
+                        "filament_id": "filament-0000",
+                        "metric_status": "computed",
+                        "censor": 0,
+                        "shape_rmse_px": 8.0,
+                        "model_length_px": 100.0,
+                        "length_difference_px": 4.0,
+                    },
+                    {
+                        "frame": 1,
+                        "time": 1.0,
+                        "filament_id": "filament-0000",
+                        "metric_status": "not_computed_censored",
+                        "censor": 1,
+                        "shape_rmse_px": 30.0,
+                        "model_length_px": 100.0,
+                        "length_difference_px": 30.0,
+                    },
+                ],
+                "summary": {
+                    "calibration_status": "calibrated",
+                    "eligible_rows": 1,
+                    "censored_rows": 1,
+                    "excluded_from_metric_denominator": 1,
+                    "observation_dir": str((output / "_video_artifacts").resolve()),
+                    "model_path": str((output / "_runs" / "fixture" / "trajectory.npz").resolve()),
+                },
+            }
+            with patch.object(stage2, "run_pipeline", return_value=extraction), patch.object(
+                stage2, "compare_with_model", return_value=comparison
+            ):
+                record = stage2.run_video_comparison(
+                    video,
+                    output,
+                    output / "_runs" / "fixture" / "trajectory.npz",
+                    self._config(),
+                    registration={"pixel_per_model_unit": 10.0},
+                )
+            self.assertEqual(record["holdout"]["status"], "calibrated_comparison")
+            self.assertTrue(record["data_quality"]["censor"])
+            self.assertEqual(record["model_inadequacy"]["status"], "candidate")
+            self.assertEqual(record["model_inadequacy"]["candidate_count"], 1)
+            self.assertIn("shape_rmse_px_above_threshold", record["model_inadequacy"]["candidates"][0]["reasons"])
+            self.assertEqual(record["model_inadequacy"]["thresholds"]["shape_rmse_px"], 5.0)
+
+    def test_video_failure_categories_are_stable_and_redacted(self):
+        from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
+
+        cases = (
+            (RuntimeError("required executable is not installed: ffmpeg"), "missing_ffmpeg", "execution_environment"),
+            (RuntimeError("command failed (ffprobe…): Invalid data found when processing input"), "decode_or_corrupt_input", "input_quality"),
+            (ValueError("unsupported format"), "invalid_format", "input_quality"),
+            (RuntimeError("analysis failed"), "analysis_failure", "analysis"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            video = root / "input.mp4"
+            video.write_bytes(b"video")
+            for index, (error, category, domain) in enumerate(cases):
+                output = root / f"output-{index}"
+                with patch.object(stage2, "run_pipeline", side_effect=error):
+                    record = stage2.run_video_comparison(video, output, output / "model.npz", self._config())
+                self.assertEqual(record["failure"], {"category": category, "domain": domain})
+                self.assertEqual(record["error"], category)
+                self.assertNotIn(str(root.resolve()), json.dumps(record))
+
     def test_missing_video_is_censored_without_substitution_or_fit(self):
         config = load_config_from_mapping(self._config())
         with tempfile.TemporaryDirectory() as directory:

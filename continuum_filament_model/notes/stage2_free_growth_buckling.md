@@ -109,6 +109,12 @@ pixel per model unit と time registration は推測しない。登録値が無�
 品質 censor、new/reconnected lineage、missing、branch/loop は比較母集団から除外し、
 calibration と holdout の records を混同しない。入力中心線が censored のとき、見た目の
 overlayからモデル不足・入力品質・数値未収束を区別せずに結論を出してはならない。
+校正済みで `metric_status=computed` の行だけを対象に、`shape_rmse_px > 5.0` または
+`abs(length_difference_px) / model_length_px > 0.25` を `model_inadequacy` 候補として記録する。
+これは候補条件であり、接触物理やモデル不足の確定診断ではない。候補は入力品質/censorと
+別フィールドに保存し、候補行がない・未校正・eligible行がない状態も区別する。動画処理の
+失敗は `missing_ffmpeg`、`decode_or_corrupt_input`、`invalid_format`、`analysis_failure`
+の安定したカテゴリで保存し、絶対パスや例外詳細はcompact成果物へ出さない。
 
 ## 結果の解釈
 

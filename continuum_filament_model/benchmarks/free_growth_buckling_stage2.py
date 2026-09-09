@@ -67,6 +67,10 @@ from growing_filament.video_comparison import (  # noqa: E402
 )
 
 SCHEMA_VERSION = "continuum-filament-stage2-free-free-1"
+MODEL_INADEQUACY_THRESHOLDS: dict[str, float] = {
+    "shape_rmse_px": 5.0,
+    "relative_length_error": 0.25,
+}
 DEFAULT_VIDEO_CONFIG: dict[str, Any] = {
     "polarity": "dark",
     "background": "local_median",
@@ -772,6 +776,80 @@ def _compact_comparison_summary(summary: Mapping[str, Any], output: Path, artifa
     return value
 
 
+def _model_inadequacy_assessment(rows: Sequence[Mapping[str, Any]], registration: RegistrationConfig) -> dict[str, Any]:
+    thresholds = dict(MODEL_INADEQUACY_THRESHOLDS)
+    conditions = [
+        "registration.calibrated",
+        "metric_status == computed",
+        "shape_rmse_px > 5.0 or abs(length_difference_px) / model_length_px > 0.25",
+    ]
+    result: dict[str, Any] = {
+        "status": "not_assessed_uncalibrated",
+        "category": "model_inadequacy",
+        "thresholds": thresholds,
+        "conditions": conditions,
+        "candidate_count": 0,
+        "candidates": [],
+        "scope": "eligible calibrated comparison rows only; input quality/censor and numerical status remain separate",
+    }
+    if not registration.calibrated:
+        return result
+    eligible = [row for row in rows if row.get("metric_status") == "computed" and not row.get("censor")]
+    if not eligible:
+        result["status"] = "not_assessed_no_eligible_rows"
+        return result
+    candidates: list[dict[str, Any]] = []
+    for row in eligible:
+        reasons: list[str] = []
+        shape_rmse = row.get("shape_rmse_px")
+        if shape_rmse is not None and float(shape_rmse) > thresholds["shape_rmse_px"]:
+            reasons.append("shape_rmse_px_above_threshold")
+        model_length = row.get("model_length_px")
+        length_difference = row.get("length_difference_px")
+        relative_length_error = None
+        if model_length is not None and length_difference is not None and float(model_length) > 0.0:
+            relative_length_error = abs(float(length_difference)) / float(model_length)
+            if relative_length_error > thresholds["relative_length_error"]:
+                reasons.append("relative_length_error_above_threshold")
+        if reasons:
+            candidates.append({
+                "frame": row.get("frame"),
+                "time": row.get("time"),
+                "filament_id": row.get("filament_id"),
+                "shape_rmse_px": None if shape_rmse is None else float(shape_rmse),
+                "relative_length_error": relative_length_error,
+                "reasons": reasons,
+            })
+    result["status"] = "candidate" if candidates else "no_candidate"
+    result["candidate_count"] = len(candidates)
+    result["candidates"] = candidates[:64]
+    result["candidate_rows_truncated"] = len(candidates) > 64
+    return result
+
+
+def _video_failure_category(exc: BaseException) -> tuple[str, str]:
+    message = str(exc).lower()
+    if "required executable is not installed" in message and ("ffmpeg" in message or "ffprobe" in message):
+        return "missing_ffmpeg", "execution_environment"
+    if any(token in message for token in ("unsupported format", "invalid format", "not a valid video")):
+        return "invalid_format", "input_quality"
+    if any(token in message for token in ("decode", "corrupt", "invalid data", "moov atom not found", "video metadata failed", "command failed")):
+        return "decode_or_corrupt_input", "input_quality"
+    return "analysis_failure", "analysis"
+
+
+def _holdout_status(usable: bool, registration: RegistrationConfig, summary: Mapping[str, Any], reasons: Sequence[str]) -> str:
+    if not registration.calibrated:
+        return "comparison_only_uncalibrated" if usable else "censored"
+    if int(summary.get("eligible_rows", 0)) > 0:
+        return "calibrated_comparison"
+    if not usable:
+        return "calibrated_but_input_unusable"
+    if reasons or int(summary.get("excluded_from_metric_denominator", 0)) > 0:
+        return "calibrated_but_censored"
+    return "calibrated_no_eligible_rows"
+
+
 def run_video_comparison(video_path: str | Path, output: Path, model_path: Path, config: Mapping[str, Any], registration: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Run the existing video pipeline and return a compact QC-only record.
 
@@ -793,6 +871,12 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
             "data_quality": {"usable": False, "censor": True, "reasons": ["input_missing"]},
             "calibration": {"status": "not_run_input_missing", "runs": []},
             "holdout": {"status": "not_run_input_missing", "runs": []},
+            "model_inadequacy": {
+                "status": "not_assessed_input_missing",
+                "category": "model_inadequacy",
+                "thresholds": dict(MODEL_INADEQUACY_THRESHOLDS),
+                "candidates": [],
+            },
             "quantitative_fitting": "suppressed",
             "legacy_video_substitution": False,
         }
@@ -816,6 +900,7 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
         if int(video_manifest.get("candidate_censor_count", 0)) > 0:
             reasons.append("candidate_quality_censor_present")
         calibration_status = "configured_not_fitted" if registration_value.calibrated else "not_available_metrics_suppressed"
+        model_inadequacy = _model_inadequacy_assessment(comparison.get("rows", []), registration_value)
         record = {
             "schema_version": SCHEMA_VERSION,
             "status": "extracted" if usable else "unusable",
@@ -840,30 +925,47 @@ def run_video_comparison(video_path: str | Path, output: Path, model_path: Path,
                 "parameter_identification": "suppressed; registration is not an inferred fit",
             },
             "holdout": {
-                "status": "comparison_only_uncalibrated" if usable else "censored",
+                "status": _holdout_status(usable, registration_value, comparison_summary, reasons),
                 "model_logical_id": model_path.name,
                 "comparison": _compact_comparison_summary(
                     comparison_summary, output, artifact_dir, model_path
                 ),
                 "supported_observables": ["observed_length_px", "observed_endpoint_distance_px", "observed_curvature_mean_px_inv", "observed_curvature_max_px_inv", "temporal_frame_coverage"],
-                "quantitative_model_overlay": "suppressed_without_pixel_per_model_unit_or_uncensored_centerline",
+                "quantitative_model_overlay": (
+                    "available_for_eligible_registered_rows"
+                    if registration_value.calibrated and int(comparison_summary.get("eligible_rows", 0)) > 0
+                    else "suppressed_without_registered_eligible_centerline"
+                ),
             },
+            "model_inadequacy": model_inadequacy,
             "quantitative_fitting": "suppressed",
             "lineage_censor_preserved": True,
             "legacy_video_substitution": False,
         }
     except (OSError, RuntimeError, ValueError, KeyError) as exc:
+        failure_category, failure_domain = _video_failure_category(exc)
         record = {
             "schema_version": SCHEMA_VERSION,
             "status": "unusable",
             "input_logical_id": source.name,
             "input_sha256": sha256_file(source),
-            "data_quality": {"usable": False, "censor": True, "reasons": [f"pipeline_error:{type(exc).__name__}"]},
+            "data_quality": {
+                "usable": False,
+                "censor": True,
+                "reasons": [failure_category] if failure_domain == "input_quality" else ["pipeline_failure"],
+            },
+            "failure": {"category": failure_category, "domain": failure_domain},
             "calibration": {"status": "not_run_pipeline_error", "runs": []},
             "holdout": {"status": "not_run_pipeline_error", "runs": []},
+            "model_inadequacy": {
+                "status": "not_assessed_pipeline_error",
+                "category": "model_inadequacy",
+                "thresholds": dict(MODEL_INADEQUACY_THRESHOLDS),
+                "candidates": [],
+            },
             "quantitative_fitting": "suppressed",
             "legacy_video_substitution": False,
-            "error": type(exc).__name__,
+            "error": failure_category,
         }
     _write_json(compact_path, record)
     return record
