@@ -21,6 +21,7 @@ import csv
 import hashlib
 import json
 import math
+import re
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -132,6 +133,15 @@ class Stage2Error(ValueError):
     """Invalid Stage 2 configuration or result."""
 
 
+_SAFE_RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
+
+
+def _validate_run_name(name: str, context: str = "run") -> str:
+    if not _SAFE_RUN_NAME.fullmatch(name):
+        raise Stage2Error(f"{context} name must be a safe single path component")
+    return name
+
+
 @dataclass(frozen=True)
 class RunSpec:
     name: str
@@ -208,13 +218,17 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     if float(base.get("max_displacement_fraction", 1.0)) <= 0.0:
         raise Stage2Error("base.max_displacement_fraction must be positive")
     fixtures = config.get("fixtures", [])
-    if not fixtures:
+    if not isinstance(fixtures, list) or not fixtures:
         raise Stage2Error("at least one deterministic fixture is required")
-    names = [str(item.get("name")) for item in fixtures if isinstance(item, Mapping) and item.get("name")]
+    names: list[str] = []
+    for item in fixtures:
+        if not isinstance(item, Mapping) or not item.get("name"):
+            raise Stage2Error("every fixture requires a name")
+        name = str(item["name"])
+        _validate_run_name(name, "fixture")
+        names.append(name)
     if len(names) != len(set(names)):
         raise Stage2Error("fixture names must be unique")
-    if len(names) != len(fixtures):
-        raise Stage2Error("every fixture requires a name")
     contrast_conditions = config.get("contrast_conditions", [])
     if not isinstance(contrast_conditions, list):
         raise Stage2Error("contrast_conditions must be a list")
@@ -230,6 +244,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         overrides = condition.get("overrides")
         if not name or name in fixture_names or name in condition_names:
             raise Stage2Error("contrast condition names must be unique and not reuse fixture names")
+        _validate_run_name(name, "contrast condition")
         if base_fixture not in fixture_names:
             raise Stage2Error(f"contrast condition references unknown fixture: {base_fixture}")
         if factor not in allowed_factors or not isinstance(overrides, Mapping) or set(overrides) != {factor}:
@@ -489,6 +504,12 @@ def _apply_work_diagnostics(rows: list[dict[str, Any]], trajectory: Sequence[Fil
     balance_cumulative = 0.0
     for index, (before, after) in enumerate(zip(trajectory, trajectory[1:]), start=1):
         dt = float(after.time - before.time)
+        if dt <= 0.0:
+            rows[index]["growth_work_increment"] = None
+            rows[index]["dissipation_increment"] = None
+            rows[index]["mechanical_balance_residual_increment"] = None
+            rows[index]["accepted_dt"] = None
+            continue
         energy_before = model.energy(before.positions, before.rest_lengths)
         grown = grow_reference_lengths(before.rest_lengths, model.parameters.growth_rate, dt)
         growth_increment = float(model.energy(before.positions, grown) - energy_before)
@@ -565,6 +586,7 @@ def _dimensionless_groups(config: Mapping[str, Any]) -> dict[str, float | str]:
 
 
 def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revision: str | None, save_trajectory_file: bool = False) -> dict[str, Any]:
+    _validate_run_name(spec.name)
     config = _effective(base_config, spec)
     groups = _dimensionless_groups(config)
     state = _initial_state(config, spec.seed)
@@ -597,7 +619,11 @@ def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revisi
     except (ModelError, RuntimeError, ValueError, FloatingPointError) as exc:
         failure_reason = f"{type(exc).__name__}: {exc}"
         if simulator is not None:
-            trajectory = [simulator.initial_state.copy(), simulator.state.copy()]
+            initial_state = simulator.initial_state.copy()
+            current_state = simulator.state.copy()
+            trajectory = [initial_state]
+            if current_state.step != initial_state.step or current_state.time > initial_state.time + 1.0e-15:
+                trajectory.append(current_state)
     if simulator is None:
         # Keep the schema usable when initialization itself fails.
         rows: list[dict[str, Any]] = []
@@ -720,7 +746,6 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
         "G_b": groups["G_b"],
         "G_s": groups["G_s"],
         "chi": groups["chi"],
-        "bending_to_axial_ratio": groups["bending_to_axial_ratio"],
         "growth_bending_number": groups["G_b"],
         "dt_over_tau_b": groups["dt_over_tau_b"],
         "dt_over_tau_s": groups["dt_over_tau_s"],
@@ -984,6 +1009,11 @@ def run_video_comparison(
                 "thresholds": dict(MODEL_INADEQUACY_THRESHOLDS),
                 "candidates": [],
             },
+            "numerical_unresolved": {
+                "status": "not_assessed_input_missing",
+                "category": None,
+                "reasons": [],
+            },
             "quantitative_fitting": "suppressed",
             "legacy_video_substitution": False,
         }
@@ -1102,7 +1132,7 @@ def run_video_comparison(
             },
             "numerical_unresolved": {
                 "status": "not_assessed_pipeline_error",
-                "category": "numerical_nonconvergence",
+                "category": None,
                 "reasons": [],
             },
             "quantitative_fitting": "suppressed",
@@ -1159,7 +1189,7 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
         trajectory_path = Path(str(trajectory_value))
         if trajectory_path.is_absolute():
             raise Stage2Error("video trajectory path must be output-relative")
-        summary["video_comparison"] = run_video_comparison(
+        video_record = run_video_comparison(
             video_path,
             output,
             output / trajectory_path,
@@ -1167,6 +1197,10 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
             registration,
             numerical_status=numerical_status,
         )
+        video_record["source_revision"] = revision
+        video_record["config_sha256"] = summary["config_sha256"]
+        summary["video_comparison"] = video_record
+        _write_json(output / "video_comparison_manifest.json", video_record)
     _write_json(output / "compact_summary.json", summary)
     _write_json(output / "effective_config.json", effective)
     artifact_paths = [output / "summary.csv", output / "compact_summary.json", output / "effective_config.json"]

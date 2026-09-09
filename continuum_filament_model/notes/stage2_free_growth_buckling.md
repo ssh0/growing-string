@@ -90,11 +90,12 @@ fixture と独立の exploratory distribution として報告し、この定義�
 
 ```bash
 TMP_DIR=$(mktemp -d /tmp/growing-string-stage2-gray5.XXXXXX)
+VIDEO_PATH=/path/to/video.mp4
 PYTHONPATH=continuum_filament_model/src \
 python continuum_filament_model/benchmarks/free_growth_buckling_stage2.py \
   --config continuum_filament_model/benchmarks/configs/stage2_free_free.json \
   --output "$TMP_DIR" \
-  --video /Users/fujimotoshotaro/Workspace/growing-string/img/gray5.mp4
+  --video "$VIDEO_PATH"
 ```
 
 動画本体、raw centerline、comparison CSV、trajectory は `_video_artifacts/` と `_runs/`
@@ -135,7 +136,7 @@ overlayからモデル不足・入力品質・数値未収束を区別せずに�
 ## 実行済み探索の要約
 
 `results/stage2_free_free/` は、source revision
-`6c7446afb01ae1af6db7f54c4c1a12cbe053462c`、`t_end=4.0` の22 run（決定論的 fixture 5、
+`29bba36eab811616644b1f54108feae04edd229d`、`t_end=4.0` の22 run（決定論的 fixture 5、
 refinement 4、parameter contrast 4、seed付き replicate 9）をcompactに保存する。全runは
 `contact_enabled=false`、失敗0、拒否0であった。決定論的な fast-growth/low-bend 条件は
 `t≈3.30` に定義した onset を通過し、`n_nodes=9,13` と `dt=0.002,0.001` の4 refinement
@@ -146,14 +147,14 @@ refinement 4、parameter contrast 4、seed付き replicate 9）をcompactに保�
 fast-growth/low-bend replicate は3本中2本が candidate、1本が閾値未満であり、これは
 初期 imperfection の探索的な感度としてのみ扱う。
 
-`gray5.mp4` の full-period・frame stride 15 抽出は24 sampled frames、20 candidate、
-selected lineageを含む2 lineage、candidate censor 20で、centerline contract自体はvalid
-だった。pixel/model scale・time registrationは明示していないため、現行manifestは
-`comparison_only_unregistered`、eligible行0、`model_inadequacy=not_assessed_unregistered`
-としている。動画側の `L(t)`、endpoint distance、curvature候補、lineage/censorはQC用に
-保存したが、モデル時刻照合、定量overlay、onset matching、parameter fittingは抑制した。
-refinementと選択モデルの数値状態は `numerical_resolved` として別記録し、未校正を数値未収束や
-モデル不足と混同しない。
+現在のworktreeには実動画本体が含まれないため、source revision
+`29bba36eab811616644b1f54108feae04edd229d` で再生成したStage 2 compact artifactの動画記録は
+`input_missing`、`quantitative_fitting=suppressed`、`model_inadequacy=not_assessed_input_missing`
+である。入力品質、censor、model inadequacy、numerical unresolvedを別フィールドに保持し、
+動画がない状態を実動画との比較結果として解釈しない。利用可能な実動画を `VIDEO_PATH` に指定して
+再実行すれば、pixel/model scaleとtime registrationを明示した場合だけ定量比較へ進む。
+既存の観測抽出マニフェストは `results/video_comparison/gray5_manifest.json` に保存されているが、
+今回のStage 2成果物の動画比較済み証拠とは混同しない。
 
 この段階の compact result だけから、実動画のパラメータ同定、接触・摩擦・折りたたみの
 再現、臨界値、普遍性を主張しない。

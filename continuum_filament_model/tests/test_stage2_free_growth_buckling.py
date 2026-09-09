@@ -92,6 +92,8 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertIn("event_sequence_hash", run_summary["events"])
             self.assertIn("dimensionless_groups", run_summary)
             self.assertGreater(run_summary["dimensionless_groups"]["G_s"], 0.0)
+            self.assertIn("chi", run_summary["dimensionless_groups"])
+            self.assertNotIn("bending_to_axial_ratio", run_summary["dimensionless_groups"])
             self.assertTrue((Path(directory) / "compact_manifest.json").is_file())
 
     def test_axial_and_drag_contrasts_preserve_other_experiment_axes(self):
@@ -128,6 +130,25 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
                 self.assertIn("chi", result["dimensionless_groups"])
                 self.assertIn("G_b", result["dimensionless_groups"])
                 self.assertFalse(result["contact_enabled"])
+
+    def test_run_names_cannot_escape_output_directory(self):
+        config = self._config()
+        config["fixtures"][0]["name"] = "../escape"
+        with self.assertRaises(ValueError):
+            load_config_from_mapping(config)
+
+    def test_failed_zero_progress_run_is_serializable_and_unresolved(self):
+        config = self._config()
+        config["base"]["max_displacement_fraction"] = 1.0e-12
+        config["base"]["max_retries"] = 0
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_suite(config, Path(directory), video_path=Path(directory) / "missing.mp4")
+            result = next(item for item in report["results"] if item["run_name"] == "fixture")
+            self.assertEqual(result["classification"]["label"], "numerically-unresolved")
+            self.assertEqual(result["classification"]["unresolved_reason_category"], "numerical_nonconvergence")
+            self.assertEqual(len(result["observables"]), 1)
+            self.assertEqual(report["video_comparison"]["status"], "input_missing")
+            self.assertEqual(report["video_comparison"]["numerical_unresolved"]["status"], "not_assessed_input_missing")
 
     def test_single_interior_replicate_noise_stays_bounded(self):
         config = self._config()
@@ -321,6 +342,7 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
                     record = stage2.run_video_comparison(video, output, output / "model.npz", self._config())
                 self.assertEqual(record["failure"], {"category": category, "domain": domain})
                 self.assertEqual(record["error"], category)
+                self.assertIsNone(record["numerical_unresolved"]["category"])
                 self.assertNotIn(str(root.resolve()), json.dumps(record))
 
     def test_missing_video_is_censored_without_substitution_or_fit(self):
