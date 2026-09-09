@@ -94,5 +94,26 @@ overlayからモデル不足・入力品質・数値未収束を区別せずに�
 - fixture と replicate の形態差：seed付き初期 imperfection の分布として保存し、実験ノイズ
   の同定や相境界の証拠とはしない。
 
+## 実行済み探索の要約
+
+`results/stage2_free_free/` は、source revision
+`187434c4e18a21f3d3bdfc33fb133b7f25570c37`、`t_end=4.0` の18 run（決定論的 fixture・
+refinement 9 run、seed付き replicate 9 run）を compact に保存する。全 run は
+`contact_enabled=false`、失敗0、拒否0であった。決定論的な fast-growth/low-bend 条件は
+`t≈3.30` に定義した onset を通過し、`n_nodes=9,13` と `dt=0.002,0.001` の4 refinement
+でも onset は `3.298--3.316`、peak transverse amplitude は約 `0.0876--0.0894` であった。
+slow-growth/low-bend は閾値未満で、high-bend は同じ fast growth でも閾値未満だった。
+fast-growth/low-bend replicate は3本中2本が candidate、1本が閾値未満であり、これは
+初期 imperfection の探索的な感度としてのみ扱う。したがって、この結果は「free/freeで
+成長・drag・伸長・曲げの競合により非接触の座屈候補が現れ得る」ことの bounded evidence
+であり、相境界・臨界成長率・実験パラメータ同定ではない。
+
+`gray5.mp4` の full-period・frame stride 15 抽出は24 sampled frames、20 candidate、
+selected lineageを含む2 lineage、candidate censor 20で、centerline contract自体はvalid
+だった。一方、pixel/model scale・time registrationは未指定で、比較母集団24行の定量metric
+eligibleは0行となった。従って動画側の `L(t)`、endpoint distance、curvature候補、lineage/
+censorはQC用に保存したが、モデル overlay、onset matching、parameter fittingは抑制した。
+これは入力品質/censorと未校正を数値未収束やモデル不足と混同しないための結果である。
+
 この段階の compact result だけから、実動画のパラメータ同定、接触・摩擦・折りたたみの
 再現、臨界値、普遍性を主張しない。

@@ -1,0 +1,43 @@
+{
+  "artifacts": {
+    "compact_summary.json": {
+      "bytes": 383375,
+      "sha256": "1b2661700beaaa285de37713379e07fee38c97d3a5d8a774a7b3d2ccb1c0141c"
+    },
+    "summary.csv": {
+      "bytes": 6394,
+      "sha256": "d26620f77c820171adfa237ec387617055c9f0b9449df58d2a5f121fcc7ed5a1"
+    },
+    "video_comparison.json": {
+      "bytes": 3554,
+      "sha256": "1f9cf446931e3c815b6dfc6bc3fc10400984030c9b3d775f822e283a91868d44"
+    }
+  },
+  "benchmark": "Stage 2 free/free growth-induced buckling exploration",
+  "config_sha256": "35acaf4475f5872033818f09403fef0c48a0cd82b24e4daa29a5c9556f6643cd",
+  "contact_enabled": false,
+  "deterministic_fixture_count": 9,
+  "exploratory_replicate_count": 9,
+  "observation_window": {
+    "t_end_values": [
+      4.0
+    ],
+    "units": "model time"
+  },
+  "phase_boundary_claim": false,
+  "run_count": 18,
+  "schema_version": "continuum-filament-stage2-free-free-1",
+  "source_revision": "187434c4e18a21f3d3bdfc33fb133b7f25570c37",
+  "video_input": {
+    "bytes": 4104980,
+    "calibration_status": "not_available_metrics_suppressed",
+    "candidate_censor_count": 20,
+    "candidate_count": 20,
+    "excluded_from_metric_denominator": 24,
+    "holdout_status": "comparison_only_uncalibrated",
+    "logical_id": "gray5.mp4",
+    "quantitative_fitting": "suppressed",
+    "sha256": "25eea9e9f439beb0476841f8269d421569fc011e548c3ea85741dea5cfd1072e",
+    "status": "extracted"
+  }
+}
