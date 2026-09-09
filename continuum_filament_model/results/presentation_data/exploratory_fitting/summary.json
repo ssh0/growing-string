@@ -1,0 +1,292 @@
+{
+  "artifacts": {
+    "best_fit_trajectory": "continuum_filament_model/results/presentation_data/exploratory_fitting/best_fit_trajectory.npz",
+    "candidate_scores": "continuum_filament_model/results/presentation_data/exploratory_fitting/candidate_scores.csv",
+    "comparison_plot": "continuum_filament_model/results/presentation_data/exploratory_fitting/best_fit_comparison.png"
+  },
+  "baseline": {
+    "feature_loss": 174.30146898073056,
+    "model_features": {
+      "contour_chord_ratio": 1.0,
+      "curvature_max_L": 2.3511630127789207e-28,
+      "curvature_mean_abs_L": 5.681328297253483e-29,
+      "curvature_rms_L": 8.293200067175531e-29,
+      "deflection_ratio": 6.123233995736766e-17,
+      "mode_1_abs": 3.8980450124298224e-17,
+      "mode_2_over_mode_1": 1.9488273390972896e-05,
+      "mode_3_over_mode_1": 1.2990101307653912e-05
+    },
+    "normalized_shape_loss": 28.512344973918292,
+    "observed_features": {
+      "contour_chord_ratio": 1.6372350758160705,
+      "curvature_max_L": 66.87029621761792,
+      "curvature_mean_abs_L": 8.718062698127621,
+      "curvature_rms_L": 13.708683501363183,
+      "deflection_ratio": 0.5344827586206896,
+      "mode_1_abs": 0.3050400646423558,
+      "mode_2_over_mode_1": 0.11018649489585203,
+      "mode_3_over_mode_1": 0.035064881232902946
+    },
+    "target_curvature_rmse_px_inv": 0.2850886021869142,
+    "target_frechet_distance_px": 40.568542494923804,
+    "type": "straight_centerline"
+  },
+  "best_fit": {
+    "G_b": 0.2,
+    "chi": 0.001,
+    "feature_names": [
+      "deflection_ratio",
+      "contour_chord_ratio",
+      "curvature_mean_abs_L",
+      "curvature_rms_L",
+      "curvature_max_L",
+      "mode_1_abs",
+      "mode_2_over_mode_1",
+      "mode_3_over_mode_1"
+    ],
+    "feature_scales": {
+      "contour_chord_ratio": 0.25,
+      "curvature_max_L": 2.0,
+      "curvature_mean_abs_L": 1.0,
+      "curvature_rms_L": 1.0,
+      "deflection_ratio": 0.25,
+      "mode_1_abs": 0.25,
+      "mode_2_over_mode_1": 1.0,
+      "mode_3_over_mode_1": 1.0
+    },
+    "frame_metrics": [
+      {
+        "censor": true,
+        "curvature_rmse_px_inv": 0.7411129535248169,
+        "feature_loss": 19.80311171546567,
+        "feature_residuals": {
+          "contour_chord_ratio": 1.3529599626622542,
+          "curvature_max_L": -0.7583980496298857,
+          "curvature_mean_abs_L": -7.027843837453702,
+          "curvature_rms_L": -10.295463555685064,
+          "deflection_ratio": 0.750641529593363,
+          "mode_1_abs": 0.23845653222597607,
+          "mode_2_over_mode_1": 0.10703215590203394,
+          "mode_3_over_mode_1": -0.01692705798452316
+        },
+        "filament_id": "filament-0000",
+        "frame": 15,
+        "frechet_distance_px": 5.63793425676316,
+        "model_features": {
+          "contour_chord_ratio": 1.6133657066709295,
+          "curvature_max_L": 32.704670531439575,
+          "curvature_mean_abs_L": 3.0068184102016673,
+          "curvature_rms_L": 5.284773579900973,
+          "deflection_ratio": 0.5341904280094405,
+          "mode_1_abs": 0.30655517402919386,
+          "mode_2_over_mode_1": 0.1292297041008476,
+          "mode_3_over_mode_1": 0.03204047746704209
+        },
+        "model_time": 0.0,
+        "n_model_nodes": 25,
+        "normalized_shape_loss": 24.605910168148494,
+        "observed_features": {
+          "contour_chord_ratio": 1.275125716005366,
+          "curvature_max_L": 34.22146663069935,
+          "curvature_mean_abs_L": 10.034662247655369,
+          "curvature_rms_L": 15.580237135586037,
+          "deflection_ratio": 0.34653004561109974,
+          "mode_1_abs": 0.24694104097269984,
+          "mode_2_over_mode_1": 0.022197548198813675,
+          "mode_3_over_mode_1": 0.04896753545156525
+        },
+        "quality": 0.7199999999999999,
+        "quality_flags": "ambiguous_components;components_truncated;disconnected_skeleton;large_jump;orientation_reversed",
+        "requested_model_time": 0.0,
+        "selected_orientation": "forward",
+        "time": 1.0
+      },
+      {
+        "censor": true,
+        "curvature_rmse_px_inv": 0.31292868275430324,
+        "feature_loss": 44.30539943667326,
+        "feature_residuals": {
+          "contour_chord_ratio": -0.07692079505882088,
+          "curvature_max_L": -18.338290492710414,
+          "curvature_mean_abs_L": -1.3107524583475492,
+          "curvature_rms_L": -4.0527730477641715,
+          "deflection_ratio": 0.0329988911662471,
+          "mode_1_abs": 0.004679965696971156,
+          "mode_2_over_mode_1": 0.015102468202736918,
+          "mode_3_over_mode_1": 0.0004386908849579388
+        },
+        "filament_id": "filament-0000",
+        "frame": 45,
+        "frechet_distance_px": 2.404310467144171,
+        "model_features": {
+          "contour_chord_ratio": 1.6180048770513653,
+          "curvature_max_L": 30.19371523219709,
+          "curvature_mean_abs_L": 7.407310239780072,
+          "curvature_rms_L": 9.655910453599011,
+          "deflection_ratio": 0.5427324814122514,
+          "mode_1_abs": 0.30621005606659857,
+          "mode_2_over_mode_1": 0.12528896309858895,
+          "mode_3_over_mode_1": 0.035503572117860885
+        },
+        "model_time": 0.05,
+        "n_model_nodes": 25,
+        "normalized_shape_loss": 30.86931643359402,
+        "observed_features": {
+          "contour_chord_ratio": 1.6372350758160705,
+          "curvature_max_L": 66.87029621761792,
+          "curvature_mean_abs_L": 8.718062698127621,
+          "curvature_rms_L": 13.708683501363183,
+          "deflection_ratio": 0.5344827586206896,
+          "mode_1_abs": 0.3050400646423558,
+          "mode_2_over_mode_1": 0.11018649489585203,
+          "mode_3_over_mode_1": 0.035064881232902946
+        },
+        "quality": 1.0,
+        "quality_flags": "ambiguous_components;branched_component;components_truncated;disconnected_skeleton;orientation_reversed",
+        "requested_model_time": 0.05,
+        "selected_orientation": "forward",
+        "time": 3.0
+      }
+    ],
+    "growth_time": 0.05,
+    "normalized_shape_loss": 46.508591664929504,
+    "target_frame": {
+      "censor": true,
+      "curvature_rmse_px_inv": 0.31292868275430324,
+      "feature_loss": 44.30539943667326,
+      "feature_residuals": {
+        "contour_chord_ratio": -0.07692079505882088,
+        "curvature_max_L": -18.338290492710414,
+        "curvature_mean_abs_L": -1.3107524583475492,
+        "curvature_rms_L": -4.0527730477641715,
+        "deflection_ratio": 0.0329988911662471,
+        "mode_1_abs": 0.004679965696971156,
+        "mode_2_over_mode_1": 0.015102468202736918,
+        "mode_3_over_mode_1": 0.0004386908849579388
+      },
+      "filament_id": "filament-0000",
+      "frame": 45,
+      "frechet_distance_px": 2.404310467144171,
+      "model_features": {
+        "contour_chord_ratio": 1.6180048770513653,
+        "curvature_max_L": 30.19371523219709,
+        "curvature_mean_abs_L": 7.407310239780072,
+        "curvature_rms_L": 9.655910453599011,
+        "deflection_ratio": 0.5427324814122514,
+        "mode_1_abs": 0.30621005606659857,
+        "mode_2_over_mode_1": 0.12528896309858895,
+        "mode_3_over_mode_1": 0.035503572117860885
+      },
+      "model_time": 0.05,
+      "n_model_nodes": 25,
+      "normalized_shape_loss": 30.86931643359402,
+      "observed_features": {
+        "contour_chord_ratio": 1.6372350758160705,
+        "curvature_max_L": 66.87029621761792,
+        "curvature_mean_abs_L": 8.718062698127621,
+        "curvature_rms_L": 13.708683501363183,
+        "deflection_ratio": 0.5344827586206896,
+        "mode_1_abs": 0.3050400646423558,
+        "mode_2_over_mode_1": 0.11018649489585203,
+        "mode_3_over_mode_1": 0.035064881232902946
+      },
+      "quality": 1.0,
+      "quality_flags": "ambiguous_components;branched_component;components_truncated;disconnected_skeleton;orientation_reversed",
+      "requested_model_time": 0.05,
+      "selected_orientation": "forward",
+      "time": 3.0
+    },
+    "temporal_features": {
+      "growth_rate_loss": 0.9835787459588884,
+      "model_growth_rate": 0.004514491018412331,
+      "normalised_growth_rate_residual": -0.991755386150682,
+      "observed_growth_rate": 0.5475685218156996,
+      "time_unit": "selected observation time"
+    }
+  },
+  "improvement": {
+    "feature_loss_percent": 74.58116693120279,
+    "feature_loss_reduction": 129.9960695440573,
+    "frechet_distance_percent": 94.07346106297753,
+    "frechet_distance_px_reduction": 38.16423202777963,
+    "reference": "straight_centerline baseline on the selected target frame"
+  },
+  "input": {
+    "centerline": "continuum_filament_model/results/presentation_data/video_gray5/centerline.csv",
+    "initial_shape_frame": {
+      "frame": 45,
+      "reason": "latest selected representative frame used as exploratory shape seed",
+      "time": 3.0
+    },
+    "selected_filament_id": "filament-0000",
+    "selected_frames": [
+      {
+        "censor": true,
+        "filament_id": "filament-0000",
+        "frame": 15,
+        "n_points": 29,
+        "quality": 0.7199999999999999,
+        "quality_flags": "ambiguous_components;components_truncated;disconnected_skeleton;large_jump;orientation_reversed",
+        "time": 1.0
+      },
+      {
+        "censor": true,
+        "filament_id": "filament-0000",
+        "frame": 45,
+        "n_points": 83,
+        "quality": 1.0,
+        "quality_flags": "ambiguous_components;branched_component;components_truncated;disconnected_skeleton;orientation_reversed",
+        "time": 3.0
+      }
+    ]
+  },
+  "limitations": [
+    "The anchor observation is smoothed and used as the model initial geometry; this is an exploratory shape comparison, not an independent parameter identification.",
+    "Pixel-to-physical calibration is not inferred. Each overlay uses one global similarity registration to the selected observation frame.",
+    "All selected frames retain their source censor and quality flags; a low geometric loss does not establish tracking validity or physical model validity.",
+    "The reported Fréchet improvement is relative to a straight-centerline baseline, not a holdout or uncertainty-calibrated comparison."
+  ],
+  "schema_version": "continuum-filament-exploratory-shape-fitting-1",
+  "search": {
+    "candidate_count": 58,
+    "coarse_G_b": [
+      0.2,
+      0.775,
+      1.35,
+      1.925,
+      2.5
+    ],
+    "coarse_chi": [
+      0.0001,
+      0.0003,
+      0.0006,
+      0.001
+    ],
+    "dt": 0.01,
+    "growth_times": [
+      0.02,
+      0.05
+    ],
+    "model_length": 2.0,
+    "model_nondimensionalisation": "EA=1, zeta=1, EI=chi*EA*L^2; growth_rate=G_b/tau_b",
+    "n_nodes": 25,
+    "refinement": {
+      "G_b": [
+        0.2,
+        0.25
+      ],
+      "chi": [
+        0.0007071067811865475,
+        0.001,
+        0.0014142135623730952
+      ],
+      "growth_time": [
+        0.037500000000000006,
+        0.05,
+        0.0625
+      ]
+    },
+    "visual_frechet_weight": 50.0
+  },
+  "status": "computed"
+}

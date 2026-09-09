@@ -111,11 +111,13 @@ def _(Path, csv, json):
     contact_snapshots = load_json(presentation_root / "contact_snapshots" / "contact_snapshots.json")
     video_presentation = load_json(presentation_root / "video_gray5" / "video_presentation.json")
     video_centerline_rows = load_csv(presentation_root / "video_gray5" / "centerline.csv")
+    exploratory_summary = load_json(presentation_root / "exploratory_fitting" / "summary.json")
 
     result_paths = {
         "p1b2_map": results_root / "p1b2" / "regime_map.png",
         "p1b2_convergence": results_root / "p1b2" / "convergence_summary.png",
         "contact_map": results_root / "contact_buckling" / "phase_map.png",
+        "exploratory_fit": presentation_root / "exploratory_fitting" / "best_fit_comparison.png",
     }
     return (
         contact_rows,
@@ -131,22 +133,24 @@ def _(Path, csv, json):
         result_paths,
         video_centerline_rows,
         video_presentation,
+        exploratory_summary,
     )
 
 
 @app.cell
-def _(dense_heatmap_rows, jp_font_name, mo, p1b2_manifest, p1b2_map, result_paths, video_presentation):
+def _(dense_heatmap_rows, exploratory_summary, jp_font_name, mo, p1b2_manifest, p1b2_map, result_paths, video_presentation):
     report_lines = [
         f"- P1B.2 非接触 suite: **{p1b2_manifest['run_count']} run**、seed `{p1b2_manifest['seed_set']}`、3×3 grid",
         f"- P1B.2 regime map: `{result_paths['p1b2_map'].relative_to(result_paths['p1b2_map'].parents[2])}`（各cellは5 seed trial）",
         f"- 高密度座屈相図: `presentation_data/dense_buckling/heatmap.csv`（**{len(dense_heatmap_rows)}条件**、7×8 grid）",
         f"- 実観察 `gray5`: `{video_presentation['status']}`、中心線行を **{video_presentation['validation']['n_rows']}** 行収録",
+        f"- 探索的形状fit: `{exploratory_summary['status']}`、候補 **{exploratory_summary['search']['candidate_count']}** 件",
     ]
     mo.md(
         "### このページが参照する成果物\n"
         + "\n".join(report_lines)
         + "\n\n"
-        + f"P1B.2 のregime分類は `{len(p1b2_map['rows'])}` cellを対象にしています。動画の中心線は保存済みartifactから読み込み、品質・censorフラグを保持したまま表示します。"
+        + f"P1B.2 のregime分類は `{len(p1b2_map['rows'])}` cellを対象にしています。動画の中心線は保存済みartifactから読み込み、品質・censorフラグを保持したまま表示します。探索的fitの結果も、同じ保存済みartifactから読み込みます。"
         + f"\n\nMatplotlib Japanese font: `{jp_font_name}`"
     )
     return
@@ -876,6 +880,59 @@ def _(dense_snapshots, mo, np, plt, video_centerline_rows, video_frame_control, 
             video_frame_control,
             _figure,
             _comparison_figure,
+        ]
+    )
+    return
+
+
+@app.cell
+def _(exploratory_summary, mo, plt, result_paths):
+    _best = exploratory_summary["best_fit"]
+    _target = _best["target_frame"]
+    _baseline = exploratory_summary["baseline"]
+    _improvement = exploratory_summary["improvement"]
+    _temporal = _best["temporal_features"]
+    _figure, _axis = plt.subplots(figsize=(10, 6), constrained_layout=True)
+    _axis.imshow(plt.imread(result_paths["exploratory_fit"]))
+    _axis.axis("off")
+    _axis.set_title("保存済み exploratory fitting comparison")
+    mo.vstack(
+        [
+            mo.md(
+                f"""
+                ## 5A. 実データへの探索的フィッティングと視覚的整合性
+
+                `exploratory_shape_fitting.py` は、`gray5` の代表フレームを弧長再サンプルし、
+                節点数 **{exploratory_summary['search']['n_nodes']}** の連続体モデルを
+                `G_b`、`chi`、モデル成長時間の grid で探索した。以下は、選択された
+                target frame（`t={_target['time']:g}s`, `frame={_target['frame']}`）について、
+                一様スケールと端点方向だけを合わせた重ね合わせである。最新のtarget形状を
+                滑らかな初期seedにも使うため、これは予測的な動画再現ではなく、観察形状の
+                周囲で力学パラメータを探索する比較である。
+
+                **最良候補**: `G_b={_best['G_b']:.5g}`, `chi={_best['chi']:.5g}`,
+                `growth_time={_best['growth_time']:.5g}`、
+                **Fréchet距離={_target['frechet_distance_px']:.4g} px**、
+                **曲率RMSE={_target['curvature_rmse_px_inv']:.4g} px⁻¹**、
+                **特徴量損失={_target['feature_loss']:.4g}**。
+
+                図の下段には、`Amax/chord`、`L/chord`、無次元曲率統計、低次モード比の
+                観察／モデル比較と、時刻に対する特徴量の変化を並べた。成長率は
+                `d(log L)/dt` として観察={_temporal['observed_growth_rate']:.4g}、
+                モデル={_temporal['model_growth_rate']:.4g} と評価している。
+                直線中心線 baseline と比較した Fréchet 距離の減少は
+                **{_improvement['frechet_distance_px_reduction']:.4g} px
+                ({_improvement['frechet_distance_percent']:.2f}%)**、
+                特徴量損失の減少は **{_improvement['feature_loss_reduction']:.4g}** である。
+                これは視覚的な形状整合性を示す探索指標であり、pixel/model校正の推定、
+                holdout評価、物性値の同定ではない。
+
+                選択フレームの `censor` は **{_target['censor']}**、品質フラグは
+                `{_target['quality_flags']}` である。したがって、図が重なって見えることと、
+                動画追跡・物理モデルが検証済みであることを分けて読む。
+                """
+            ),
+            _figure,
         ]
     )
     return
