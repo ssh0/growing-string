@@ -331,6 +331,22 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
                 run_suite(config, Path(directory))
             self.assertFalse((Path(directory) / "_runs").exists())
 
+    def test_invalid_refinement_nodes_are_rejected_before_spec_generation(self):
+        config = self._config()
+        config["refinement"]["n_nodes"] = [5.5, 7]
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                run_suite(config, Path(directory))
+            self.assertFalse((Path(directory) / "_runs").exists())
+
+    def test_invalid_fixture_override_is_rejected_before_any_run(self):
+        config = self._config()
+        config["fixtures"][0]["overrides"]["axial_stiffness"] = 0.0
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                run_suite(config, Path(directory))
+            self.assertFalse((Path(directory) / "_runs").exists())
+
     def test_generated_run_name_collisions_are_rejected_before_execution(self):
         config = self._config()
         config["fixtures"].append(

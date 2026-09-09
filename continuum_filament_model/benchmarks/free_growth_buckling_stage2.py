@@ -163,6 +163,65 @@ def _validate_max_displacement_fraction(value: Any, context: str) -> float:
     return number
 
 
+def _validate_integer_at_least(value: Any, minimum: int, context: str) -> int:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise Stage2Error(f"{context} must be a finite integer >= {minimum}") from exc
+    if not math.isfinite(number) or not number.is_integer() or number < minimum:
+        raise Stage2Error(f"{context} must be a finite integer >= {minimum}")
+    return int(number)
+
+
+def _validate_positive_finite(value: Any, context: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise Stage2Error(f"{context} must be positive and finite") from exc
+    if not math.isfinite(number) or number <= 0.0:
+        raise Stage2Error(f"{context} must be positive and finite")
+    return number
+
+
+def _validate_effective_config(config: Mapping[str, Any], context: str) -> None:
+    for field in (
+        "length",
+        "axial_stiffness",
+        "bending_stiffness",
+        "drag_density",
+        "dt",
+        "t_end",
+        "a_max_factor",
+        "dt_min",
+    ):
+        _validate_positive_finite(config.get(field), f"{context}.{field}")
+    _validate_integer_at_least(config.get("n_nodes"), 3, f"{context}.n_nodes")
+    _validate_max_displacement_fraction(config.get("max_displacement_fraction", 1.0), context)
+    try:
+        growth_rate = float(config.get("growth_rate", 0.0))
+        amplitude = float(config.get("amplitude", 0.0))
+        rest_length_factor = float(config.get("rest_length_factor", 1.0))
+    except (TypeError, ValueError) as exc:
+        raise Stage2Error(f"{context} contains a malformed effective parameter") from exc
+    if not math.isfinite(growth_rate) or growth_rate < 0.0:
+        raise Stage2Error(f"{context}.growth_rate must be finite and non-negative")
+    if not math.isfinite(amplitude):
+        raise Stage2Error(f"{context}.amplitude must be finite")
+    if not math.isfinite(rest_length_factor) or rest_length_factor <= 0.0:
+        raise Stage2Error(f"{context}.rest_length_factor must be positive and finite")
+    _validate_integer_at_least(config.get("max_retries", 0), 0, f"{context}.max_retries")
+    rest_length_mode = config.get("rest_length_mode", "geometric_initial")
+    if rest_length_mode not in {"geometric_initial", "projected_spacing"}:
+        raise Stage2Error(f"{context}.rest_length_mode must be geometric_initial or projected_spacing")
+    if "noise_fraction" in config:
+        try:
+            noise_fraction = float(config["noise_fraction"])
+        except (TypeError, ValueError) as exc:
+            raise Stage2Error(f"{context}.noise_fraction must be finite in [0, 1]") from exc
+        if not math.isfinite(noise_fraction) or not 0.0 <= noise_fraction <= 1.0:
+            raise Stage2Error(f"{context}.noise_fraction must be finite in [0, 1]")
+
+
 def _registration_record(value: Mapping[str, Any] | None) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         return {}
@@ -294,8 +353,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     for key in required:
         if key not in base or not math.isfinite(float(base[key])):
             raise Stage2Error(f"base.{key} must be finite")
-    if int(base["n_nodes"]) < 3 or int(base["n_nodes"]) != base["n_nodes"]:
-        raise Stage2Error("base.n_nodes must be an integer >= 3")
+    _validate_integer_at_least(base["n_nodes"], 3, "base.n_nodes")
     for key in ("length", "axial_stiffness", "bending_stiffness", "drag_density", "dt", "t_end", "a_max_factor"):
         if float(base[key]) <= 0.0:
             raise Stage2Error(f"base.{key} must be positive")
@@ -341,6 +399,10 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     refinement = config.get("refinement", {})
     if len(refinement.get("n_nodes", [])) < 2 or len(refinement.get("dt_values", [])) < 2:
         raise Stage2Error("refinement requires at least two spatial resolutions and two time steps")
+    for index, n_nodes in enumerate(refinement["n_nodes"]):
+        _validate_integer_at_least(n_nodes, 3, f"refinement.n_nodes[{index}]")
+    for index, dt in enumerate(refinement["dt_values"]):
+        _validate_positive_finite(dt, f"refinement.dt_values[{index}]")
     rep = config.get("replicates", {})
     seeds = [int(seed) for seed in rep.get("seeds", [])]
     if len(seeds) != len(set(seeds)):
@@ -431,13 +493,16 @@ def _all_specs(config: Mapping[str, Any]) -> list[RunSpec]:
         if spec.name in seen:
             raise Stage2Error(f"generated run names must be unique: {spec.name}")
         seen.add(spec.name)
+    for spec in result:
+        _effective(config["base"], spec)
     return result
 
 
 def _effective(base: Mapping[str, Any], spec: RunSpec) -> dict[str, Any]:
     value = dict(base)
     value.update(spec.overrides)
-    value["n_nodes"] = int(value["n_nodes"])
+    _validate_effective_config(value, f"run {spec.name}")
+    value["n_nodes"] = _validate_integer_at_least(value["n_nodes"], 3, f"run {spec.name}.n_nodes")
     value["dt"] = float(value["dt"])
     value["t_end"] = float(value["t_end"])
     value["max_displacement_fraction"] = _validate_max_displacement_fraction(
