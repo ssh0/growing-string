@@ -137,7 +137,7 @@ overlayからモデル不足・入力品質・数値未収束を区別せずに�
 ## 実行済み探索の要約
 
 `results/stage2_free_free/` は、source revision
-`cde92054981329a3613232f7aa66b84e033c01b9`、`t_end=4.0` の22 run（決定論的 fixture 5、
+`b4c1b56fc168bdb5542157dfd3e2d38333864d3b`、`t_end=4.0` の22 run（決定論的 fixture 5、
 refinement 4、parameter contrast 4、seed付き replicate 9）をcompactに保存する。全runは
 `contact_enabled=false`、失敗0、拒否0であった。決定論的な fast-growth/low-bend 条件は
 `t≈3.30` に定義した onset を通過し、`n_nodes=9,13` と `dt=0.002,0.001` の4 refinement
@@ -148,14 +148,11 @@ refinement 4、parameter contrast 4、seed付き replicate 9）をcompactに保�
 fast-growth/low-bend replicate は3本中2本が candidate、1本が閾値未満であり、これは
 初期 imperfection の探索的な感度としてのみ扱う。
 
-`gray5.mp4` の full-period・frame stride 15 抽出は24 sampled frames、20 candidate、
-selected lineageを含む2 lineage、candidate censor 20で、centerline contract自体はvalid
-だった。pixel/model scale・time registrationは明示していないため、現行manifestは
-`comparison_only_unregistered`、eligible行0、`model_inadequacy=not_assessed_unregistered`
-としている。動画側の `L(t)`、endpoint distance、curvature候補、lineage/censorはQC用に
-保存したが、モデル時刻照合、定量overlay、onset matching、parameter fittingは抑制した。
-refinementと選択モデルの数値状態は `numerically_resolved` として別記録し、未校正を数値未収束や
-モデル不足と混同しない。入力hashはmanifestへ保存し、動画本体と `_video_artifacts/` はGitへ含めない。
+現worktreeには実動画入力が存在しないため、現行HEADでの動画pipelineは
+`input_missing`、`quantitative_fitting=suppressed`、`model_inadequacy=not_assessed_input_missing`
+として記録した。動画入力が利用可能になった場合は、`VIDEO_PATH` に実動画を指定して再実行し、
+pixel/model scaleとtime registrationを明示した場合だけ定量比較へ進む。実動画がない状態を、
+過去の抽出結果やlegacy videoによる比較結果として解釈しない。
 
 この段階の compact result だけから、実動画のパラメータ同定、接触・摩擦・折りたたみの
 再現、臨界値、普遍性を主張しない。

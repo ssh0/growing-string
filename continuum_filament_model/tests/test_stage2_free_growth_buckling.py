@@ -166,6 +166,16 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertEqual(report["video_comparison"]["numerical_unresolved"]["status"], "numerically_unresolved")
             self.assertEqual(report["video_comparison"]["numerical_unresolved"]["category"], "numerical_nonconvergence")
 
+    def test_tiny_positive_end_time_executes_one_step(self):
+        config = self._config()
+        config["base"]["t_end"] = 5.0e-13
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_suite(config, Path(directory))
+        result = next(item for item in report["results"] if item["run_name"] == "fixture")
+        self.assertEqual(result["accepted_steps"], 1)
+        self.assertEqual(len(result["observables"]), 2)
+        self.assertGreater(result["observables"][-1]["time"], 0.0)
+
     def test_zero_amplitude_has_no_dominant_mode(self):
         config = self._config()
         config["base"]["amplitude"] = 0.0
@@ -433,7 +443,7 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
         self.assertIn("video_model_refinement_missing", status["reasons"])
 
     def test_unsupported_replicate_seed_is_rejected_before_conversion(self):
-        for seeds in ([1.5, 2], [-1, 2], [2**32, 2]):
+        for seeds in ([1.5, 2], [-1, 2], [2**32, 2], [True, 2]):
             with self.subTest(seeds=seeds):
                 config = self._config()
                 config["replicates"]["seeds"] = list(seeds)
@@ -532,6 +542,7 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             (RuntimeError("command failed (ffprobe…): Invalid data found when processing input"), "decode_or_corrupt_input", "input_quality"),
             (ValueError("unsupported format"), "invalid_format", "input_quality"),
             (RuntimeError("analysis failed"), "analysis_failure", "analysis"),
+            (ImportError("No module named 'imageio'"), "missing_dependency", "execution_environment"),
         )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

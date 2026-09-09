@@ -164,6 +164,8 @@ def _validate_max_displacement_fraction(value: Any, context: str) -> float:
 
 
 def _validate_integer(value: Any, context: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise Stage2Error(f"{context} must be a finite integer")
     try:
         number = float(value)
     except (TypeError, ValueError) as exc:
@@ -803,7 +805,9 @@ def _run_with_partial_trajectory(
     trajectory: list[FilamentState],
 ) -> None:
     end_tolerance = max(1.0e-15, 1.0e-12 * max(1.0, abs(float(t_end))))
-    while simulator.state.time < t_end - end_tolerance:
+    while simulator.state.time < t_end - end_tolerance or (
+        simulator.accepted_steps == 0 and simulator.state.time < t_end
+    ):
         simulator.step(min(simulator.parameters.dt, t_end - simulator.state.time))
         trajectory.append(simulator.state.copy())
 
@@ -1142,13 +1146,37 @@ def _best_effort_file_hash(path: Path) -> str | None:
         return None
 
 
+def _external_video_artifacts(artifact_dir: Path, video_manifest: Mapping[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    manifest_path = artifact_dir / "manifest.json"
+    if manifest_path.is_file():
+        result["manifest"] = {
+            "logical_id": manifest_path.name,
+            "bytes": manifest_path.stat().st_size,
+            "sha256": _best_effort_file_hash(manifest_path),
+        }
+    for logical_id, artifact in sorted((video_manifest.get("artifacts") or {}).items()):
+        if not isinstance(artifact, Mapping):
+            continue
+        result[str(logical_id)] = {
+            "logical_id": artifact.get("path", f"{logical_id}"),
+            "bytes": artifact.get("bytes"),
+            "sha256": artifact.get("sha256"),
+        }
+    return result
+
+
 def _video_failure_category(exc: BaseException) -> tuple[str, str]:
     message = str(exc).lower()
     if "required executable is not installed" in message and ("ffmpeg" in message or "ffprobe" in message):
         return "missing_ffmpeg", "execution_environment"
+    if "no module named" in message or "cannot import" in message:
+        return "missing_dependency", "execution_environment"
+    if any(token in message for token in ("permission denied", "operation not permitted", "exec format error", "cannot execute")):
+        return "command_execution_failure", "execution_environment"
     if any(token in message for token in ("unsupported format", "invalid format", "not a valid video")):
         return "invalid_format", "input_quality"
-    if any(token in message for token in ("decode", "corrupt", "invalid data", "moov atom not found", "video metadata failed", "command failed")):
+    if any(token in message for token in ("decode", "corrupt", "invalid data", "moov atom not found", "video metadata failed")):
         return "decode_or_corrupt_input", "input_quality"
     return "analysis_failure", "analysis"
 
@@ -1339,6 +1367,7 @@ def run_video_comparison(
                 "selected_filament_id": video_manifest.get("selected_filament_id"),
                 "validation": validation,
                 "artifact_dir_external": True,
+                "external_artifacts": _external_video_artifacts(artifact_dir, video_manifest),
             },
             "data_quality": {"usable": usable, "censor": bool(reasons), "reasons": reasons},
             "calibration": {
@@ -1378,7 +1407,7 @@ def run_video_comparison(
             "lineage_censor_preserved": True,
             "legacy_video_substitution": False,
         }
-    except (OSError, RuntimeError, ValueError, KeyError) as exc:
+    except (OSError, RuntimeError, ValueError, KeyError, ImportError) as exc:
         failure_category, failure_domain = _video_failure_category(exc)
         record = {
             "schema_version": SCHEMA_VERSION,
