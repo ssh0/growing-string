@@ -1,0 +1,54 @@
+{
+  "interpretation": "This is a mesh sensitivity check at fixed parameters, not an independent optimum at each resolution.",
+  "mode": "fixed_best_parameters_mesh_sensitivity",
+  "parameters": {
+    "G_b": 2.5,
+    "chi": 7.071067811865475e-05,
+    "growth_time": 0.01
+  },
+  "rows": [
+    {
+      "G_b": 2.5,
+      "chi": 7.071067811865475e-05,
+      "curvature_rmse_px_inv": 0.30552251930231883,
+      "failure_reason": null,
+      "feature_loss": 97.4769999731104,
+      "frechet_distance_px": 21.231784747296928,
+      "growth_time": 0.01,
+      "model_growth_rate": -0.003301307373908961,
+      "n_nodes": 25,
+      "observed_growth_rate": 0.5475685218156996,
+      "score": 109.25915560685256,
+      "status": "computed"
+    },
+    {
+      "G_b": 2.5,
+      "chi": 7.071067811865475e-05,
+      "curvature_rmse_px_inv": 0.3084907986932963,
+      "failure_reason": null,
+      "feature_loss": 99.2040994316898,
+      "frechet_distance_px": 20.989266527022153,
+      "growth_time": 0.01,
+      "model_growth_rate": -0.004167975448107571,
+      "n_nodes": 30,
+      "observed_growth_rate": 0.5475685218156996,
+      "score": 110.86642207967854,
+      "status": "computed"
+    },
+    {
+      "G_b": 2.5,
+      "chi": 7.071067811865475e-05,
+      "curvature_rmse_px_inv": 0.27573307910937733,
+      "failure_reason": null,
+      "feature_loss": 106.20254259103658,
+      "frechet_distance_px": 21.109983204849243,
+      "growth_time": 0.01,
+      "model_growth_rate": -0.0061761468643400565,
+      "n_nodes": 35,
+      "observed_growth_rate": 0.5475685218156996,
+      "score": 117.93350427891146,
+      "status": "computed"
+    }
+  ],
+  "schema_version": "continuum-filament-exploratory-shape-fitting-2"
+}
