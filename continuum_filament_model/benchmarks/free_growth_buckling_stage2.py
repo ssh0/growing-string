@@ -134,12 +134,88 @@ class Stage2Error(ValueError):
 
 
 _SAFE_RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
+_REGISTRATION_REQUIRED_FIELDS = ("pixel_per_model_unit", "time_scale", "time_offset")
+_REGISTRATION_NUMERIC_FIELDS = {
+    "pixel_per_model_unit",
+    "x_offset_px",
+    "y_offset_px",
+    "rotation_deg",
+    "time_scale",
+    "time_offset",
+    "max_time_error_s",
+}
+_REGISTRATION_FIELDS = _REGISTRATION_NUMERIC_FIELDS | {"endpoint_order"}
 
 
 def _validate_run_name(name: str, context: str = "run") -> str:
     if not _SAFE_RUN_NAME.fullmatch(name):
         raise Stage2Error(f"{context} name must be a safe single path component")
     return name
+
+
+def _registration_record(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    result: dict[str, Any] = {}
+    for key, item in value.items():
+        if isinstance(item, (float, np.floating)) and not math.isfinite(float(item)):
+            result[str(key)] = None
+        else:
+            result[str(key)] = item
+    return result
+
+
+def _parse_registration(
+    value: Mapping[str, Any] | None,
+) -> tuple[dict[str, Any], RegistrationConfig | None, list[str], list[str]]:
+    registration = _registration_record(value)
+    if value is not None and not isinstance(value, Mapping):
+        return registration, None, list(_REGISTRATION_REQUIRED_FIELDS), ["registration"]
+    missing = [
+        field for field in _REGISTRATION_REQUIRED_FIELDS
+        if field not in registration or registration[field] is None
+    ]
+    invalid: list[str] = []
+    normalized: dict[str, Any] = {}
+    for field in _REGISTRATION_NUMERIC_FIELDS:
+        if field not in registration:
+            continue
+        raw = registration[field]
+        if raw is None:
+            if field not in _REGISTRATION_REQUIRED_FIELDS:
+                invalid.append(field)
+            continue
+        if isinstance(raw, bool) or not isinstance(raw, (int, float, np.integer, np.floating)):
+            invalid.append(field)
+            continue
+        number = float(raw)
+        if not math.isfinite(number):
+            invalid.append(field)
+            continue
+        if field in {"pixel_per_model_unit", "time_scale"} and number <= 0.0:
+            invalid.append(field)
+            continue
+        if field == "max_time_error_s" and number < 0.0:
+            invalid.append(field)
+            continue
+        normalized[field] = number
+    if "endpoint_order" in registration:
+        endpoint_order = registration["endpoint_order"]
+        if endpoint_order not in {"auto", "forward", "reverse"}:
+            invalid.append("endpoint_order")
+        else:
+            normalized["endpoint_order"] = endpoint_order
+    invalid.extend(
+        f"unknown:{key}"
+        for key in sorted(set(registration) - _REGISTRATION_FIELDS)
+    )
+    if missing or invalid:
+        return registration, None, missing, sorted(set(invalid))
+    try:
+        parsed = RegistrationConfig.from_mapping(normalized)
+    except (TypeError, ValueError):
+        return registration, None, missing, ["constraints"]
+    return registration, parsed, [], []
 
 
 @dataclass(frozen=True)
@@ -340,6 +416,12 @@ def _all_specs(config: Mapping[str, Any]) -> list[RunSpec]:
                 trial=trial,
                 base_fixture=fixture_name,
             ))
+    seen: set[str] = set()
+    for spec in result:
+        _validate_run_name(spec.name)
+        if spec.name in seen:
+            raise Stage2Error(f"generated run names must be unique: {spec.name}")
+        seen.add(spec.name)
     return result
 
 
@@ -896,7 +978,7 @@ def _numerical_unresolved_assessment(results: Sequence[Mapping[str, Any]], video
 
 def _model_inadequacy_assessment(
     rows: Sequence[Mapping[str, Any]],
-    registration: RegistrationConfig,
+    registration: RegistrationConfig | None,
     registration_explicit: bool,
     numerical_status: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -920,7 +1002,7 @@ def _model_inadequacy_assessment(
         return result
     if not registration_explicit:
         return result
-    if not registration.calibrated:
+    if registration is None or not registration.calibrated:
         result["status"] = "not_assessed_uncalibrated"
         return result
     eligible = [row for row in rows if row.get("metric_status") == "computed" and not row.get("censor")]
@@ -969,7 +1051,7 @@ def _video_failure_category(exc: BaseException) -> tuple[str, str]:
 
 def _holdout_status(
     usable: bool,
-    registration: RegistrationConfig,
+    registration: RegistrationConfig | None,
     registration_explicit: bool,
     summary: Mapping[str, Any],
     reasons: Sequence[str],
@@ -979,7 +1061,7 @@ def _holdout_status(
         return "numerical_unresolved"
     if not registration_explicit:
         return "comparison_only_unregistered" if usable else "censored"
-    if not registration.calibrated:
+    if registration is None or not registration.calibrated:
         return "comparison_only_uncalibrated" if usable else "censored"
     if int(summary.get("eligible_rows", 0)) > 0:
         return "calibrated_comparison"
@@ -995,6 +1077,7 @@ def _unregistered_comparison_summary(
     model_path: Path,
     registration: Mapping[str, Any],
     missing_fields: Sequence[str],
+    invalid_fields: Sequence[str],
 ) -> dict[str, Any]:
     population_rows = len(extraction.get("summary_rows", []))
     return {
@@ -1002,6 +1085,7 @@ def _unregistered_comparison_summary(
         "calibration_status": "registration_incomplete_metrics_suppressed",
         "registration": dict(registration),
         "registration_missing_fields": list(missing_fields),
+        "registration_invalid_fields": list(invalid_fields),
         "model_logical_id": model_path.name,
         "rows": population_rows,
         "eligible_rows": 0,
@@ -1062,14 +1146,8 @@ def run_video_comparison(
         video_cfg = dict(DEFAULT_VIDEO_CONFIG)
         video_cfg.update(dict(config.get("video", {})))
         extraction = run_pipeline(source, artifact_dir, SegmentationConfig.from_mapping(video_cfg), command_line=["stage2", "extract", "${INPUT_VIDEO}", "${OUTPUT_DIR}"])
-        registration_mapping = dict(registration or {})
-        required_registration_fields = ("pixel_per_model_unit", "time_scale", "time_offset")
-        missing_registration_fields = [
-            field for field in required_registration_fields
-            if field not in registration_mapping or registration_mapping[field] is None
-        ]
-        registration_explicit = not missing_registration_fields
-        registration_value = RegistrationConfig.from_mapping(registration_mapping)
+        registration_mapping, registration_value, missing_registration_fields, invalid_registration_fields = _parse_registration(registration)
+        registration_explicit = registration_value is not None
         if registration_explicit:
             comparison = compare_with_model(artifact_dir, model_path, registration_value, output_dir=artifact_dir)
             comparison_summary = comparison["summary"]
@@ -1077,7 +1155,11 @@ def run_video_comparison(
         else:
             comparison = {"rows": []}
             comparison_summary = _unregistered_comparison_summary(
-                extraction, model_path, registration_mapping, missing_registration_fields
+                extraction,
+                model_path,
+                registration_mapping,
+                missing_registration_fields,
+                invalid_registration_fields,
             )
             comparison_rows = []
         video_manifest = extraction["manifest"]

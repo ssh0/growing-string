@@ -273,6 +273,60 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertIn("time_scale", record["holdout"]["comparison"]["registration_missing_fields"])
             self.assertIn("time_offset", record["holdout"]["comparison"]["registration_missing_fields"])
 
+    def test_malformed_or_nonfinite_registration_suppresses_comparison(self):
+        from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "output"
+            video = root / "input.mp4"
+            video.write_bytes(b"video")
+            extraction = {
+                "manifest": {
+                    "input": {"metadata": {"path": str(video.resolve())}},
+                    "processed_frames": 1,
+                    "candidate_count": 1,
+                    "candidate_censor_count": 0,
+                    "selected_filament_id": "filament-0000",
+                },
+                "validation": {"valid": True},
+                "summary_rows": [{"frame": 0}],
+            }
+            with patch.object(stage2, "run_pipeline", return_value=extraction), patch.object(
+                stage2, "compare_with_model", side_effect=AssertionError("comparison must be suppressed")
+            ):
+                for registration, field in (
+                    ({"pixel_per_model_unit": 10.0, "time_scale": "bad", "time_offset": 0.0}, "time_scale"),
+                    ({"pixel_per_model_unit": 10.0, "time_scale": float("nan"), "time_offset": 0.0}, "time_scale"),
+                    ({"pixel_per_model_unit": "bad", "time_scale": 1.0, "time_offset": 0.0}, "pixel_per_model_unit"),
+                ):
+                    with self.subTest(registration=registration):
+                        record = stage2.run_video_comparison(
+                            video,
+                            output,
+                            output / "model.npz",
+                            self._config(),
+                            registration=registration,
+                        )
+                        comparison = record["holdout"]["comparison"]
+                        self.assertEqual(record["holdout"]["status"], "comparison_only_unregistered")
+                        self.assertFalse(comparison["comparison_performed"])
+                        self.assertEqual(comparison["eligible_rows"], 0)
+                        self.assertTrue(
+                            field in comparison["registration_missing_fields"]
+                            or field in comparison["registration_invalid_fields"]
+                        )
+
+    def test_generated_run_name_collisions_are_rejected_before_execution(self):
+        config = self._config()
+        config["fixtures"].append(
+            {"name": "fixture_refine_n5_dt0.001", "overrides": {"growth_rate": 0.02, "amplitude": 0.02}}
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                run_suite(config, Path(directory))
+            self.assertFalse((Path(directory) / "_runs").exists())
+
     def test_numerical_unresolved_suppresses_model_inadequacy(self):
         from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
 
