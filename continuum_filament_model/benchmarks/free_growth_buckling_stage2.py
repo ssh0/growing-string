@@ -163,14 +163,21 @@ def _validate_max_displacement_fraction(value: Any, context: str) -> float:
     return number
 
 
-def _validate_integer_at_least(value: Any, minimum: int, context: str) -> int:
+def _validate_integer(value: Any, context: str) -> int:
     try:
         number = float(value)
     except (TypeError, ValueError) as exc:
-        raise Stage2Error(f"{context} must be a finite integer >= {minimum}") from exc
-    if not math.isfinite(number) or not number.is_integer() or number < minimum:
-        raise Stage2Error(f"{context} must be a finite integer >= {minimum}")
+        raise Stage2Error(f"{context} must be a finite integer") from exc
+    if not math.isfinite(number) or not number.is_integer():
+        raise Stage2Error(f"{context} must be a finite integer")
     return int(number)
+
+
+def _validate_integer_at_least(value: Any, minimum: int, context: str) -> int:
+    number = _validate_integer(value, context)
+    if number < minimum:
+        raise Stage2Error(f"{context} must be a finite integer >= {minimum}")
+    return number
 
 
 def _validate_positive_finite(value: Any, context: str) -> float:
@@ -404,7 +411,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     for index, dt in enumerate(refinement["dt_values"]):
         _validate_positive_finite(dt, f"refinement.dt_values[{index}]")
     rep = config.get("replicates", {})
-    seeds = [int(seed) for seed in rep.get("seeds", [])]
+    seeds = [_validate_integer(seed, f"replicates.seeds[{index}]") for index, seed in enumerate(rep.get("seeds", []))]
     if len(seeds) != len(set(seeds)):
         raise Stage2Error("replicate seeds must be unique")
     if not 0.0 <= float(rep.get("noise_fraction", 0.0)) <= 1.0:
@@ -716,7 +723,7 @@ def _apply_work_diagnostics(rows: list[dict[str, Any]], trajectory: Sequence[Fil
             balance_increment: float | None = None
         else:
             velocity = (after.positions - before.positions) / dt
-            gamma = model.parameters.drag_density * _node_weights(before.rest_lengths)
+            gamma = model.parameters.drag_density * _node_weights(after.rest_lengths)
             dissipation_increment = float(dt * np.sum(gamma[:, None] * velocity * velocity))
             energy_after = model.energy(after.positions, after.rest_lengths)
             balance_increment = float(energy_after - energy_before - growth_increment + dissipation_increment)
@@ -783,6 +790,16 @@ def _dimensionless_groups(config: Mapping[str, Any]) -> dict[str, float | str]:
     return groups
 
 
+def _run_with_partial_trajectory(
+    simulator: OverdampedGrowingFilament,
+    t_end: float,
+    trajectory: list[FilamentState],
+) -> None:
+    while simulator.state.time < t_end - 1.0e-15:
+        simulator.step(min(simulator.parameters.dt, t_end - simulator.state.time))
+        trajectory.append(simulator.state.copy())
+
+
 def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revision: str | None, save_trajectory_file: bool = False) -> dict[str, Any]:
     _validate_run_name(spec.name)
     config = _effective(base_config, spec)
@@ -813,15 +830,9 @@ def run_case(spec: RunSpec, base_config: Mapping[str, Any], output: Path, revisi
     failure_reason: str | None = None
     try:
         simulator = OverdampedGrowingFilament(state, params)
-        trajectory = simulator.run()
+        _run_with_partial_trajectory(simulator, params.t_end, trajectory)
     except (ModelError, RuntimeError, ValueError, FloatingPointError) as exc:
         failure_reason = f"{type(exc).__name__}: {exc}"
-        if simulator is not None:
-            initial_state = simulator.initial_state.copy()
-            current_state = simulator.state.copy()
-            trajectory = [initial_state]
-            if current_state.step != initial_state.step or current_state.time > initial_state.time + 1.0e-15:
-                trajectory.append(current_state)
     if simulator is None:
         # Keep the schema usable when initialization itself fails.
         rows: list[dict[str, Any]] = []
@@ -1016,6 +1027,8 @@ def _numerical_unresolved_assessment(results: Sequence[Mapping[str, Any]], video
             reasons.add("selected_model_failure")
         if classification.get("unresolved_reason_category") == "numerical_nonconvergence" or classification.get("label") == "numerically-unresolved":
             reasons.add("selected_model_numerically_unresolved")
+    if not refinements:
+        reasons.add("video_model_refinement_missing")
     for result in refinements:
         classification = result.get("classification", {})
         if result.get("failure_reason") is not None:
@@ -1134,16 +1147,18 @@ def _holdout_status(
     reasons: Sequence[str],
     numerical_status: Mapping[str, Any],
 ) -> str:
+    if not usable:
+        if registration_explicit and registration is not None and registration.calibrated:
+            return "calibrated_but_input_unusable"
+        return "censored"
     if numerical_status.get("status") == "numerically_unresolved":
         return "numerical_unresolved"
     if not registration_explicit:
-        return "comparison_only_unregistered" if usable else "censored"
+        return "comparison_only_unregistered"
     if registration is None or not registration.calibrated:
-        return "comparison_only_uncalibrated" if usable else "censored"
+        return "comparison_only_uncalibrated"
     if int(summary.get("eligible_rows", 0)) > 0:
         return "calibrated_comparison"
-    if not usable:
-        return "calibrated_but_input_unusable"
     if reasons or int(summary.get("excluded_from_metric_denominator", 0)) > 0:
         return "calibrated_but_censored"
     return "calibrated_no_eligible_rows"
@@ -1171,6 +1186,31 @@ def _unregistered_comparison_summary(
         "population_rows": population_rows,
         "excluded_from_metric_denominator": population_rows,
         "excluded_from_metric_reasons": ["explicit_pixel_and_time_registration_required"],
+        "comparison_performed": False,
+    }
+
+
+def _input_censored_comparison_summary(
+    extraction: Mapping[str, Any],
+    model_path: Path,
+    registration: Mapping[str, Any],
+    reasons: Sequence[str],
+) -> dict[str, Any]:
+    population_rows = len(extraction.get("summary_rows", []))
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "calibration_status": "input_quality_metrics_suppressed",
+        "registration": dict(registration),
+        "registration_missing_fields": [],
+        "registration_invalid_fields": [],
+        "model_logical_id": model_path.name,
+        "rows": population_rows,
+        "eligible_rows": 0,
+        "computed_rows": 0,
+        "censored_rows": population_rows,
+        "population_rows": population_rows,
+        "excluded_from_metric_denominator": population_rows,
+        "excluded_from_metric_reasons": list(reasons),
         "comparison_performed": False,
     }
 
@@ -1223,22 +1263,6 @@ def run_video_comparison(
         video_cfg = dict(DEFAULT_VIDEO_CONFIG)
         video_cfg.update(dict(config.get("video", {})))
         extraction = run_pipeline(source, artifact_dir, SegmentationConfig.from_mapping(video_cfg), command_line=["stage2", "extract", "${INPUT_VIDEO}", "${OUTPUT_DIR}"])
-        registration_mapping, registration_value, missing_registration_fields, invalid_registration_fields = _parse_registration(registration)
-        registration_explicit = registration_value is not None
-        if registration_explicit:
-            comparison = compare_with_model(artifact_dir, model_path, registration_value, output_dir=artifact_dir)
-            comparison_summary = comparison["summary"]
-            comparison_rows = comparison.get("rows", [])
-        else:
-            comparison = {"rows": []}
-            comparison_summary = _unregistered_comparison_summary(
-                extraction,
-                model_path,
-                registration_mapping,
-                missing_registration_fields,
-                invalid_registration_fields,
-            )
-            comparison_rows = []
         video_manifest = extraction["manifest"]
         validation = extraction["validation"]
         usable = bool(validation.get("valid")) and bool(extraction.get("summary_rows"))
@@ -1249,12 +1273,43 @@ def run_video_comparison(
             reasons.append("no_centerline_candidates")
         if int(video_manifest.get("candidate_censor_count", 0)) > 0:
             reasons.append("candidate_quality_censor_present")
+        registration_mapping, registration_value, missing_registration_fields, invalid_registration_fields = _parse_registration(registration)
+        registration_explicit = registration_value is not None
+        if registration_explicit and usable:
+            comparison = compare_with_model(artifact_dir, model_path, registration_value, output_dir=artifact_dir)
+            comparison_summary = comparison["summary"]
+            comparison_rows = comparison.get("rows", [])
+        elif registration_explicit:
+            comparison = {"rows": []}
+            comparison_summary = _input_censored_comparison_summary(
+                extraction,
+                model_path,
+                registration_mapping,
+                reasons,
+            )
+            comparison_rows = []
+        else:
+            comparison = {"rows": []}
+            comparison_summary = _unregistered_comparison_summary(
+                extraction,
+                model_path,
+                registration_mapping,
+                missing_registration_fields,
+                invalid_registration_fields,
+            )
+            comparison_rows = []
         numerical_status_value = dict(numerical_status or {
             "status": "not_assessed_no_suite_context",
             "category": None,
             "reasons": [],
         })
-        calibration_status = "configured_not_fitted" if registration_explicit else "not_registered_metrics_suppressed"
+        calibration_status = (
+            "configured_not_fitted"
+            if registration_explicit and usable
+            else "input_quality_metrics_suppressed"
+            if registration_explicit
+            else "not_registered_metrics_suppressed"
+        )
         model_inadequacy = _model_inadequacy_assessment(
             comparison_rows, registration_value, registration_explicit, numerical_status_value
         )
@@ -1347,6 +1402,8 @@ def run_suite(config: Mapping[str, Any] | None, output: Path, *, video_path: str
     revision = detect_git_revision(Path(__file__).resolve().parents[2])
     specs = _all_specs(effective)
     video_case = str(effective.get("video_model_case", "fast_growth_low_bend"))
+    if video_path is not None and video_case not in {spec.name for spec in specs}:
+        raise Stage2Error(f"video_model_case is not a generated run: {video_case}")
     results: list[dict[str, Any]] = []
     for spec in specs:
         results.append(run_case(spec, effective["base"], output, revision, save_trajectory_file=bool(video_path and spec.name == video_case)))

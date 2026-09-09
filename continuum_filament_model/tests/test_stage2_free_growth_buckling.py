@@ -175,6 +175,29 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertLess(initial["contour_length"], 3.0)
             self.assertFalse(replicate["contact_enabled"])
 
+    def test_failed_run_preserves_all_accepted_partial_states(self):
+        from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
+        from growing_filament.model import ModelError, OverdampedGrowingFilament
+
+        class FailingAfterTwoAcceptedSteps(OverdampedGrowingFilament):
+            def step(self, dt=None):
+                if self.accepted_steps >= 2:
+                    raise ModelError("forced partial-trajectory failure")
+                return super().step(dt)
+
+        config = self._config()
+        config["base"]["growth_rate"] = 0.02
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            stage2, "OverdampedGrowingFilament", FailingAfterTwoAcceptedSteps
+        ):
+            report = run_suite(config, Path(directory))
+        result = next(item for item in report["results"] if item["run_name"] == "fixture")
+        self.assertIsNotNone(result["failure_reason"])
+        self.assertEqual(result["accepted_steps"], 2)
+        self.assertEqual(len(result["observables"]), 3)
+        self.assertEqual([row["step"] for row in result["observables"]], [0, 1, 2])
+        self.assertTrue(all(row["time"] < next_row["time"] for row, next_row in zip(result["observables"], result["observables"][1:])))
+
     def test_calibrated_comparison_reports_model_inadequacy_candidates_separately(self):
         from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
 
@@ -242,6 +265,41 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
             self.assertEqual(record["model_inadequacy"]["candidate_count"], 1)
             self.assertIn("shape_rmse_px_above_threshold", record["model_inadequacy"]["candidates"][0]["reasons"])
             self.assertEqual(record["model_inadequacy"]["thresholds"]["shape_rmse_px"], 5.0)
+
+    def test_invalid_centerline_validation_suppresses_calibrated_comparison(self):
+        from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "output"
+            video = root / "input.mp4"
+            video.write_bytes(b"video")
+            extraction = {
+                "manifest": {
+                    "input": {"metadata": {"path": str(video.resolve())}},
+                    "processed_frames": 1,
+                    "candidate_count": 1,
+                    "candidate_censor_count": 0,
+                    "selected_filament_id": "filament-0000",
+                },
+                "validation": {"valid": False, "errors": ["time is not monotonic"]},
+                "summary_rows": [{"frame": 0}],
+            }
+            with patch.object(stage2, "run_pipeline", return_value=extraction), patch.object(
+                stage2, "compare_with_model", side_effect=AssertionError("invalid input must not be compared")
+            ):
+                record = stage2.run_video_comparison(
+                    video,
+                    output,
+                    output / "model.npz",
+                    self._config(),
+                    registration={"pixel_per_model_unit": 10.0, "time_scale": 1.0, "time_offset": 0.0},
+                )
+            self.assertEqual(record["holdout"]["status"], "calibrated_but_input_unusable")
+            self.assertEqual(record["holdout"]["comparison"]["eligible_rows"], 0)
+            self.assertFalse(record["holdout"]["comparison"]["comparison_performed"])
+            self.assertEqual(record["model_inadequacy"]["status"], "not_assessed_no_eligible_rows")
+            self.assertIn("centerline_contract_invalid", record["data_quality"]["reasons"])
 
     def test_missing_time_registration_suppresses_model_comparison(self):
         from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
@@ -326,6 +384,41 @@ class Stage2FreeGrowthBucklingTest(unittest.TestCase):
     def test_invalid_max_displacement_fraction_is_rejected_as_configuration_error(self):
         config = self._config()
         config["base"]["max_displacement_fraction"] = 2.0
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                run_suite(config, Path(directory))
+            self.assertFalse((Path(directory) / "_runs").exists())
+
+    def test_invalid_video_model_case_is_rejected_before_runs(self):
+        config = self._config()
+        config["video_model_case"] = "not-generated"
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                run_suite(config, Path(directory), video_path=Path(directory) / "missing.mp4")
+            self.assertFalse((Path(directory) / "_runs").exists())
+
+    def test_video_case_without_refinement_is_numerically_unresolved(self):
+        from continuum_filament_model.benchmarks import free_growth_buckling_stage2 as stage2
+
+        config = self._config()
+        config["contrast_conditions"] = [
+            {
+                "name": "soft_axial",
+                "base_fixture": "fixture",
+                "factor": "axial_stiffness",
+                "overrides": {"axial_stiffness": 2.0},
+            }
+        ]
+        config["video_model_case"] = "soft_axial"
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_suite(config, Path(directory))
+        status = stage2._numerical_unresolved_assessment(report["results"], "soft_axial")
+        self.assertEqual(status["status"], "numerically_unresolved")
+        self.assertIn("video_model_refinement_missing", status["reasons"])
+
+    def test_fractional_replicate_seed_is_rejected_before_conversion(self):
+        config = self._config()
+        config["replicates"]["seeds"] = [1.5, 2]
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ValueError):
                 run_suite(config, Path(directory))
