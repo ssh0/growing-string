@@ -41,16 +41,17 @@ from growing_filament.model import (  # noqa: E402
     OverdampedGrowingFilament,
 )
 
-SCHEMA_VERSION = "continuum-filament-exploratory-shape-fitting-1"
+SCHEMA_VERSION = "continuum-filament-exploratory-shape-fitting-2"
 DEFAULT_CENTERLINE = Path("continuum_filament_model/results/presentation_data/video_gray5/centerline.csv")
 DEFAULT_OUTPUT = Path("continuum_filament_model/results/presentation_data/exploratory_fitting")
 DEFAULT_TARGET_TIMES = (1.0, 3.0)
 DEFAULT_GB_GRID = (0.2, 0.775, 1.35, 1.925, 2.5)
 DEFAULT_CHI_GRID = (0.0001, 0.0003, 0.0006, 0.001)
 DEFAULT_GROWTH_TIMES = (0.02, 0.05)
+DEFAULT_RESOLUTION_VALUES = (25, 30, 35)
 FEATURE_NAMES = (
     "deflection_ratio",
-    "contour_chord_ratio",
+    "slack_ratio",
     "curvature_mean_abs_L",
     "curvature_rms_L",
     "curvature_max_L",
@@ -60,7 +61,7 @@ FEATURE_NAMES = (
 )
 FEATURE_LABELS = (
     "Amax/chord",
-    "L/chord",
+    "L/chord - 1",
     "mean(|k|)L",
     "RMS(k)L",
     "max(|k|)L",
@@ -72,7 +73,7 @@ FEATURE_LABELS = (
 # the pixel-coordinate residual to dominate the shape objective.
 FEATURE_SCALES = {
     "deflection_ratio": 0.25,
-    "contour_chord_ratio": 0.25,
+    "slack_ratio": 0.25,
     "curvature_mean_abs_L": 1.0,
     "curvature_rms_L": 1.0,
     "curvature_max_L": 2.0,
@@ -286,10 +287,13 @@ def shape_features(points: np.ndarray) -> dict[str, float]:
         [2.0 * integrate(transverse_normalised * np.sin(mode * np.pi * u), u) for mode in (1, 2, 3)],
         dtype=float,
     )
-    mode_1 = max(abs(float(modes[0])), 1.0e-12)
+    # A finite floor avoids unstable mode ratios when the first mode is
+    # numerically absent.  Such a candidate is still visible in the feature
+    # residual rather than producing inf/NaN.
+    mode_1 = max(abs(float(modes[0])), 1.0e-6)
     return {
         "deflection_ratio": float(np.max(np.abs(transverse)) / chord),
-        "contour_chord_ratio": float(contour / chord),
+        "slack_ratio": float(contour / chord - 1.0),
         "curvature_mean_abs_L": float(np.mean(np.abs(curvature)) * contour),
         "curvature_rms_L": float(np.sqrt(np.mean(curvature * curvature)) * contour),
         "curvature_max_L": float(np.max(np.abs(curvature)) * contour),
@@ -624,6 +628,19 @@ def _write_candidate_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
         writer.writerows(_jsonable(row) for row in rows)
 
 
+def _write_resolution_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    fields = [
+        "n_nodes", "status", "G_b", "chi", "growth_time", "score",
+        "frechet_distance_px", "curvature_rmse_px_inv", "feature_loss",
+        "observed_growth_rate", "model_growth_rate", "failure_reason",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(_jsonable(row) for row in rows)
+
+
 def _write_trajectory(path: Path, trajectory: Sequence[FilamentState], metadata: Mapping[str, Any]) -> None:
     positions: list[np.ndarray] = []
     rest_lengths: list[np.ndarray] = []
@@ -657,17 +674,19 @@ def _write_plot(
 
     target_index = len(observations) - 1
     target_observation = observations[target_index]
+    censor_label = "CENSORED exploratory overlay" if all(item.censor for item in observations) else "exploratory overlay"
     target_metric = best.frame_metrics[target_index]
     target_state = _state_at_time(best.trajectory, float(target_metric["requested_model_time"]))
     target_comparison = compare_shape(target_state.positions, target_observation.points)
     target_registered = target_comparison["model_points_registered"]
-    seed_comparison = compare_shape(best.trajectory[0].positions, target_observation.points)
+    seed_observation = observations[0]
+    seed_comparison = compare_shape(best.trajectory[0].positions, seed_observation.points)
     seed_registered = seed_comparison["model_points_registered"]
 
     figure, axes = plt.subplots(3, 2, figsize=(14, 14), constrained_layout=True)
-    axes[0, 0].plot(target_observation.points[:, 0], target_observation.points[:, 1], "-", color="tab:blue", linewidth=2.5, label="observation target")
+    axes[0, 0].plot(seed_observation.points[:, 0], seed_observation.points[:, 1], "-", color="tab:blue", linewidth=2.5, label="observation seed")
     axes[0, 0].plot(seed_registered[:, 0], seed_registered[:, 1], "--", color="tab:orange", linewidth=2.0, label="model seed")
-    axes[0, 0].set_title(f"shape seed: target t={target_observation.time:g}s / n={best.trajectory[0].n_nodes}")
+    axes[0, 0].set_title(f"causal seed: t={seed_observation.time:g}s / n={best.trajectory[0].n_nodes}")
     axes[0, 1].plot(target_observation.points[:, 0], target_observation.points[:, 1], "-", color="tab:blue", linewidth=2.5, label="observation")
     axes[0, 1].plot(target_registered[:, 0], target_registered[:, 1], "--", color="tab:orange", linewidth=2.2, label="best model")
     axes[0, 1].set_title(
@@ -694,7 +713,7 @@ def _write_plot(
     axes[1, 0].legend(fontsize=8)
 
     frame_times = [float(metric["time"]) for metric in best.frame_metrics]
-    for name, color in (("deflection_ratio", "tab:purple"), ("contour_chord_ratio", "tab:green"), ("curvature_rms_L", "tab:red")):
+    for name, color in (("deflection_ratio", "tab:purple"), ("slack_ratio", "tab:green"), ("curvature_rms_L", "tab:red")):
         axes[1, 1].plot(frame_times, [metric["observed_features"][name] for metric in best.frame_metrics], "o-", color=color, label=f"obs {name}")
         axes[1, 1].plot(frame_times, [metric["model_features"][name] for metric in best.frame_metrics], "--", color=color, alpha=0.7, label=f"model {name}")
     axes[1, 1].set_title("feature time development")
@@ -731,7 +750,7 @@ def _write_plot(
     axes[2, 1].grid(alpha=0.22)
     axes[2, 1].legend(fontsize=8)
     figure.colorbar(scatter, ax=axes[2, 1], label="weighted feature loss")
-    figure.suptitle("gray5 observation, robust features, and high-resolution continuum model", fontsize=14)
+    figure.suptitle(f"gray5 {censor_label}: robust features and continuum model", fontsize=14)
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, dpi=180)
     plt.close(figure)
@@ -744,6 +763,7 @@ def run_exploratory_fit(
     target_times: Sequence[float] = DEFAULT_TARGET_TIMES,
     filament_id: str | None = None,
     n_nodes: int = 25,
+    resolution_values: Sequence[int] = DEFAULT_RESOLUTION_VALUES,
     model_length: float = 2.0,
     coarse_gb: Sequence[float] = DEFAULT_GB_GRID,
     coarse_chi: Sequence[float] = DEFAULT_CHI_GRID,
@@ -757,6 +777,9 @@ def run_exploratory_fit(
 
     if not 5 <= int(n_nodes) <= 100:
         raise ValueError("n_nodes must be between 5 and 100")
+    resolution_grid = tuple(sorted({int(value) for value in resolution_values}))
+    if not resolution_grid or any(value < 5 or value > 100 for value in resolution_grid):
+        raise ValueError("resolution_values must contain integers between 5 and 100")
     if dt <= 0.0:
         raise ValueError("dt must be positive")
     centerline = Path(centerline_path).expanduser().resolve()
@@ -766,11 +789,9 @@ def run_exploratory_fit(
     if len(observations) > 1 and observations[-1].time <= observations[0].time:
         raise ValueError("selected observation times must increase")
 
-    # This is a shape-only exploratory fit: seed the solver from the latest
-    # selected representative frame so the comparison tests mechanical
-    # relaxation/growth around the observed morphology rather than claiming a
-    # predictive reconstruction from an unknown earlier state.
-    initial_shape_frame = observations[-1]
+    # Use the earliest selected representative as the causal initial state;
+    # later observations are evaluated only after forward model evolution.
+    initial_shape_frame = observations[0]
     initial_positions = canonical_observation(initial_shape_frame.points, int(n_nodes), model_length)
     initial_state = FilamentState(initial_positions, np.linalg.norm(np.diff(initial_positions, axis=0), axis=1))
     gb_values = _grid_values(coarse_gb, minimum=0.2, maximum=2.5)
@@ -813,6 +834,61 @@ def run_exploratory_fit(
             key=lambda result: result.score,
         )
 
+    # Mesh sensitivity uses the same selected best parameters at each mesh.
+    # It is intentionally not a second independent parameter refit; the
+    # artifact therefore cannot be misread as resolution-converged inference.
+    resolution_rows: list[dict[str, Any]] = []
+    for resolution in resolution_grid:
+        if resolution == int(n_nodes):
+            resolution_result = best
+        else:
+            resolution_positions = canonical_observation(observations[0].points, resolution, model_length)
+            resolution_state = FilamentState(
+                resolution_positions,
+                np.linalg.norm(np.diff(resolution_positions, axis=0), axis=1),
+            )
+            resolution_result = _evaluate_candidate(
+                resolution_state,
+                observations,
+                G_b=best.G_b,
+                chi=best.chi,
+                growth_time=best.growth_time,
+                model_length=model_length,
+                dt=dt,
+                max_retries=max_retries,
+            )
+        if resolution_result.status == "computed":
+            resolution_target = resolution_result.frame_metrics[-1]
+            resolution_rows.append({
+                "n_nodes": resolution,
+                "status": resolution_result.status,
+                "G_b": best.G_b,
+                "chi": best.chi,
+                "growth_time": best.growth_time,
+                "score": resolution_result.score,
+                "frechet_distance_px": resolution_target.get("frechet_distance_px"),
+                "curvature_rmse_px_inv": resolution_target.get("curvature_rmse_px_inv"),
+                "feature_loss": resolution_target.get("feature_loss"),
+                "observed_growth_rate": resolution_result.temporal_features.get("observed_growth_rate"),
+                "model_growth_rate": resolution_result.temporal_features.get("model_growth_rate"),
+                "failure_reason": None,
+            })
+        else:
+            resolution_rows.append({
+                "n_nodes": resolution,
+                "status": resolution_result.status,
+                "G_b": best.G_b,
+                "chi": best.chi,
+                "growth_time": best.growth_time,
+                "score": None,
+                "frechet_distance_px": None,
+                "curvature_rmse_px_inv": None,
+                "feature_loss": None,
+                "observed_growth_rate": None,
+                "model_growth_rate": None,
+                "failure_reason": resolution_result.failure_reason,
+            })
+
     target_observation = observations[-1]
     straight = np.column_stack((np.linspace(0.0, model_length, int(n_nodes)), np.zeros(int(n_nodes))))
     baseline = compare_shape(straight, target_observation.points)
@@ -842,10 +918,21 @@ def run_exploratory_fit(
     )
     candidates_path = output / "candidate_scores.csv"
     _write_candidate_csv(candidates_path, candidate_rows)
+    resolution_path = output / "resolution_sensitivity.csv"
+    _write_resolution_csv(resolution_path, resolution_rows)
+    resolution_json_path = output / "resolution_sensitivity.json"
+    _write_json(resolution_json_path, {
+        "schema_version": SCHEMA_VERSION,
+        "mode": "fixed_best_parameters_mesh_sensitivity",
+        "parameters": {"G_b": best.G_b, "chi": best.chi, "growth_time": best.growth_time},
+        "rows": resolution_rows,
+        "interpretation": "This is a mesh sensitivity check at fixed parameters, not an independent optimum at each resolution.",
+    })
     plot_path = output / "best_fit_comparison.png"
     if write_plot:
         _write_plot(plot_path, observations, best, baseline, candidate_rows)
 
+    censored_count = sum(bool(item.censor) for item in observations)
     summary: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "status": "computed",
@@ -855,7 +942,7 @@ def run_exploratory_fit(
             "initial_shape_frame": {
                 "frame": initial_shape_frame.frame,
                 "time": initial_shape_frame.time,
-                "reason": "latest selected representative frame used as exploratory shape seed",
+                "reason": "earliest selected representative frame used as causal model seed",
             },
             "selected_frames": [
                 {
@@ -870,8 +957,16 @@ def run_exploratory_fit(
                 for item in observations
             ],
         },
+        "data_quality": {
+            "selected_frame_count": len(observations),
+            "censored_frame_count": censored_count,
+            "all_selected_frames_censored": censored_count == len(observations),
+            "interpretation": "censored exploratory overlay; not a material-constant identification",
+        },
         "search": {
             "n_nodes": n_nodes,
+            "resolution_values": resolution_grid,
+            "resolution_sensitivity_mode": "fixed_best_parameters_mesh_sensitivity",
             "model_length": model_length,
             "coarse_G_b": gb_values,
             "coarse_chi": chi_values,
@@ -882,6 +977,7 @@ def run_exploratory_fit(
             "dt": dt,
             "model_nondimensionalisation": "EA=1, zeta=1, EI=chi*EA*L^2; growth_rate=G_b/tau_b",
         },
+        "resolution_sensitivity": resolution_rows,
         "best_fit": {
             "G_b": best.G_b,
             "chi": best.chi,
@@ -912,6 +1008,8 @@ def run_exploratory_fit(
         "artifacts": {
             "comparison_plot": _logical_path(plot_path),
             "candidate_scores": _logical_path(candidates_path),
+            "resolution_sensitivity_csv": _logical_path(resolution_path),
+            "resolution_sensitivity_json": _logical_path(resolution_json_path),
             "best_fit_trajectory": _logical_path(trajectory_path),
         },
         "limitations": [
@@ -938,6 +1036,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--target-times", nargs="+", help="representative observation times in seconds")
     parser.add_argument("--filament-id")
     parser.add_argument("--n-nodes", type=int, default=25)
+    parser.add_argument("--resolution-values", nargs="+", help="mesh values for fixed-parameter sensitivity check")
     parser.add_argument("--model-length", type=float, default=2.0)
     parser.add_argument("--coarse-gb", nargs="+")
     parser.add_argument("--coarse-chi", nargs="+")
@@ -954,6 +1053,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             target_times=_parse_float_list(args.target_times, DEFAULT_TARGET_TIMES),
             filament_id=args.filament_id,
             n_nodes=args.n_nodes,
+            resolution_values=(
+                tuple(int(value) for value in args.resolution_values)
+                if args.resolution_values is not None else DEFAULT_RESOLUTION_VALUES
+            ),
             model_length=args.model_length,
             coarse_gb=_parse_float_list(args.coarse_gb, DEFAULT_GB_GRID),
             coarse_chi=_parse_float_list(args.coarse_chi, DEFAULT_CHI_GRID),

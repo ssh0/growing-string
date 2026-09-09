@@ -79,6 +79,7 @@ class ExploratoryShapeFittingTests(unittest.TestCase):
                 output,
                 target_times=(0.0, 0.1),
                 n_nodes=7,
+                resolution_values=(7,),
                 coarse_gb=(0.2,),
                 coarse_chi=(0.001,),
                 growth_times=(0.005,),
@@ -89,6 +90,8 @@ class ExploratoryShapeFittingTests(unittest.TestCase):
             self.assertEqual(summary["status"], "computed")
             self.assertEqual(summary["search"]["candidate_count"], 1)
             self.assertEqual(summary["search"]["n_nodes"], 7)
+            self.assertEqual(summary["input"]["initial_shape_frame"]["time"], 0.0)
+            self.assertEqual(summary["resolution_sensitivity"][0]["n_nodes"], 7)
             self.assertIn("observed_features", summary["best_fit"]["target_frame"])
             self.assertIn("temporal_features", summary["best_fit"])
             self.assertTrue((output / "summary.json").is_file())

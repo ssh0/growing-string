@@ -892,6 +892,8 @@ def _(exploratory_summary, mo, plt, result_paths):
     _baseline = exploratory_summary["baseline"]
     _improvement = exploratory_summary["improvement"]
     _temporal = _best["temporal_features"]
+    _quality = exploratory_summary["data_quality"]
+    _resolution = exploratory_summary["resolution_sensitivity"]
     _figure, _axis = plt.subplots(figsize=(10, 6), constrained_layout=True)
     _axis.imshow(plt.imread(result_paths["exploratory_fit"]))
     _axis.axis("off")
@@ -906,9 +908,9 @@ def _(exploratory_summary, mo, plt, result_paths):
                 節点数 **{exploratory_summary['search']['n_nodes']}** の連続体モデルを
                 `G_b`、`chi`、モデル成長時間の grid で探索した。以下は、選択された
                 target frame（`t={_target['time']:g}s`, `frame={_target['frame']}`）について、
-                一様スケールと端点方向だけを合わせた重ね合わせである。最新のtarget形状を
-                滑らかな初期seedにも使うため、これは予測的な動画再現ではなく、観察形状の
-                周囲で力学パラメータを探索する比較である。
+                一様スケールと端点方向だけを合わせた重ね合わせである。モデルはseed frame
+                （`t={exploratory_summary['input']['initial_shape_frame']['time']:g}s`）から
+                targetへ前向きに発展させているため、時間対応を保った探索的比較である。
 
                 **最良候補**: `G_b={_best['G_b']:.5g}`, `chi={_best['chi']:.5g}`,
                 `growth_time={_best['growth_time']:.5g}`、
@@ -916,7 +918,7 @@ def _(exploratory_summary, mo, plt, result_paths):
                 **曲率RMSE={_target['curvature_rmse_px_inv']:.4g} px⁻¹**、
                 **特徴量損失={_target['feature_loss']:.4g}**。
 
-                図の下段には、`Amax/chord`、`L/chord`、無次元曲率統計、低次モード比の
+                図の下段には、`Amax/chord`、`L/chord - 1`、無次元曲率統計、低次モード比の
                 観察／モデル比較と、時刻に対する特徴量の変化を並べた。成長率は
                 `d(log L)/dt` として観察={_temporal['observed_growth_rate']:.4g}、
                 モデル={_temporal['model_growth_rate']:.4g} と評価している。
@@ -924,12 +926,15 @@ def _(exploratory_summary, mo, plt, result_paths):
                 **{_improvement['frechet_distance_px_reduction']:.4g} px
                 ({_improvement['frechet_distance_percent']:.2f}%)**、
                 特徴量損失の減少は **{_improvement['feature_loss_reduction']:.4g}** である。
-                これは視覚的な形状整合性を示す探索指標であり、pixel/model校正の推定、
-                holdout評価、物性値の同定ではない。
+                `n_nodes` は **{exploratory_summary['search']['n_nodes']}**、固定最良パラメータでの
+                mesh感度確認は **{[row['n_nodes'] for row in _resolution]}** であり、各解像度での
+               独立再最適化や収束証明ではない。
 
-                選択フレームの `censor` は **{_target['censor']}**、品質フラグは
-                `{_target['quality_flags']}` である。したがって、図が重なって見えることと、
-                動画追跡・物理モデルが検証済みであることを分けて読む。
+                選択フレームの `censor` は **{_target['censor']}**、選択フレームの
+                **{_quality['censored_frame_count']}/{_quality['selected_frame_count']}** がcensor付き、
+                品質フラグは `{_target['quality_flags']}` である。この図は
+                **censored exploratory overlay** であり、物理的材料定数の確定ではない。
+                図が重なって見えることと、動画追跡・物理モデルが検証済みであることを分けて読む。
                 """
             ),
             _figure,
