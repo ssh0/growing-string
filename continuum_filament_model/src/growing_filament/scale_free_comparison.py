@@ -34,7 +34,8 @@ from .video_comparison import (
     sha256_text,
     validate_centerline_rows,
 )
-from .reproducibility import detect_git_revision
+from .model import FilamentState
+from .reproducibility import canonical_state_hash, detect_git_revision
 
 
 SCHEMA_VERSION = "continuum-filament-scale-free-shape-0.1"
@@ -391,7 +392,8 @@ def _progress(frames: Sequence[_Frame], config: ScaleFreeConfig) -> _Progress:
 
 
 def _assign_progress(frames: Sequence[_Frame], progress: _Progress, config: ScaleFreeConfig) -> None:
-    if progress.status != "ok" or progress.growth_span is None or abs(progress.growth_span) <= config.min_length:
+    relative_floor = config.min_growth_span_relative * max(abs(progress.initial_length or 0.0), config.min_length)
+    if progress.status != "ok" or progress.growth_span is None or abs(progress.growth_span) <= relative_floor:
         return
     for frame in frames:
         if _progress_eligible(frame, config):
@@ -415,6 +417,8 @@ def _validate_frame_keys(rows: Sequence[Mapping[str, Any]], artifact: str) -> di
             filament = str(row.get("filament_id", "")).strip()
             if not filament:
                 raise ValueError("empty filament_id")
+            if artifact != "lineage" and filament == "unknown":
+                raise ValueError("unknown filament_id")
             raw_time = row["time"]
             if raw_time in (None, ""):
                 raise ValueError("empty time")
@@ -576,11 +580,27 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
             positions = np.asarray(archive["positions"])
             times = np.asarray(archive["times"])
             offsets = np.asarray(archive["position_offsets"])
+            rest_lengths = np.asarray(archive["rest_lengths"])
+            rest_offsets = np.asarray(archive["rest_offsets"])
+            steps = np.asarray(archive["steps"])
         if positions.ndim != 2 or positions.shape[1] != 2:
             errors.append("positions_must_be_n_by_two")
         if times.ndim != 1:
             errors.append("times_must_be_one_dimensional")
+        if rest_lengths.ndim != 1:
+            errors.append("rest_lengths_must_be_one_dimensional")
+        if steps.ndim != 1:
+            errors.append("steps_must_be_one_dimensional")
         frame_count = int(len(times)) if times.ndim == 1 else 0
+        if rest_offsets.ndim != 1 or len(rest_offsets) != frame_count + 1:
+            errors.append("rest_offsets_length_mismatch")
+        if rest_offsets.ndim == 1 and len(rest_offsets) == frame_count + 1:
+            if np.any(rest_offsets < 0) or np.any(rest_offsets > len(rest_lengths)) or np.any(np.diff(rest_offsets) < 0):
+                errors.append("rest_offsets_invalid")
+            if len(rest_offsets) and int(rest_offsets[-1]) != len(rest_lengths):
+                errors.append("rest_offsets_end_mismatch")
+        if steps.ndim == 1 and len(steps) != frame_count:
+            errors.append("steps_length_mismatch")
         if offsets.ndim != 1 or len(offsets) != frame_count + 1:
             errors.append("position_offsets_length_mismatch")
         else:
@@ -627,6 +647,8 @@ def _validate_lineage_rows(
             if not str(row["status"]):
                 raise ValueError("empty status")
             lineage_censor = _bool_value(row["censor"])
+            if str(row["filament_id"]) == "unknown" and (str(row["status"]) != "missing_unknown" or not lineage_censor):
+                raise ValueError("unknown lineage must be missing and censored")
             if str(row["status"]) not in ALLOWED_LINEAGE_STATUSES and not lineage_censor:
                 raise ValueError("lineage status requires censor")
         except (TypeError, ValueError):
@@ -1351,6 +1373,34 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
                 scope_validation["valid"] = False
             model_metadata = metadata.get("metadata") if isinstance(metadata.get("metadata"), Mapping) else {}
             model_manifest = metadata.get("manifest") if isinstance(metadata.get("manifest"), Mapping) else {}
+            try:
+                with np.load(model_path, allow_pickle=False) as archive:
+                    positions = np.asarray(archive["positions"], dtype=float)
+                    position_offsets = np.asarray(archive["position_offsets"], dtype=int)
+                    rest_lengths = np.asarray(archive["rest_lengths"], dtype=float)
+                    rest_offsets = np.asarray(archive["rest_offsets"], dtype=int)
+                    times = np.asarray(archive["times"], dtype=float)
+                    steps = np.asarray(archive["steps"], dtype=int)
+                initial_state = FilamentState(
+                    positions[position_offsets[0]:position_offsets[1]],
+                    rest_lengths[rest_offsets[0]:rest_offsets[1]],
+                    float(times[0]),
+                    int(steps[0]),
+                )
+                final_state = FilamentState(
+                    positions[position_offsets[-2]:position_offsets[-1]],
+                    rest_lengths[rest_offsets[-2]:rest_offsets[-1]],
+                    float(times[-1]),
+                    int(steps[-1]),
+                )
+                if model_manifest.get("initial_state_hash") != canonical_state_hash(initial_state):
+                    scope_validation["errors"].append("initial_state_hash_mismatch")
+                if model_manifest.get("canonical_state_hash") != canonical_state_hash(final_state):
+                    scope_validation["errors"].append("canonical_state_hash_mismatch")
+                if model_manifest.get("event_sequence_hash") is None and model_manifest.get("full_event_sequence_hash") is None:
+                    scope_validation["errors"].append("event_sequence_hash_missing")
+            except (OSError, EOFError, KeyError, TypeError, ValueError, IndexError, zipfile.BadZipFile):
+                scope_validation["errors"].append("trajectory_state_hash_unreadable")
             scope_validation = _json_sanitize(scope_validation)
             provenance.update(
                 {
@@ -1362,7 +1412,8 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
                     "input_hash": _json_sanitize(model_manifest.get("input_hash")),
                     "initial_state_hash": _json_sanitize(model_manifest.get("initial_state_hash")),
                     "canonical_state_hash": _json_sanitize(model_manifest.get("canonical_state_hash")),
-                    "event_sequence_hash": _json_sanitize(model_manifest.get("event_sequence_hash")),
+                    "event_sequence_hash": _json_sanitize(model_manifest.get("full_event_sequence_hash") or model_manifest.get("event_sequence_hash")),
+                    "full_event_sequence_hash": _json_sanitize(model_manifest.get("full_event_sequence_hash")),
                     "failure_reason": _json_sanitize(model_metadata.get("failure_reason") or model_manifest.get("failure_reason")),
                 }
             )
@@ -1605,6 +1656,9 @@ def scale_free_shape_comparison(
         "frame_fraction_is_not_physical_time": True,
     }
     censored_count = sum(int(row["comparison_censor"]) for row in output_rows)
+    reflection_selected_count = sum(
+        1 for row in output_rows if str(row.get("shape_distance_orientation", "")).endswith("_reflected")
+    )
     compact: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "comparison_mode": "scale_free_shape",
@@ -1634,7 +1688,9 @@ def scale_free_shape_comparison(
         "video_alignment": {
             "status": "shape_alignment_only",
             "fit_performed": compared_count > 0,
-            "fit_components": ["translation", "rotation", "endpoint_orientation"],
+            "fit_components": ["translation", "rotation", "endpoint_orientation", "reflection"],
+            "reflection_allowed": True,
+            "reflection_selected_rows": reflection_selected_count,
             "absolute_registration_used": False,
             "distinguished_from_initial_condition_sensitivity": True,
         },

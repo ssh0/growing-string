@@ -95,9 +95,17 @@ def run_bounded_comparison(
     source = Path(video_path).expanduser().resolve()
     revision = detect_git_revision(Path(__file__).resolve().parents[2])
     config_hash = __import__("hashlib").sha256(canonical_json_bytes(effective)).hexdigest()
-    specs = {spec.name: spec for spec in _all_specs(effective)}
+    all_specs = _all_specs(effective)
+    specs = {spec.name: spec for spec in all_specs}
+    configured_cases = effective.get("scale_free_cases")
+    if isinstance(configured_cases, list):
+        case_names = [str(name) for name in configured_cases if str(name) in specs]
+    else:
+        case_names = [name for name in DEFAULT_CASES if name in specs]
+        if not case_names:
+            case_names = [spec.name for spec in all_specs if spec.kind == "deterministic_fixture"][:2]
     model_records: list[dict[str, Any]] = []
-    for case_name in DEFAULT_CASES:
+    for case_name in case_names:
         spec = specs[case_name]
         result = run_case(spec, effective["base"], destination, revision, save_trajectory_file=True)
         trajectory_value = result.get("trajectory_path")

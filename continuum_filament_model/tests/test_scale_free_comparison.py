@@ -10,6 +10,8 @@ from pathlib import Path
 import numpy as np
 
 from continuum_filament_model.video_compare import build_parser
+from growing_filament.model import FilamentState
+from growing_filament.reproducibility import canonical_state_hash
 from growing_filament.scale_free_comparison import (
     ScaleFreeConfig,
     normalized_shape_distance,
@@ -101,9 +103,17 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
         model = root / "model.npz"
         positions = []
         offsets = [0]
+        rest_lengths = []
+        rest_offsets = [0]
+        times = np.asarray([1000.0 + index * 11.0 for index in range(len(lengths))], dtype=float)
+        steps = np.arange(len(lengths), dtype=int)
         for length in lengths:
             positions.extend([[0.0, 0.0], [length * 0.5, 0.0], [length, 0.0]])
+            rest_lengths.extend([length * 0.5, length * 0.5])
             offsets.append(offsets[-1] + 3)
+            rest_offsets.append(rest_offsets[-1] + 2)
+        initial_state = FilamentState(np.asarray(positions[:3]), np.asarray(rest_lengths[:2]), float(times[0]), int(steps[0]))
+        final_state = FilamentState(np.asarray(positions[-3:]), np.asarray(rest_lengths[-2:]), float(times[-1]), int(steps[-1]))
         metadata = {
             "schema_version": "continuum-filament-0.1",
             "parameters": {
@@ -140,8 +150,9 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             "manifest": {
                 "manifest_schema_version": "continuum-filament-manifest-1",
                 "input_hash": "input-hash",
-                "initial_state_hash": "initial-state-hash",
-                "canonical_state_hash": "canonical-state-hash",
+                "initial_state_hash": canonical_state_hash(initial_state),
+                "canonical_state_hash": canonical_state_hash(final_state),
+                "event_sequence_hash": "events-hash",
                 "git_revision": "revision-test",
                 "parameters": {
                 "axial_stiffness": 10.0,
@@ -168,7 +179,10 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             model,
             positions=np.asarray(positions, dtype=float),
             position_offsets=np.asarray(offsets, dtype=int),
-            times=np.asarray([1000.0 + index * 11.0 for index in range(len(lengths))], dtype=float),
+            rest_lengths=np.asarray(rest_lengths, dtype=float),
+            rest_offsets=np.asarray(rest_offsets, dtype=int),
+            times=times,
+            steps=steps,
             metadata_json=np.asarray(json.dumps(metadata)),
         )
         return model
@@ -399,8 +413,11 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             with np.load(model, allow_pickle=False) as archive:
                 positions = archive["positions"]
                 times = archive["times"]
+                rest_lengths = archive["rest_lengths"]
+                rest_offsets = archive["rest_offsets"]
+                steps = archive["steps"]
                 metadata_json = archive["metadata_json"]
-            np.savez(model, positions=positions[:5], position_offsets=np.asarray([0, 2, 6]), times=times, metadata_json=metadata_json)
+            np.savez(model, positions=positions[:5], position_offsets=np.asarray([0, 2, 6]), rest_lengths=rest_lengths, rest_offsets=rest_offsets, times=times, steps=steps, metadata_json=metadata_json)
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
             self.assertEqual(result["summary"]["status"], "model_centerline_unavailable")
             self.assertEqual(result["summary"]["compared_rows"], 0)
@@ -414,8 +431,11 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             with np.load(model, allow_pickle=False) as archive:
                 positions = archive["positions"]
                 offsets = archive["position_offsets"]
+                rest_lengths = archive["rest_lengths"]
+                rest_offsets = archive["rest_offsets"]
                 times = archive["times"]
-            np.savez(model, positions=positions, position_offsets=offsets, times=times, metadata_json=np.asarray(json.dumps({"metadata": [], "manifest": {}})))
+                steps = archive["steps"]
+            np.savez(model, positions=positions, position_offsets=offsets, rest_lengths=rest_lengths, rest_offsets=rest_offsets, times=times, steps=steps, metadata_json=np.asarray(json.dumps({"metadata": [], "manifest": {}})))
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
             self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
             self.assertIn("model_metadata_not_mapping", result["summary"]["model_validation"]["errors"])
@@ -428,10 +448,13 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             with np.load(model, allow_pickle=False) as archive:
                 positions = archive["positions"]
                 offsets = archive["position_offsets"]
+                rest_lengths = archive["rest_lengths"]
+                rest_offsets = archive["rest_offsets"]
                 times = archive["times"]
+                steps = archive["steps"]
                 metadata = json.loads(str(archive["metadata_json"].item()))
             metadata["metadata"]["run_kind"] = "exploratory_replicate"
-            np.savez(model, positions=positions, position_offsets=offsets, times=times, metadata_json=np.asarray(json.dumps(metadata)))
+            np.savez(model, positions=positions, position_offsets=offsets, rest_lengths=rest_lengths, rest_offsets=rest_offsets, times=times, steps=steps, metadata_json=np.asarray(json.dumps(metadata)))
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
             self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
             self.assertIn("unsupported_model_run_kind", result["summary"]["model_validation"]["errors"])
@@ -444,7 +467,10 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             with np.load(model, allow_pickle=False) as archive:
                 positions = archive["positions"]
                 offsets = archive["position_offsets"]
+                rest_lengths = archive["rest_lengths"]
+                rest_offsets = archive["rest_offsets"]
                 times = archive["times"]
+                steps = archive["steps"]
                 metadata = json.loads(str(archive["metadata_json"].item()))
             baseline_artifact = root / "member-baseline.bin"
             plus_artifact = root / "member-plus.bin"
@@ -485,7 +511,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                     },
                 }
             )
-            np.savez(model, positions=positions, position_offsets=offsets, times=times, metadata_json=np.asarray(json.dumps(metadata)))
+            np.savez(model, positions=positions, position_offsets=offsets, rest_lengths=rest_lengths, rest_offsets=rest_offsets, times=times, steps=steps, metadata_json=np.asarray(json.dumps(metadata)))
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
             self.assertEqual(result["summary"]["model_population"], "initial_condition_sensitivity")
             self.assertEqual(result["summary"]["initial_condition_sensitivity"]["metrics"], ["normalized_shape_distance"])
