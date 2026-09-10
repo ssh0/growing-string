@@ -385,6 +385,8 @@ def _progress(frames: Sequence[_Frame], config: ScaleFreeConfig) -> _Progress:
     span = final - initial
     relative_floor = config.min_growth_span_relative * max(abs(initial), config.min_length)
     decreases = sum(1 for before, after in zip(lengths, lengths[1:]) if after < before - config.monotonic_tolerance * max(abs(initial), 1.0))
+    if span < 0.0:
+        return _Progress("non_monotonic_lengths", initial, final, span, len(lengths), max(1, decreases))
     if abs(span) <= relative_floor:
         return _Progress("zero_growth_span", initial, final, span, len(lengths), decreases)
     if decreases:

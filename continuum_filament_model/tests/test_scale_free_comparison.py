@@ -817,6 +817,21 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertIn("observation_zero_growth_span", result["summary"]["input_quality"]["reasons"])
             self.assertEqual(result["summary"]["compared_rows"], 0)
 
+    def test_negative_growth_span_is_not_treated_as_growth(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 9.96, 9.92])
+            model = self._write_model(root, [1.0, 1.1, 1.2])
+            result = scale_free_shape_comparison(
+                observation,
+                model,
+                output_dir=root / "comparison",
+                config={"monotonic_tolerance": 0.05},
+            )
+            self.assertEqual(result["summary"]["status"], "growth_progress_undefined_non_monotonic")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertTrue(all(row["observation_q"] is None for row in result["rows"]))
+
     def test_non_monotonic_length_is_not_silently_aligned(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
