@@ -139,8 +139,17 @@ def _float_or_none(value: Any) -> float | None:
 
 def _bool_value(value: Any) -> bool:
     if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes"}
-    return bool(value)
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes"}:
+            return True
+        if normalized in {"0", "false", "no"}:
+            return False
+        raise ValueError("invalid boolean value")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in {0, 1}:
+        return bool(value)
+    raise ValueError("invalid boolean value")
 
 
 def _length(points: np.ndarray) -> float:
@@ -202,10 +211,11 @@ def _peak_deflection(points: np.ndarray, total_length: float) -> float:
 def _curvature_rms_times_length(points: np.ndarray, total_length: float) -> float:
     if len(points) < 3:
         return 0.0
-    segments = np.diff(points, axis=0)
+    sampled = _resample(points, 256)
+    segments = np.diff(sampled, axis=0)
     lengths = np.linalg.norm(segments, axis=1)
     values: list[float] = []
-    for index in range(1, len(points) - 1):
+    for index in range(1, len(sampled) - 1):
         left = segments[index - 1]
         right = segments[index]
         left_norm = float(lengths[index - 1])
@@ -320,7 +330,11 @@ def _progress_eligible(frame: _Frame, config: ScaleFreeConfig) -> bool:
     ):
         return False
     if frame.source == "observation":
-        return frame.quality is not None and frame.quality >= config.min_quality and frame.lineage_status in _ALLOWED_LINEAGE_STATUSES
+        return (
+            frame.quality is not None
+            and config.min_quality <= frame.quality <= 1.0
+            and frame.lineage_status in _ALLOWED_LINEAGE_STATUSES
+        )
     return True
 
 
@@ -350,14 +364,64 @@ def _assign_progress(frames: Sequence[_Frame], progress: _Progress, config: Scal
 
 def _validate_frame_keys(rows: Sequence[Mapping[str, Any]], artifact: str) -> dict[str, Any]:
     errors: list[str] = []
+    seen_frame_keys: set[tuple[int, str]] = set()
+    seen_centerline_keys: set[tuple[int, str, int]] = set()
+    frame_times: dict[tuple[int, str], float] = {}
+    time_frames: dict[tuple[float, str], int] = {}
     for line_number, row in enumerate(rows, start=2):
         try:
-            value = row["frame"]
-            if value in (None, ""):
+            raw_frame = row["frame"]
+            if raw_frame in (None, ""):
                 raise ValueError("empty frame")
-            int(value)
+            frame = int(raw_frame)
+            filament = str(row.get("filament_id", ""))
+            raw_time = row["time"]
+            if raw_time in (None, ""):
+                raise ValueError("empty time")
+            time_s = float(raw_time)
+            if not math.isfinite(time_s):
+                raise ValueError("non-finite time")
         except (KeyError, TypeError, ValueError):
-            errors.append(f"{artifact} line {line_number}: invalid frame key")
+            errors.append(f"{artifact} line {line_number}: invalid frame/time key")
+            continue
+        frame_key = (frame, filament)
+        if artifact == "centerline":
+            try:
+                point_id = int(row["point_id"])
+            except (KeyError, TypeError, ValueError):
+                errors.append(f"{artifact} line {line_number}: invalid point_id")
+            else:
+                point_key = (frame, filament, point_id)
+                if point_key in seen_centerline_keys:
+                    errors.append(f"{artifact} line {line_number}: duplicate frame/filament/point_id key")
+                seen_centerline_keys.add(point_key)
+        else:
+            if frame_key in seen_frame_keys:
+                errors.append(f"{artifact} line {line_number}: duplicate frame/filament key")
+            seen_frame_keys.add(frame_key)
+        previous_time = frame_times.get(frame_key)
+        if previous_time is not None and abs(previous_time - time_s) > 1.0e-12:
+            errors.append(f"{artifact} line {line_number}: frame maps to multiple times")
+        frame_times[frame_key] = time_s
+        time_key = (time_s, filament)
+        previous_frame = time_frames.get(time_key)
+        if previous_frame is not None and previous_frame != frame:
+            errors.append(f"{artifact} line {line_number}: time maps to multiple frames")
+        time_frames[time_key] = frame
+        if "censor" not in row or row["censor"] in (None, ""):
+            errors.append(f"{artifact} line {line_number}: missing censor value")
+        else:
+            try:
+                _bool_value(row["censor"])
+            except ValueError:
+                errors.append(f"{artifact} line {line_number}: invalid censor value")
+        if artifact in {"summary", "centerline"}:
+            try:
+                quality = float(row["quality"])
+                if not math.isfinite(quality) or not 0.0 <= quality <= 1.0:
+                    raise ValueError("quality outside [0,1]")
+            except (KeyError, TypeError, ValueError):
+                errors.append(f"{artifact} line {line_number}: invalid quality value")
     return {"valid": not errors, "errors": errors, "row_count": len(rows)}
 
 
@@ -421,7 +485,18 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     lineage_artifact_present = lineage_path.is_file()
     lineage_rows = _read_csv_rows(lineage_path) if lineage_artifact_present else []
     manifest_path = observation_dir / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    manifest_load_errors: list[str] = []
+    if manifest_path.exists():
+        try:
+            loaded_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(loaded_manifest, Mapping):
+                raise ValueError("manifest must be an object")
+            manifest = loaded_manifest
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            manifest = {}
+            manifest_load_errors.append(f"invalid_manifest_json:{type(exc).__name__}")
+    else:
+        manifest = {}
     frame_key_validation = {
         artifact: _validate_frame_keys(rows, artifact)
         for artifact, rows in (("centerline", centerline_rows), ("summary", summary_rows), ("lineage", lineage_rows))
@@ -436,6 +511,11 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     manifest_validation = manifest.get("validation")
     if not isinstance(manifest_validation, Mapping):
         manifest_validation = {"valid": False, "errors": ["missing_manifest_validation"]}
+    if manifest_load_errors:
+        manifest_validation = {
+            "valid": False,
+            "errors": manifest_load_errors + list(manifest_validation.get("errors", [])),
+        }
     manifest_validation_valid = manifest_validation.get("valid") is True
     contract_valid = manifest_validation_valid and bool(centerline_validation.get("valid")) and frame_keys_valid and bool(lineage_validation.get("valid"))
     selected = filament_id or _choose_filament(summary_rows) or _choose_filament(lineage_rows)
@@ -478,7 +558,10 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         quality = _float_or_none((row or {}).get("quality"))
         flags = str((row or {}).get("quality_flags", "ok") or "ok")
         lineage_status = str((lineage or {}).get("status", "missing_lineage"))
-        censor = _bool_value((row or {}).get("censor", "0")) or _bool_value((lineage or {}).get("censor", "0"))
+        try:
+            censor = _bool_value((row or {}).get("censor", "0")) or _bool_value((lineage or {}).get("censor", "0"))
+        except ValueError:
+            censor = True
         if lineage is None:
             censor = True
         if lineage_status not in _ALLOWED_LINEAGE_STATUSES:
@@ -572,6 +655,7 @@ def _validate_model_csv_source(path: Path) -> dict[str, Any]:
     required = {"time", "x", "y"}
     errors: list[str] = []
     row_count = 0
+    point_ids_by_time: dict[float, list[int]] = {}
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         fieldnames = set(reader.fieldnames or [])
@@ -585,17 +669,25 @@ def _validate_model_csv_source(path: Path) -> dict[str, Any]:
                 errors.append(f"line {line_number}: missing required values {','.join(missing_values)}")
                 continue
             try:
-                values = [float(row[field]) for field in sorted(required)]
+                time_s = float(row["time"])
+                values = [time_s, float(row["x"]), float(row["y"])]
             except (TypeError, ValueError):
                 errors.append(f"line {line_number}: invalid time or coordinate")
                 continue
             if not np.isfinite(values).all():
                 errors.append(f"line {line_number}: non-finite time or coordinate")
-            if "point_id" in row and row["point_id"] not in (None, ""):
+            if "point_id" in fieldnames:
                 try:
-                    int(row["point_id"])
+                    point_id = int(row["point_id"])
                 except (TypeError, ValueError):
                     errors.append(f"line {line_number}: invalid point_id")
+                else:
+                    point_ids_by_time.setdefault(time_s, []).append(point_id)
+    if "point_id" in fieldnames:
+        for time_s, point_ids in point_ids_by_time.items():
+            expected = list(range(len(point_ids)))
+            if point_ids != expected:
+                errors.append(f"time {time_s}: point_id must be ordered and contiguous from zero")
     return {
         "valid": not errors,
         "errors": errors,
