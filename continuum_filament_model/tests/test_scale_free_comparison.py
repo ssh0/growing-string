@@ -11,7 +11,7 @@ import numpy as np
 
 from continuum_filament_model.video_compare import build_parser
 from growing_filament.model import FilamentState
-from growing_filament.reproducibility import canonical_state_hash
+from growing_filament.reproducibility import canonical_state_hash, event_sequence_hash
 from growing_filament.scale_free_comparison import (
     ScaleFreeConfig,
     normalized_shape_distance,
@@ -152,7 +152,8 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 "input_hash": "input-hash",
                 "initial_state_hash": canonical_state_hash(initial_state),
                 "canonical_state_hash": canonical_state_hash(final_state),
-                "event_sequence_hash": "events-hash",
+                "event_sequence_hash": event_sequence_hash([]),
+                "events": [],
                 "git_revision": "revision-test",
                 "parameters": {
                 "axial_stiffness": 10.0,

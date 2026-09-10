@@ -98,12 +98,19 @@ def run_bounded_comparison(
     all_specs = _all_specs(effective)
     specs = {spec.name: spec for spec in all_specs}
     configured_cases = effective.get("scale_free_cases")
+    configuration_errors: list[str] = []
     if isinstance(configured_cases, list):
-        case_names = [str(name) for name in configured_cases if str(name) in specs]
+        requested_cases = [str(name) for name in configured_cases]
+        unknown_cases = [name for name in requested_cases if name not in specs]
+        if unknown_cases:
+            configuration_errors.append("unknown_scale_free_cases:" + ",".join(unknown_cases))
+        case_names = [name for name in requested_cases if name in specs]
     else:
         case_names = [name for name in DEFAULT_CASES if name in specs]
         if not case_names:
             case_names = [spec.name for spec in all_specs if spec.kind == "deterministic_fixture"][:2]
+    if not case_names:
+        configuration_errors.append("no_scale_free_cases_selected")
     model_records: list[dict[str, Any]] = []
     for case_name in case_names:
         spec = specs[case_name]
@@ -175,6 +182,17 @@ def run_bounded_comparison(
             "external_artifact_ids": {},
         }
 
+    if configuration_errors:
+        extraction = {
+            "status": "input_quality_invalid_configuration",
+            "processed_frames": 0,
+            "candidate_count": 0,
+            "candidate_censor_count": 0,
+            "selected_filament_id": None,
+            "validation": {"valid": False, "errors": configuration_errors},
+            "decode_complete": False,
+            "external_artifact_ids": {},
+        }
     shape_cfg = shape_config if isinstance(shape_config, ScaleFreeConfig) else ScaleFreeConfig.from_mapping(shape_config)
     if extraction["status"] == "extracted":
         for record in model_records:
@@ -231,6 +249,7 @@ def run_bounded_comparison(
         "shape_config_sha256": __import__("hashlib").sha256(canonical_json_bytes(shape_cfg.to_dict())).hexdigest(),
         "video": _compact_input(source),
         "extraction": extraction,
+        "configuration_errors": configuration_errors,
         "model_runs": model_records,
         "summary_csv": "summary.csv",
         "artifact_policy": "trajectories, raw extraction, and per-case scale-free CSV are external-style artifacts; root summaries are compact",

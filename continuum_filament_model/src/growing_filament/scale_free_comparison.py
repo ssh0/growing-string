@@ -35,7 +35,7 @@ from .video_comparison import (
     validate_centerline_rows,
 )
 from .model import FilamentState
-from .reproducibility import canonical_state_hash, detect_git_revision
+from .reproducibility import canonical_state_hash, detect_git_revision, event_sequence_hash
 
 
 SCHEMA_VERSION = "continuum-filament-scale-free-shape-0.1"
@@ -907,6 +907,7 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     if selected is not None:
         keys.update(key for key in summary_by_key if key[1] == selected)
         keys.update(key for key in lineage_by_key if key[1] == selected)
+        keys.update(key for key in lineage_by_key if key[1] == "unknown" and key[0] in set(processed_frames))
         for row in centerline_rows:
             if row.get("filament_id") != selected:
                 continue
@@ -1041,6 +1042,8 @@ def _validate_model_scope(
         errors.append("model_metadata_not_mapping")
     manifest_metadata: Mapping[str, Any] | None = None
     if isinstance(raw_manifest, Mapping):
+        if raw_manifest.get("manifest_schema_version") != "continuum-filament-manifest-1":
+            errors.append("model_manifest_schema_version_invalid")
         required_manifest_fields = ("manifest_schema_version", "input_hash", "initial_state_hash", "canonical_state_hash", "git_revision")
         for field in required_manifest_fields:
             if not isinstance(raw_manifest.get(field), str) or not raw_manifest.get(field):
@@ -1053,8 +1056,8 @@ def _validate_model_scope(
                 errors.append("model_manifest_metadata_not_mapping")
     else:
         errors.append("model_manifest_not_mapping")
-    if not isinstance(metadata.get("schema_version"), str) or not metadata.get("schema_version"):
-        errors.append("model_serializer_schema_missing")
+    if metadata.get("schema_version") != "continuum-filament-0.1":
+        errors.append("model_serializer_schema_version_invalid")
     scope: dict[str, Any] = {}
     for key in ("benchmark", "boundary", "contact_enabled", "physical_scope", "run_kind", "sensitivity_protocol"):
         values = [source[key] for source in sources if key in source]
@@ -1397,8 +1400,12 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
                     scope_validation["errors"].append("initial_state_hash_mismatch")
                 if model_manifest.get("canonical_state_hash") != canonical_state_hash(final_state):
                     scope_validation["errors"].append("canonical_state_hash_mismatch")
-                if model_manifest.get("event_sequence_hash") is None and model_manifest.get("full_event_sequence_hash") is None:
+                events = model_manifest.get("events")
+                declared_event_hash = model_manifest.get("full_event_sequence_hash") or model_manifest.get("event_sequence_hash")
+                if not isinstance(events, list) or not isinstance(declared_event_hash, str) or not declared_event_hash:
                     scope_validation["errors"].append("event_sequence_hash_missing")
+                elif declared_event_hash != event_sequence_hash(events):
+                    scope_validation["errors"].append("event_sequence_hash_mismatch")
             except (OSError, EOFError, KeyError, TypeError, ValueError, IndexError, zipfile.BadZipFile):
                 scope_validation["errors"].append("trajectory_state_hash_unreadable")
             scope_validation = _json_sanitize(scope_validation)
@@ -1557,7 +1564,7 @@ def scale_free_shape_comparison(
         row: dict[str, Any] = {
             "observation_frame": observation.index,
             "observation_time_s": observation.time_s,
-            "filament_id": selected or "unknown",
+            "filament_id": "unknown" if observation.lineage_status == "missing_unknown" else (selected or "unknown"),
             "observation_length_px": observation.length,
             "observation_q": observation.q,
             "observation_quality": observation.quality,
