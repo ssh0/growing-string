@@ -660,6 +660,9 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
                 frame_positions = positions[offsets[index]:offsets[index + 1]]
                 if np.any(np.linalg.norm(np.diff(frame_positions, axis=0), axis=1) <= 1.0e-12):
                     errors.append(f"frame_{index}_zero_length_segment")
+                frame_positions = positions[offsets[index]:offsets[index + 1]]
+                if np.any(np.linalg.norm(np.diff(frame_positions, axis=0), axis=1) <= 1.0e-12):
+                    errors.append(f"frame_{index}_zero_length_segment")
                 if np.any(rest_lengths[rest_offsets[index]:rest_offsets[index + 1]] <= 0.0):
                     errors.append(f"frame_{index}_rest_lengths_invalid")
     except (OSError, EOFError, KeyError, TypeError, ValueError, zipfile.BadZipFile):

@@ -117,7 +117,7 @@ def run_bounded_comparison(
     if not case_names:
         configuration_errors.append("no_scale_free_cases_selected")
     model_records: list[dict[str, Any]] = []
-    for case_name in case_names:
+    for case_name in ([] if configuration_errors else case_names):
         spec = specs[case_name]
         result = run_case(spec, effective["base"], destination, revision, save_trajectory_file=True)
         trajectory_value = result.get("trajectory_path")
