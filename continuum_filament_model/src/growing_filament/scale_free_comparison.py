@@ -1040,7 +1040,11 @@ def _validate_model_csv_source(path: Path) -> dict[str, Any]:
     }
 
 
-def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) -> dict[str, Any]:
+def _validate_model_scope(
+    model_path: Path,
+    metadata: Mapping[str, Any] | None,
+    parameters: Mapping[str, Any] | None,
+) -> dict[str, Any]:
     if model_path.suffix.lower() != ".npz" or metadata is None:
         return {"valid": False, "errors": ["stage2_scope_metadata_required"], "warnings": []}
     raw_metadata = metadata.get("metadata")
@@ -1051,10 +1055,12 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
         sources.append(raw_metadata)
     else:
         errors.append("model_metadata_not_mapping")
+    manifest_metadata: Mapping[str, Any] | None = None
     if isinstance(raw_manifest, Mapping):
         if "metadata" in raw_manifest:
             if isinstance(raw_manifest["metadata"], Mapping):
-                sources.append(raw_manifest["metadata"])
+                manifest_metadata = raw_manifest["metadata"]
+                sources.append(manifest_metadata)
             else:
                 errors.append("model_manifest_metadata_not_mapping")
     else:
@@ -1062,15 +1068,45 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
     scope: dict[str, Any] = {}
     for key in ("benchmark", "boundary", "contact_enabled", "physical_scope", "run_kind", "sensitivity_protocol"):
         values = [source[key] for source in sources if key in source]
+        if key == "run_kind" and isinstance(raw_manifest, Mapping) and "run_kind" in raw_manifest:
+            values.append(raw_manifest["run_kind"])
         if not values:
             continue
         first_value = values[0]
-        normalized_first = set(first_value) if key == "physical_scope" and isinstance(first_value, list) else first_value
+        if key == "physical_scope":
+            normalized_first = tuple(first_value) if isinstance(first_value, list) and all(isinstance(item, str) for item in first_value) else first_value
+        elif key == "sensitivity_protocol":
+            normalized_first = canonical_json(first_value) if isinstance(first_value, Mapping) else first_value
+        else:
+            normalized_first = first_value
         for value in values[1:]:
-            normalized_value = set(value) if key == "physical_scope" and isinstance(value, list) else value
+            if key == "physical_scope":
+                normalized_value = tuple(value) if isinstance(value, list) and all(isinstance(item, str) for item in value) else value
+            elif key == "sensitivity_protocol":
+                normalized_value = canonical_json(value) if isinstance(value, Mapping) else value
+            else:
+                normalized_value = value
             if normalized_value != normalized_first:
                 errors.append(f"model_scope_metadata_mismatch:{key}")
         scope[key] = first_value
+    if not isinstance(parameters, Mapping):
+        errors.append("model_parameters_not_mapping")
+    else:
+        for key in ("contact_stiffness", "diameter", "fixed_left", "fixed_right", "growth_rate"):
+            if key not in parameters:
+                errors.append(f"model_parameter_missing:{key}")
+        try:
+            if float(parameters.get("contact_stiffness")) != 0.0 or float(parameters.get("diameter")) != 0.0:
+                errors.append("model_contact_parameters_nonzero")
+        except (TypeError, ValueError):
+            errors.append("model_contact_parameters_invalid")
+        if parameters.get("fixed_left") is not False or parameters.get("fixed_right") is not False:
+            errors.append("model_boundary_parameters_not_free")
+        try:
+            if float(parameters.get("growth_rate")) < 0.0:
+                errors.append("model_growth_rate_invalid")
+        except (TypeError, ValueError):
+            errors.append("model_growth_rate_invalid")
     if scope.get("benchmark") != "stage2_free_free_growth_relaxation_buckling":
         errors.append("unsupported_stage2_benchmark")
     run_kind = scope.get("run_kind")
@@ -1084,13 +1120,20 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
         if not isinstance(protocol, Mapping):
             errors.append("missing_sensitivity_protocol")
         else:
-            if protocol.get("parameter") != "initial_condition":
-                errors.append("invalid_sensitivity_parameter")
             members = protocol.get("members")
+            member_ids: set[str] = set()
             if not isinstance(members, list) or len(members) < 2:
                 errors.append("sensitivity_members_insufficient")
             else:
-                member_ids: set[str] = set()
+                range_value = protocol.get("perturbation_range")
+                try:
+                    range_min = float(range_value["min"])
+                    range_max = float(range_value["max"])
+                    if not math.isfinite(range_min) or not math.isfinite(range_max) or range_min > range_max:
+                        raise ValueError
+                except (KeyError, TypeError, ValueError):
+                    errors.append("missing_sensitivity_perturbation_range")
+                    range_min = range_max = 0.0
                 for member in members:
                     if not isinstance(member, Mapping):
                         errors.append("sensitivity_member_not_mapping")
@@ -1098,42 +1141,44 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
                     member_id = member.get("id")
                     if not isinstance(member_id, str) or not member_id.strip() or member_id in member_ids:
                         errors.append("sensitivity_member_id_invalid")
-                    member_ids.add(str(member_id))
-                    if "perturbation_value" not in member:
-                        errors.append("sensitivity_member_value_missing")
-                    if not isinstance(member.get("provenance"), Mapping) or not member.get("provenance"):
-                        errors.append("sensitivity_member_provenance_missing")
-                    if not isinstance(member.get("result"), Mapping) or not member.get("result"):
-                        errors.append("sensitivity_member_result_missing")
-            if not protocol.get("perturbation_range"):
-                errors.append("missing_sensitivity_perturbation_range")
+                    member_ids.add(member_id if isinstance(member_id, str) else "")
+                    try:
+                        perturbation_value = float(member["perturbation_value"])
+                        if not math.isfinite(perturbation_value) or not range_min <= perturbation_value <= range_max:
+                            raise ValueError
+                    except (KeyError, TypeError, ValueError):
+                        errors.append("sensitivity_member_value_invalid")
+                    provenance_member = member.get("provenance")
+                    result_member = member.get("result")
+                    if not isinstance(provenance_member, Mapping) or not isinstance(result_member, Mapping):
+                        errors.append("sensitivity_member_provenance_result_missing")
+                        continue
+                    if not isinstance(provenance_member.get("trajectory_sha256"), str) or provenance_member.get("trajectory_sha256") != member.get("trajectory_sha256"):
+                        errors.append("sensitivity_member_trajectory_hash_mismatch")
+                    metrics = result_member.get("metrics")
+                    if not isinstance(metrics, Mapping) or not metrics:
+                        errors.append("sensitivity_member_metrics_missing")
+                    else:
+                        if result_member.get("metrics_sha256") != sha256_text(canonical_json(metrics)):
+                            errors.append("sensitivity_member_metrics_hash_mismatch")
+            if protocol.get("parameter") != "initial_condition":
+                errors.append("invalid_sensitivity_parameter")
             if not isinstance(protocol.get("metrics"), list) or not protocol.get("metrics"):
                 errors.append("missing_sensitivity_metrics")
-            if not isinstance(protocol.get("aggregate_metrics"), Mapping) or not protocol.get("aggregate_metrics"):
-                errors.append("missing_sensitivity_aggregate_metrics")
-            if not isinstance(protocol.get("acceptance_criteria"), Mapping) or not protocol.get("acceptance_criteria"):
-                errors.append("missing_sensitivity_acceptance_criteria")
+            aggregate = protocol.get("aggregate_metrics")
+            if not isinstance(aggregate, Mapping) or aggregate.get("member_count") != len(members) if isinstance(members, list) else True:
+                errors.append("invalid_sensitivity_aggregate_metrics")
+            if not isinstance(protocol.get("acceptance_criteria"), Mapping) or not protocol.get("acceptance_criteria") or protocol.get("accepted") is not True:
+                errors.append("sensitivity_acceptance_missing_or_failed")
     if scope.get("boundary") != "free/free":
         errors.append("model_boundary_is_not_free_free")
     if scope.get("contact_enabled") is not False:
         errors.append("model_contact_scope_not_disabled")
-    required_scope = {
-        "uniform_reference_length_growth",
-        "stretching",
-        "discrete_bending",
-        "isotropic_substrate_drag",
-    }
+    required_scope = {"uniform_reference_length_growth", "stretching", "discrete_bending", "isotropic_substrate_drag"}
     physical_scope = scope.get("physical_scope")
     if not isinstance(physical_scope, list) or set(physical_scope) != required_scope:
         errors.append("model_physical_scope_not_exact_stage2_allowlist")
-    return {
-        "valid": not errors,
-        "errors": errors,
-        "warnings": [],
-        "scope": scope,
-        "population": population,
-        "sensitivity_protocol": scope.get("sensitivity_protocol"),
-    }
+    return {"valid": not errors, "errors": errors, "warnings": [], "scope": scope, "population": population, "sensitivity_protocol": scope.get("sensitivity_protocol")}
 
 
 def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Frame], dict[str, Any]]:
@@ -1194,9 +1239,10 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
             with np.load(model_path, allow_pickle=False) as archive:
                 raw = archive["metadata_json"]
                 metadata = json.loads(str(raw.item() if raw.ndim == 0 else raw.tolist()))
-            scope_validation = _validate_model_scope(model_path, metadata if isinstance(metadata, Mapping) else None)
             if not isinstance(metadata, Mapping):
                 raise TypeError("model metadata must be an object")
+            parameters = metadata.get("parameters") if isinstance(metadata.get("parameters"), Mapping) else None
+            scope_validation = _validate_model_scope(model_path, metadata, parameters)
             model_metadata = metadata.get("metadata") if isinstance(metadata.get("metadata"), Mapping) else {}
             model_manifest = metadata.get("manifest") if isinstance(metadata.get("manifest"), Mapping) else {}
             provenance.update(

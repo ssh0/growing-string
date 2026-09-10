@@ -105,6 +105,13 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             positions.extend([[0.0, 0.0], [length * 0.5, 0.0], [length, 0.0]])
             offsets.append(offsets[-1] + 3)
         metadata = {
+            "parameters": {
+                "contact_stiffness": 0.0,
+                "diameter": 0.0,
+                "fixed_left": False,
+                "fixed_right": False,
+                "growth_rate": 0.02,
+            },
             "metadata": {
                 "benchmark": "stage2_free_free_growth_relaxation_buckling",
                 "boundary": "free/free",
@@ -398,13 +405,26 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                     "run_kind": "initial_condition_sensitivity",
                     "sensitivity_protocol": {
                         "parameter": "initial_condition",
-                        "perturbation_range": {"amplitude_fraction": [-0.1, 0.1]},
+                        "perturbation_range": {"min": -0.1, "max": 0.1},
                         "members": [
-                            {"id": "baseline", "perturbation_value": 0.0, "provenance": {"seed": 0}, "result": {"normalized_shape_distance": 0.0}},
-                            {"id": "plus", "perturbation_value": 0.1, "provenance": {"seed": 1}, "result": {"normalized_shape_distance": 0.1}},
+                            {
+                                "id": "baseline",
+                                "perturbation_value": 0.0,
+                                "trajectory_sha256": "trajectory-baseline",
+                                "provenance": {"seed": 0, "trajectory_sha256": "trajectory-baseline"},
+                                "result": {"metrics": {"normalized_shape_distance": 0.0}, "metrics_sha256": hashlib.sha256(json.dumps({"normalized_shape_distance": 0.0}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
+                            },
+                            {
+                                "id": "plus",
+                                "perturbation_value": 0.1,
+                                "trajectory_sha256": "trajectory-plus",
+                                "provenance": {"seed": 1, "trajectory_sha256": "trajectory-plus"},
+                                "result": {"metrics": {"normalized_shape_distance": 0.1}, "metrics_sha256": hashlib.sha256(json.dumps({"normalized_shape_distance": 0.1}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
+                            },
                         ],
-                        "metrics": ["normalized_shape_distance", "mode_fractions"],
-                        "aggregate_metrics": {"max_normalized_shape_distance_delta": 0.1},
+                        "metrics": ["normalized_shape_distance"],
+                        "aggregate_metrics": {"member_count": 2, "max_normalized_shape_distance_delta": 0.1},
+                        "accepted": True,
                         "acceptance_criteria": {"max_metric_delta": 0.2},
                     },
                 }
@@ -412,7 +432,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             np.savez(model, positions=positions, position_offsets=offsets, times=times, metadata_json=np.asarray(json.dumps(metadata)))
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
             self.assertEqual(result["summary"]["model_population"], "initial_condition_sensitivity")
-            self.assertEqual(result["summary"]["initial_condition_sensitivity"]["metrics"], ["normalized_shape_distance", "mode_fractions"])
+            self.assertEqual(result["summary"]["initial_condition_sensitivity"]["metrics"], ["normalized_shape_distance"])
             self.assertTrue(result["summary"]["video_alignment"]["distinguished_from_initial_condition_sensitivity"])
 
     def test_invalid_model_contract_is_unavailable_but_retains_coverage(self):
