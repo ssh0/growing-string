@@ -596,6 +596,8 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
             rest_lengths = np.asarray(archive["rest_lengths"])
             rest_offsets = np.asarray(archive["rest_offsets"])
             steps = np.asarray(archive["steps"])
+        if any(np.iscomplexobj(array) for array in (positions, times, offsets, rest_lengths, rest_offsets, steps)):
+            errors.append("npz_numeric_arrays_must_be_real")
         if positions.ndim != 2 or positions.shape[1] != 2:
             errors.append("positions_must_be_n_by_two")
         if times.ndim != 1:
