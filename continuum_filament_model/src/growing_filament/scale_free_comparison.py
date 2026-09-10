@@ -1222,6 +1222,7 @@ def _validate_model_scope(
             members = protocol.get("members")
             member_ids: set[str] = set()
             member_hashes: set[str] = set()
+            member_initial_hashes: set[str] = set()
             if not isinstance(members, list) or len(members) < 2:
                 errors.append("sensitivity_members_insufficient")
             else:
@@ -1282,12 +1283,19 @@ def _validate_model_scope(
                                         member_scope = _validate_model_scope(member_file, member_metadata if isinstance(member_metadata, Mapping) else None, member_parameters)
                                         if not member_scope.get("valid", False) or member_scope.get("population") != "stage2_deterministic":
                                             errors.append("sensitivity_member_stage2_scope_invalid")
+                                        member_manifest = member_metadata.get("manifest") if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("manifest"), Mapping) else {}
+                                        member_initial_hash = member_manifest.get("initial_state_hash")
+                                        if not isinstance(member_initial_hash, str) or not member_initial_hash or member_initial_hash in member_initial_hashes:
+                                            errors.append("sensitivity_member_initial_state_invalid")
+                                        member_initial_hashes.add(member_initial_hash if isinstance(member_initial_hash, str) else "")
                                     except (OSError, KeyError, TypeError, ValueError, OverflowError, zipfile.BadZipFile):
                                         errors.append("sensitivity_member_metadata_unreadable")
                             except OSError:
                                 errors.append("sensitivity_member_artifact_hash_unreadable")
                     if not isinstance(provenance_member.get("trajectory_sha256"), str) or provenance_member.get("trajectory_sha256") != trajectory_hash:
                         errors.append("sensitivity_member_trajectory_hash_mismatch")
+                    if provenance_member.get("initial_state_hash") is not None and provenance_member.get("initial_state_hash") not in member_initial_hashes:
+                        errors.append("sensitivity_member_initial_state_hash_mismatch")
                     metrics = result_member.get("metrics")
                     if not isinstance(metrics, Mapping) or not metrics:
                         errors.append("sensitivity_member_metrics_missing")
