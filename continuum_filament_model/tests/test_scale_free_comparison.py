@@ -479,6 +479,10 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             plus_artifact = self._write_model(root / "member-plus", [1.1, 2.1])
             baseline_hash = hashlib.sha256(baseline_artifact.read_bytes()).hexdigest()
             plus_hash = hashlib.sha256(plus_artifact.read_bytes()).hexdigest()
+            with np.load(baseline_artifact, allow_pickle=False) as member_archive:
+                baseline_initial_hash = json.loads(str(member_archive["metadata_json"].item()))["manifest"]["initial_state_hash"]
+            with np.load(plus_artifact, allow_pickle=False) as member_archive:
+                plus_initial_hash = json.loads(str(member_archive["metadata_json"].item()))["manifest"]["initial_state_hash"]
             baseline_metrics = {"normalized_endpoint_distance": 1.0}
             plus_metrics = {"normalized_endpoint_distance": 1.0}
             metadata["metadata"].update(
@@ -486,22 +490,28 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                     "run_kind": "initial_condition_sensitivity",
                     "sensitivity_protocol": {
                         "parameter": "initial_condition",
+                        "baseline_run_id": "baseline",
+                        "baseline_initial_state_hash": baseline_initial_hash,
                         "perturbation_range": {"min": -0.1, "max": 0.1},
                         "members": [
                             {
                                 "id": "baseline",
                                 "perturbation_value": 0.0,
+                                "perturbation_vector": [0.0],
+                                "perturbation_norm": 0.0,
                                 "artifact_path": "member-baseline/model.npz",
                                 "trajectory_sha256": baseline_hash,
-                                "provenance": {"seed": 0, "trajectory_sha256": baseline_hash},
+                                "provenance": {"seed": 0, "trajectory_sha256": baseline_hash, "initial_state_hash": baseline_initial_hash, "baseline_run_id": "baseline"},
                                 "result": {"metrics": baseline_metrics, "metrics_sha256": hashlib.sha256(json.dumps(baseline_metrics, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
                             },
                             {
                                 "id": "plus",
                                 "perturbation_value": 0.1,
+                                "perturbation_vector": [0.1],
+                                "perturbation_norm": 0.1,
                                 "artifact_path": "member-plus/model.npz",
                                 "trajectory_sha256": plus_hash,
-                                "provenance": {"seed": 1, "trajectory_sha256": plus_hash},
+                                "provenance": {"seed": 1, "trajectory_sha256": plus_hash, "initial_state_hash": plus_initial_hash, "baseline_run_id": "baseline"},
                                 "result": {"metrics": plus_metrics, "metrics_sha256": hashlib.sha256(json.dumps(plus_metrics, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
                             },
                         ],

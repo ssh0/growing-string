@@ -1219,6 +1219,12 @@ def _validate_model_scope(
         if not isinstance(protocol, Mapping):
             errors.append("missing_sensitivity_protocol")
         else:
+            baseline_run_id = protocol.get("baseline_run_id")
+            baseline_initial_state_hash = protocol.get("baseline_initial_state_hash")
+            if not isinstance(baseline_run_id, str) or not baseline_run_id:
+                errors.append("sensitivity_baseline_run_missing")
+            if not isinstance(baseline_initial_state_hash, str) or not baseline_initial_state_hash:
+                errors.append("sensitivity_baseline_initial_state_missing")
             members = protocol.get("members")
             member_ids: set[str] = set()
             member_hashes: set[str] = set()
@@ -1244,10 +1250,20 @@ def _validate_model_scope(
                         errors.append("sensitivity_member_id_invalid")
                     member_ids.add(member_id if isinstance(member_id, str) else "")
                     try:
-                        perturbation_value = float(member["perturbation_value"])
+                        perturbation_vector = member["perturbation_vector"]
+                        if not isinstance(perturbation_vector, list) or not perturbation_vector:
+                            raise ValueError
+                        vector = np.asarray(perturbation_vector, dtype=float)
+                        if not np.isfinite(vector).all():
+                            raise ValueError
+                        perturbation_norm = float(member["perturbation_norm"])
+                        expected_norm = float(np.linalg.norm(vector))
+                        if not math.isfinite(perturbation_norm) or abs(perturbation_norm - expected_norm) > 1.0e-9:
+                            raise ValueError
+                        perturbation_value = float(member.get("perturbation_value", vector[0]))
                         if not math.isfinite(perturbation_value) or not range_min <= perturbation_value <= range_max:
                             raise ValueError
-                    except (KeyError, TypeError, ValueError):
+                    except (KeyError, TypeError, ValueError, OverflowError):
                         errors.append("sensitivity_member_value_invalid")
                     provenance_member = member.get("provenance")
                     result_member = member.get("result")
@@ -1266,9 +1282,14 @@ def _validate_model_scope(
                         errors.append("sensitivity_member_artifact_path_invalid")
                     else:
                         member_file = model_path.parent / artifact_path
-                        if not member_file.is_file() or member_file.is_symlink():
+                        try:
+                            member_file.resolve().relative_to(model_path.parent.resolve())
+                        except ValueError:
+                            errors.append("sensitivity_member_artifact_outside_model_dir")
+                            member_file = None
+                        if member_file is not None and (not member_file.is_file() or member_file.is_symlink()):
                             errors.append("sensitivity_member_artifact_missing")
-                        else:
+                        elif member_file is not None:
                             try:
                                 if sha256_file(member_file) != trajectory_hash:
                                     errors.append("sensitivity_member_artifact_hash_mismatch")
@@ -1288,6 +1309,14 @@ def _validate_model_scope(
                                         member_initial_hash = member_manifest.get("initial_state_hash")
                                         if not isinstance(member_initial_hash, str) or not member_initial_hash or member_initial_hash in member_initial_hashes:
                                             errors.append("sensitivity_member_initial_state_invalid")
+                                        if member.get("id") == baseline_run_id and member_initial_hash != baseline_initial_state_hash:
+                                            errors.append("sensitivity_baseline_initial_state_mismatch")
+                                        if member.get("id") != baseline_run_id and member_initial_hash == baseline_initial_state_hash:
+                                            errors.append("sensitivity_member_not_perturbed")
+                                        if provenance_member.get("initial_state_hash") != member_initial_hash:
+                                            errors.append("sensitivity_member_initial_state_hash_mismatch")
+                                        if provenance_member.get("baseline_run_id") != baseline_run_id:
+                                            errors.append("sensitivity_member_baseline_mismatch")
                                         member_initial_hashes.add(member_initial_hash if isinstance(member_initial_hash, str) else "")
                                         member_frames = load_model_output(member_file)
                                         if not member_frames:
