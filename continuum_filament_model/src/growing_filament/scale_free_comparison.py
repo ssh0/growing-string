@@ -126,7 +126,7 @@ def _write_json(path: Path, value: Mapping[str, Any]) -> None:
 
 
 def _float_or_none(value: Any) -> float | None:
-    if value is None or value == "":
+    if isinstance(value, bool) or value is None or value == "":
         return None
     try:
         number = float(value)
@@ -1141,11 +1141,15 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
                     "initial_state_hash": model_manifest.get("initial_state_hash"),
                     "canonical_state_hash": model_manifest.get("canonical_state_hash"),
                     "event_sequence_hash": model_manifest.get("event_sequence_hash"),
+                    "failure_reason": model_metadata.get("failure_reason") or model_manifest.get("failure_reason"),
                 }
             )
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
             provenance["metadata_status"] = "unavailable"
     provenance["scope_validation"] = scope_validation
+    failure_reason = provenance.get("failure_reason")
+    if failure_reason not in (None, ""):
+        validation_errors.append("model_failure_reason_present")
     validation_errors.extend(scope_validation.get("errors", []))
     provenance["validation"]["scope"] = scope_validation
     provenance["validation"]["valid"] = not validation_errors
