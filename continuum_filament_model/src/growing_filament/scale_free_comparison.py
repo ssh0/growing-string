@@ -660,9 +660,6 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
                 frame_positions = positions[offsets[index]:offsets[index + 1]]
                 if np.any(np.linalg.norm(np.diff(frame_positions, axis=0), axis=1) <= 1.0e-12):
                     errors.append(f"frame_{index}_zero_length_segment")
-                frame_positions = positions[offsets[index]:offsets[index + 1]]
-                if np.any(np.linalg.norm(np.diff(frame_positions, axis=0), axis=1) <= 1.0e-12):
-                    errors.append(f"frame_{index}_zero_length_segment")
                 if np.any(rest_lengths[rest_offsets[index]:rest_offsets[index + 1]] <= 0.0):
                     errors.append(f"frame_{index}_rest_lengths_invalid")
     except (OSError, EOFError, KeyError, TypeError, ValueError, zipfile.BadZipFile):
@@ -790,6 +787,8 @@ def _validate_observation_consistency(
             point_rows.sort(key=lambda row: int(row["point_id"]))
             try:
                 points = np.asarray([[float(row["x"]), float(row["y"])] for row in point_rows], dtype=float)
+                if np.any(np.linalg.norm(np.diff(points, axis=0), axis=1) <= 1.0e-12):
+                    errors.append(f"zero_length centerline segment for frame={key[0]},filament={key[1]}")
                 centerline_length = _length(points)
                 tolerance = max(1.0e-6, 1.0e-6 * max(summary_length, centerline_length))
                 if not math.isfinite(centerline_length) or abs(centerline_length - summary_length) > tolerance:
