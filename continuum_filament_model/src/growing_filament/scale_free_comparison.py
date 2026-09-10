@@ -391,6 +391,9 @@ def _progress(frames: Sequence[_Frame], config: ScaleFreeConfig) -> _Progress:
         return _Progress("zero_growth_span", initial, final, span, len(lengths), decreases)
     if decreases:
         return _Progress("non_monotonic_lengths", initial, final, span, len(lengths), decreases)
+    progress_values = [(length - initial) / span for length in lengths]
+    if any(value < -1.0e-12 or value > 1.0 + 1.0e-12 for value in progress_values):
+        return _Progress("non_monotonic_lengths", initial, final, span, len(lengths), max(1, decreases))
     return _Progress("ok", initial, final, span, len(lengths), decreases)
 
 
