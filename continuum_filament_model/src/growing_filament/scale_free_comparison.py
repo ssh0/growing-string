@@ -140,6 +140,18 @@ def _float_or_none(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _json_finite(value: Any) -> bool:
+    if isinstance(value, bool) or value is None or isinstance(value, str):
+        return True
+    if isinstance(value, (int, float)):
+        return math.isfinite(float(value))
+    if isinstance(value, Mapping):
+        return all(_json_finite(key) and _json_finite(item) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return all(_json_finite(item) for item in value)
+    return False
+
+
 def _bool_value(value: Any) -> bool:
     if isinstance(value, str):
         normalized = value.strip().lower()
@@ -1176,10 +1188,20 @@ def _validate_model_scope(
                         expected_delta = max(values) - min(values)
                         aggregate_key = f"max_{metric_name}_delta"
                         aggregate_delta = aggregate.get(aggregate_key)
-                        if not isinstance(aggregate_delta, (int, float)) or isinstance(aggregate_delta, bool) or abs(float(aggregate_delta) - expected_delta) > 1.0e-9:
+                        if (
+                            not isinstance(aggregate_delta, (int, float))
+                            or isinstance(aggregate_delta, bool)
+                            or not math.isfinite(float(aggregate_delta))
+                            or abs(float(aggregate_delta) - expected_delta) > 1.0e-9
+                        ):
                             errors.append(f"sensitivity_aggregate_metric_mismatch:{metric_name}")
                         threshold = acceptance.get(f"max_{metric_name}_delta", acceptance.get("max_metric_delta"))
-                        if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or expected_delta > float(threshold):
+                        if (
+                            not isinstance(threshold, (int, float))
+                            or isinstance(threshold, bool)
+                            or not math.isfinite(float(threshold))
+                            or expected_delta > float(threshold)
+                        ):
                             all_metrics_accepted = False
                     except (KeyError, TypeError, ValueError):
                         errors.append(f"sensitivity_aggregate_metric_uncomputable:{metric_name}")
@@ -1293,6 +1315,10 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
                 raise TypeError("model metadata must be an object")
             parameters = metadata.get("parameters") if isinstance(metadata.get("parameters"), Mapping) else None
             scope_validation = _validate_model_scope(model_path, metadata, parameters)
+            if not _json_finite(metadata):
+                scope_validation = dict(scope_validation)
+                scope_validation["errors"] = list(scope_validation.get("errors", [])) + ["model_metadata_nonfinite"]
+                scope_validation["valid"] = False
             model_metadata = metadata.get("metadata") if isinstance(metadata.get("metadata"), Mapping) else {}
             model_manifest = metadata.get("manifest") if isinstance(metadata.get("manifest"), Mapping) else {}
             provenance.update(

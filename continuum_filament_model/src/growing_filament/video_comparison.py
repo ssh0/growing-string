@@ -50,7 +50,7 @@ def _jsonable(value: Any) -> Any:
 
 
 def canonical_json(value: Any) -> str:
-    return json.dumps(_jsonable(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(_jsonable(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def sha256_file(path: str | Path, chunk_size: int = 1 << 20) -> str:
