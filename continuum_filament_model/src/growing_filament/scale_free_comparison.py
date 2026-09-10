@@ -141,6 +141,16 @@ def _float_or_none(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _json_sanitize(value: Any) -> Any:
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, Mapping):
+        return {str(key): _json_sanitize(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_sanitize(item) for item in value]
+    return value
+
+
 def _json_finite(value: Any) -> bool:
     if isinstance(value, bool) or value is None or isinstance(value, str):
         return True
@@ -1002,6 +1012,10 @@ def _validate_model_scope(
         errors.append("model_metadata_not_mapping")
     manifest_metadata: Mapping[str, Any] | None = None
     if isinstance(raw_manifest, Mapping):
+        required_manifest_fields = ("manifest_schema_version", "input_hash", "initial_state_hash", "canonical_state_hash", "git_revision")
+        for field in required_manifest_fields:
+            if not isinstance(raw_manifest.get(field), str) or not raw_manifest.get(field):
+                errors.append(f"model_manifest_{field}_missing")
         if "metadata" in raw_manifest:
             if isinstance(raw_manifest["metadata"], Mapping):
                 manifest_metadata = raw_manifest["metadata"]
@@ -1010,6 +1024,8 @@ def _validate_model_scope(
                 errors.append("model_manifest_metadata_not_mapping")
     else:
         errors.append("model_manifest_not_mapping")
+    if not isinstance(metadata.get("schema_version"), str) or not metadata.get("schema_version"):
+        errors.append("model_serializer_schema_missing")
     scope: dict[str, Any] = {}
     for key in ("benchmark", "boundary", "contact_enabled", "physical_scope", "run_kind", "sensitivity_protocol"):
         values = [source[key] for source in sources if key in source]
@@ -1328,18 +1344,19 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
                 scope_validation["valid"] = False
             model_metadata = metadata.get("metadata") if isinstance(metadata.get("metadata"), Mapping) else {}
             model_manifest = metadata.get("manifest") if isinstance(metadata.get("manifest"), Mapping) else {}
+            scope_validation = _json_sanitize(scope_validation)
             provenance.update(
                 {
-                    "run_kind": model_metadata.get("run_kind") or model_manifest.get("run_kind"),
-                    "base_fixture": model_metadata.get("base_fixture") or model_manifest.get("base_fixture"),
-                    "seed": model_metadata.get("seed"),
-                    "trial": model_metadata.get("trial"),
-                    "source_revision": model_manifest.get("git_revision") or model_manifest.get("source_revision"),
-                    "input_hash": model_manifest.get("input_hash"),
-                    "initial_state_hash": model_manifest.get("initial_state_hash"),
-                    "canonical_state_hash": model_manifest.get("canonical_state_hash"),
-                    "event_sequence_hash": model_manifest.get("event_sequence_hash"),
-                    "failure_reason": model_metadata.get("failure_reason") or model_manifest.get("failure_reason"),
+                    "run_kind": _json_sanitize(model_metadata.get("run_kind") or model_manifest.get("run_kind")),
+                    "base_fixture": _json_sanitize(model_metadata.get("base_fixture") or model_manifest.get("base_fixture")),
+                    "seed": _json_sanitize(model_metadata.get("seed")),
+                    "trial": _json_sanitize(model_metadata.get("trial")),
+                    "source_revision": _json_sanitize(model_manifest.get("git_revision") or model_manifest.get("source_revision")),
+                    "input_hash": _json_sanitize(model_manifest.get("input_hash")),
+                    "initial_state_hash": _json_sanitize(model_manifest.get("initial_state_hash")),
+                    "canonical_state_hash": _json_sanitize(model_manifest.get("canonical_state_hash")),
+                    "event_sequence_hash": _json_sanitize(model_manifest.get("event_sequence_hash")),
+                    "failure_reason": _json_sanitize(model_metadata.get("failure_reason") or model_manifest.get("failure_reason")),
                 }
             )
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
@@ -1390,9 +1407,9 @@ def _feature_row(prefix: str, features: Mapping[str, Any] | None) -> dict[str, A
 
 def _compact_observation_provenance(observation_dir: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
     source_value = manifest.get("input")
-    source = source_value if isinstance(source_value, Mapping) else {}
+    source = _json_sanitize(source_value) if isinstance(source_value, Mapping) else {}
     artifacts_value = manifest.get("artifacts")
-    artifacts = artifacts_value if isinstance(artifacts_value, Mapping) else {}
+    artifacts = _json_sanitize(artifacts_value) if isinstance(artifacts_value, Mapping) else {}
     return {
         "logical_id": source.get("logical_id") or observation_dir.name,
         "sha256": source.get("sha256"),

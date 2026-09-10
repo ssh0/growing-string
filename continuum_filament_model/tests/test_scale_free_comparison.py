@@ -105,6 +105,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             positions.extend([[0.0, 0.0], [length * 0.5, 0.0], [length, 0.0]])
             offsets.append(offsets[-1] + 3)
         metadata = {
+            "schema_version": "continuum-filament-0.1",
             "parameters": {
                 "axial_stiffness": 10.0,
                 "bending_stiffness": 1.0,
@@ -136,7 +137,13 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 ],
                 "run_kind": "deterministic_fixture",
             },
-            "manifest": {"parameters": {
+            "manifest": {
+                "manifest_schema_version": "continuum-filament-manifest-1",
+                "input_hash": "input-hash",
+                "initial_state_hash": "initial-state-hash",
+                "canonical_state_hash": "canonical-state-hash",
+                "git_revision": "revision-test",
+                "parameters": {
                 "axial_stiffness": 10.0,
                 "bending_stiffness": 1.0,
                 "drag_density": 1.0,
@@ -154,7 +161,8 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 "reject_crossing": True,
                 "fixed_left": False,
                 "fixed_right": False,
-            }},
+                }
+            },
         }
         np.savez(
             model,
