@@ -1316,11 +1316,13 @@ def _validate_model_scope(
                                             member_scope_metadata["metadata"] = dict(member_metadata["metadata"])
                                             member_scope_metadata["metadata"].pop("sensitivity_protocol", None)
                                         member_scope = _validate_model_scope(member_file, member_scope_metadata if isinstance(member_scope_metadata, Mapping) else None, member_parameters)
-                                        if not member_scope.get("valid", False) or member_scope.get("population") != "stage2_deterministic":
+                                        member_scope_valid = member_scope.get("valid", False) and member_scope.get("population") == "stage2_deterministic"
+                                        if not member_scope_valid:
                                             errors.append("sensitivity_member_stage2_scope_invalid")
-                                        member_frames, member_provenance = _model_frames(member_file, ScaleFreeConfig())
-                                        if not (member_provenance.get("validation") or {}).get("valid", False):
-                                            errors.append("sensitivity_member_provenance_invalid")
+                                        else:
+                                            member_frames, member_provenance = _model_frames(member_file, ScaleFreeConfig())
+                                            if not (member_provenance.get("validation") or {}).get("valid", False):
+                                                errors.append("sensitivity_member_provenance_invalid")
                                         member_manifest = member_metadata.get("manifest") if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("manifest"), Mapping) else {}
                                         member_initial_hash = member_manifest.get("initial_state_hash")
                                         if not isinstance(member_initial_hash, str) or not member_initial_hash or member_initial_hash in member_initial_hashes:
