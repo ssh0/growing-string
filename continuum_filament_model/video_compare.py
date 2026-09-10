@@ -74,8 +74,9 @@ def build_parser() -> argparse.ArgumentParser:
         child.add_argument("--model", help="trajectory .npz, model centerline CSV, or JSON")
         child.add_argument("--config", help="segmentation JSON")
         child.add_argument("--registration", help="registration JSON for calibrated comparison only")
-        child.add_argument("--shape-config", help="scale-free morphology comparison JSON")
-        child.add_argument("--max-progress-error", type=float, help="maximum growth-progress mismatch for scale-free matching")
+        if command == "scale-free":
+            child.add_argument("--shape-config", help="scale-free morphology comparison JSON")
+            child.add_argument("--max-progress-error", type=float, help="maximum growth-progress mismatch for scale-free matching")
         child.add_argument("--filament-id")
         child.add_argument("--max-frames", type=int)
         child.add_argument("--representative-count", type=int, default=6)

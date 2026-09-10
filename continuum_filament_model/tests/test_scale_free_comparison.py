@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
+from continuum_filament_model.video_compare import build_parser
 from growing_filament.scale_free_comparison import (
     ScaleFreeConfig,
     normalized_shape_distance,
@@ -195,6 +196,40 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertEqual([row["model_frame"] for row in result["rows"]], [0, 2, None])
             self.assertEqual(result["summary"]["observation_progress"]["valid_length_count"], 2)
             self.assertEqual(result["summary"]["compared_rows"], 2)
+
+    def test_invalid_model_contract_is_unavailable_but_retains_coverage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            with model.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            rows[4]["x"] = "nan"
+            with model.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertFalse(result["summary"]["model_validation"]["valid"])
+            self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 1)
+            self.assertEqual(result["summary"]["coverage"]["model"]["count"], 3)
+            self.assertIn("model_centerline_contract_invalid", result["summary"]["input_quality"]["reasons"])
+
+    def test_scale_free_cli_options_are_not_accepted_by_extract(self):
+        parser = build_parser()
+        args = parser.parse_args([
+            "scale-free",
+            "--output", "observation",
+            "--model", "model.csv",
+            "--shape-config", "shape.json",
+            "--max-progress-error", "0.1",
+        ])
+        self.assertEqual(args.shape_config, "shape.json")
+        self.assertEqual(args.max_progress_error, 0.1)
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["extract", "--video", "video.mp4", "--output", "observation", "--shape-config", "shape.json"])
 
     def test_lineage_and_processed_coverage_survive_empty_summary(self):
         with tempfile.TemporaryDirectory() as directory:

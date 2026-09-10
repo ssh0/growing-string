@@ -422,17 +422,68 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     }
 
 
-def _model_frames(model_path: Path) -> tuple[list[_Frame], dict[str, Any]]:
-    loaded = load_model_output(model_path)
-    frames = [
-        _Frame(index, float(frame.time_s), np.asarray(frame.points, dtype=float), _length(np.asarray(frame.points, dtype=float)), source="model")
-        for index, frame in enumerate(loaded)
-    ]
+def _validate_model_frames(frames: Sequence[_Frame], config: ScaleFreeConfig) -> dict[str, Any]:
+    errors: list[str] = []
+    valid_count = 0
+    previous_time: float | None = None
+    for frame in frames:
+        frame_errors: list[str] = []
+        if frame.time_s is None or not math.isfinite(frame.time_s):
+            frame_errors.append("non-finite time")
+        points = frame.points
+        if points is None or points.ndim != 2 or points.shape[1] != 2:
+            frame_errors.append("centerline must be an array of x,y points")
+        elif len(points) < config.min_points:
+            frame_errors.append(f"centerline has fewer than {config.min_points} points")
+        elif not np.isfinite(points).all():
+            frame_errors.append("centerline has non-finite coordinates")
+        else:
+            length = _length(points)
+            if not math.isfinite(length) or length <= config.min_length:
+                frame_errors.append("centerline is degenerate")
+        if previous_time is not None and frame.time_s is not None and frame.time_s < previous_time - 1.0e-12:
+            frame_errors.append("time is not monotonic")
+        if frame_errors:
+            errors.extend(f"frame {frame.index}: {error}" for error in frame_errors)
+        else:
+            valid_count += 1
+        if frame.time_s is not None and math.isfinite(frame.time_s):
+            previous_time = frame.time_s
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "warnings": [],
+        "frame_count": len(frames),
+        "valid_frame_count": valid_count,
+        "invalid_frame_count": len(frames) - valid_count,
+    }
+
+
+def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Frame], dict[str, Any]]:
     provenance: dict[str, Any] = {
         "logical_id": model_path.name,
         "sha256": sha256_file(model_path),
         "bytes": model_path.stat().st_size,
     }
+    try:
+        loaded = load_model_output(model_path)
+    except (OSError, EOFError, KeyError, TypeError, ValueError, IndexError) as exc:
+        provenance["validation"] = {
+            "valid": False,
+            "errors": [f"model_load_failed:{type(exc).__name__}"],
+            "warnings": [],
+            "frame_count": 0,
+            "valid_frame_count": 0,
+            "invalid_frame_count": 0,
+        }
+        provenance["population"] = "deterministic_or_unclassified"
+        return [], provenance
+    frames: list[_Frame] = []
+    for index, frame in enumerate(loaded):
+        points = np.asarray(frame.points, dtype=float)
+        length = _length(points) if points.ndim == 2 and points.shape[1] == 2 and len(points) >= 2 else None
+        frames.append(_Frame(index, float(frame.time_s), points, length, source="model"))
+    provenance["validation"] = _validate_model_frames(frames, config)
     if model_path.suffix.lower() == ".npz":
         try:
             with np.load(model_path, allow_pickle=False) as archive:
@@ -530,11 +581,29 @@ def scale_free_shape_comparison(
     out_dir = Path(output_dir).expanduser().resolve() if output_dir is not None else obs_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     observations, selected, observation_info = _observation_frames(obs_dir, filament_id)
-    models, model_provenance = _model_frames(model_file) if model_file.is_file() else ([], {"logical_id": model_file.name, "sha256": None, "bytes": None, "population": "unknown"})
+    models, model_provenance = _model_frames(model_file, cfg) if model_file.is_file() else (
+        [],
+        {
+            "logical_id": model_file.name,
+            "sha256": None,
+            "bytes": None,
+            "population": "unknown",
+            "validation": {
+                "valid": False,
+                "errors": ["model_file_missing"],
+                "warnings": [],
+                "frame_count": 0,
+                "valid_frame_count": 0,
+                "invalid_frame_count": 0,
+            },
+        },
+    )
     observation_manifest = observation_info.get("manifest") or {}
     observation_contract_valid = bool(observation_info.get("contract_valid"))
+    model_validation = model_provenance.get("validation") or {}
+    model_contract_valid = bool(models) and bool(model_validation.get("valid"))
     observation_progress = _progress(observations if observation_contract_valid else [], cfg)
-    model_progress = _progress(models, cfg)
+    model_progress = _progress(models if model_contract_valid else [], cfg)
     _assign_progress(observations, observation_progress, cfg)
     _assign_progress(models, model_progress, cfg)
     observation_features: dict[int, dict[str, Any] | None] = {}
@@ -545,7 +614,7 @@ def scale_free_shape_comparison(
         frame.index: shape_observables(frame.points, sample_points=cfg.sample_points, min_length=cfg.min_length) if _finite_points(frame.points) else None  # type: ignore[arg-type]
         for frame in models
     }
-    progress_alignment_possible = observation_contract_valid and observation_progress.status == "ok" and model_progress.status == "ok"
+    progress_alignment_possible = observation_contract_valid and model_contract_valid and observation_progress.status == "ok" and model_progress.status == "ok"
     model_by_observation: dict[int, tuple[_Frame, float]] = {}
     if progress_alignment_possible:
         usable_models = [frame for frame in models if frame.q is not None and model_features.get(frame.index) is not None]
@@ -612,6 +681,8 @@ def scale_free_shape_comparison(
         reasons.append("no_observation_frames")
     if not models:
         reasons.append("model_centerline_unavailable")
+    elif not model_contract_valid:
+        reasons.append("model_centerline_contract_invalid")
     if observation_progress.status != "ok":
         reasons.append(f"observation_{observation_progress.status}")
     if model_progress.status != "ok":
@@ -625,12 +696,14 @@ def scale_free_shape_comparison(
         status = "input_quality_invalid_observation_contract"
     elif not observations or selected is None:
         status = "input_quality_no_centerline"
+    elif not models:
+        status = "model_centerline_unavailable"
+    elif not model_contract_valid:
+        status = "input_quality_invalid_model_contract"
     elif observation_progress.status == "zero_growth_span" or model_progress.status == "zero_growth_span":
         status = "growth_progress_undefined_zero_span"
     elif observation_progress.status == "non_monotonic_lengths" or model_progress.status == "non_monotonic_lengths":
         status = "growth_progress_undefined_non_monotonic"
-    elif not models:
-        status = "model_centerline_unavailable"
     elif eligible_count == 0:
         status = "input_quality_no_eligible_centerline"
     elif compared_count == 0:
@@ -671,6 +744,7 @@ def scale_free_shape_comparison(
         "model_provenance": model_provenance,
         "observation_progress": observation_progress.to_dict(),
         "model_progress": model_progress.to_dict(),
+        "model_validation": model_validation,
         "observation_validation": {
             "manifest": observation_info.get("manifest_validation"),
             "centerline": observation_info.get("centerline_validation"),
