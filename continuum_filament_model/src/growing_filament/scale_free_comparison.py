@@ -444,6 +444,66 @@ def _read_observation_csv(path: Path, artifact: str) -> tuple[list[dict[str, str
     return rows, {"valid": True, "errors": [], "present": True, "row_count": len(rows)}
 
 
+def _validate_manifest_artifacts(observation_dir: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
+    artifacts = manifest.get("artifacts")
+    errors: list[str] = []
+    if not isinstance(artifacts, Mapping):
+        return {"valid": False, "errors": ["artifacts_not_mapping"], "warnings": []}
+    for artifact_name, record in artifacts.items():
+        if not isinstance(record, Mapping):
+            errors.append(f"artifact {artifact_name}: record_not_mapping")
+            continue
+        artifact_path = record.get("path")
+        if not isinstance(artifact_path, str) or not artifact_path:
+            errors.append(f"artifact {artifact_name}: path_missing")
+            continue
+        path = observation_dir / artifact_path
+        if not path.is_file():
+            errors.append(f"artifact {artifact_name}: file_missing")
+            continue
+        if record.get("bytes") is not None and record.get("bytes") != path.stat().st_size:
+            errors.append(f"artifact {artifact_name}: byte_count_mismatch")
+        expected_hash = record.get("sha256")
+        if expected_hash is not None:
+            try:
+                actual_hash = sha256_file(path)
+            except OSError:
+                errors.append(f"artifact {artifact_name}: hash_read_failed")
+            else:
+                if actual_hash != expected_hash:
+                    errors.append(f"artifact {artifact_name}: sha256_mismatch")
+    return {"valid": not errors, "errors": errors, "warnings": []}
+
+
+def _validate_npz_source(path: Path) -> dict[str, Any]:
+    errors: list[str] = []
+    frame_count = 0
+    try:
+        with np.load(path, allow_pickle=False) as archive:
+            positions = np.asarray(archive["positions"])
+            times = np.asarray(archive["times"])
+            offsets = np.asarray(archive["position_offsets"])
+        if positions.ndim != 2 or positions.shape[1] != 2:
+            errors.append("positions_must_be_n_by_two")
+        if times.ndim != 1:
+            errors.append("times_must_be_one_dimensional")
+        frame_count = int(len(times)) if times.ndim == 1 else 0
+        if offsets.ndim != 1 or len(offsets) != frame_count + 1:
+            errors.append("position_offsets_length_mismatch")
+        else:
+            if len(offsets) == 0 or int(offsets[0]) != 0:
+                errors.append("position_offsets_must_start_at_zero")
+            if np.any(np.diff(offsets) < 0):
+                errors.append("position_offsets_must_be_monotonic")
+            if int(offsets[-1]) != len(positions):
+                errors.append("position_offsets_end_mismatch")
+            if np.any(offsets < 0) or np.any(offsets > len(positions)):
+                errors.append("position_offsets_out_of_bounds")
+    except (OSError, EOFError, KeyError, TypeError, ValueError):
+        errors.append("npz_trajectory_arrays_unreadable")
+    return {"valid": not errors, "errors": errors, "warnings": [], "source_frame_count": frame_count}
+
+
 def _validate_lineage_rows(
     rows: Sequence[Mapping[str, Any]],
     summary_rows: Sequence[Mapping[str, Any]],
@@ -512,25 +572,19 @@ def _validate_observation_consistency(
     for frame, filament in sorted(set(lineage_by_key) - allowed_lineage_keys):
         if frame not in processed_set or (known_filaments and filament not in known_filaments and filament != "unknown"):
             errors.append(f"phantom lineage key: frame={frame},filament={filament}")
-    for key in sorted(summary_keys & centerline_keys):
+    for key in sorted(summary_keys):
         summary = summary_by_key[key]
         lineage = lineage_by_key.get(key)
         try:
             summary_time = float(summary["time"])
             summary_quality = float(summary["quality"])
             summary_censor = _bool_value(summary["censor"])
+            summary_length = float(summary["length_px"])
+            if not math.isfinite(summary_length) or summary_length <= 0.0:
+                raise ValueError("invalid summary length")
         except (KeyError, TypeError, ValueError):
+            errors.append(f"invalid summary metadata for frame={key[0]},filament={key[1]}")
             continue
-        for row in centerline_by_key[key]:
-            try:
-                if abs(float(row["time"]) - summary_time) > 1.0e-12:
-                    errors.append(f"time mismatch for frame={key[0]},filament={key[1]}")
-                if abs(float(row["quality"]) - summary_quality) > 1.0e-12:
-                    errors.append(f"quality mismatch for frame={key[0]},filament={key[1]}")
-                if _bool_value(row["censor"]) != summary_censor:
-                    errors.append(f"censor mismatch for frame={key[0]},filament={key[1]}")
-            except (KeyError, TypeError, ValueError):
-                continue
         if lineage is not None:
             try:
                 if abs(float(lineage["time"]) - summary_time) > 1.0e-12:
@@ -538,7 +592,27 @@ def _validate_observation_consistency(
                 if _bool_value(lineage["censor"]) != summary_censor:
                     errors.append(f"lineage censor mismatch for frame={key[0]},filament={key[1]}")
             except (KeyError, TypeError, ValueError):
-                continue
+                errors.append(f"invalid lineage metadata for frame={key[0]},filament={key[1]}")
+        if key in centerline_by_key:
+            point_rows = sorted(centerline_by_key[key], key=lambda row: int(row["point_id"]))
+            try:
+                points = np.asarray([[float(row["x"]), float(row["y"])] for row in point_rows], dtype=float)
+                centerline_length = _length(points)
+                tolerance = max(1.0e-6, 1.0e-6 * max(summary_length, centerline_length))
+                if not math.isfinite(centerline_length) or abs(centerline_length - summary_length) > tolerance:
+                    errors.append(f"length mismatch for frame={key[0]},filament={key[1]}")
+            except (KeyError, TypeError, ValueError):
+                errors.append(f"invalid centerline geometry for frame={key[0]},filament={key[1]}")
+            for row in centerline_by_key[key]:
+                try:
+                    if abs(float(row["time"]) - summary_time) > 1.0e-12:
+                        errors.append(f"time mismatch for frame={key[0]},filament={key[1]}")
+                    if abs(float(row["quality"]) - summary_quality) > 1.0e-12:
+                        errors.append(f"quality mismatch for frame={key[0]},filament={key[1]}")
+                    if _bool_value(row["censor"]) != summary_censor:
+                        errors.append(f"censor mismatch for frame={key[0]},filament={key[1]}")
+                except (KeyError, TypeError, ValueError):
+                    errors.append(f"invalid centerline metadata for frame={key[0]},filament={key[1]}")
     return {"valid": not errors, "errors": errors, "warnings": []}
 
 
@@ -591,6 +665,15 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     manifest_validation = manifest.get("validation")
     if not isinstance(manifest_validation, Mapping):
         manifest_validation = {"valid": False, "errors": ["missing_manifest_validation"]}
+    elif not isinstance(manifest_validation.get("errors"), list) or not isinstance(manifest_validation.get("warnings"), list):
+        manifest_structure_errors.append("invalid_manifest_validation_shape")
+        manifest_validation = {"valid": False, "errors": ["invalid_manifest_validation_shape"]}
+    manifest_artifact_validation = _validate_manifest_artifacts(observation_dir, manifest)
+    if not manifest_artifact_validation.get("valid", False):
+        manifest_structure_errors.extend(manifest_artifact_validation.get("errors", []))
+    manifest_input = manifest.get("input", {})
+    if not isinstance(manifest_input, Mapping):
+        manifest_structure_errors.append("input_not_mapping")
     manifest_errors = manifest_load_errors + manifest_structure_errors
     if manifest_errors:
         manifest_validation = {
@@ -674,8 +757,6 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         points_rows = sorted(grouped.get((frame_index, selected), []))
         points = np.asarray([[x, y] for _, x, y in points_rows], dtype=float) if points_rows else None
         raw_length = _float_or_none((row or {}).get("length_px"))
-        if raw_length is None and _finite_points(points):
-            raw_length = _length(points)  # type: ignore[arg-type]
         quality = _float_or_none((row or {}).get("quality"))
         flags = str((row or {}).get("quality_flags", "ok") or "ok")
         lineage_status = str((lineage or {}).get("status", "missing_lineage"))
@@ -702,6 +783,7 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         "summary_artifact": summary_artifact,
         "centerline_artifact": centerline_artifact,
         "lineage_artifact": lineage_artifact,
+        "manifest_artifact_validation": manifest_artifact_validation,
         "frame_keys_valid": frame_keys_valid,
         "contract_valid": contract_valid,
         "summary_count": len(summary_rows),
@@ -832,17 +914,25 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
         return {"valid": False, "errors": ["stage2_scope_metadata_required"], "warnings": []}
     raw_metadata = metadata.get("metadata")
     raw_manifest = metadata.get("manifest")
+    errors: list[str] = []
     sources: list[Mapping[str, Any]] = []
     if isinstance(raw_metadata, Mapping):
         sources.append(raw_metadata)
-    if isinstance(raw_manifest, Mapping) and isinstance(raw_manifest.get("metadata"), Mapping):
-        sources.append(raw_manifest["metadata"])
+    else:
+        errors.append("model_metadata_not_mapping")
+    if isinstance(raw_manifest, Mapping):
+        if "metadata" in raw_manifest:
+            if isinstance(raw_manifest["metadata"], Mapping):
+                sources.append(raw_manifest["metadata"])
+            else:
+                errors.append("model_manifest_metadata_not_mapping")
+    else:
+        errors.append("model_manifest_not_mapping")
     scope: dict[str, Any] = {}
     for source in sources:
         for key in ("benchmark", "boundary", "contact_enabled", "physical_scope"):
             if key not in scope and key in source:
                 scope[key] = source[key]
-    errors: list[str] = []
     if scope.get("benchmark") != "stage2_free_free_growth_relaxation_buckling":
         errors.append("unsupported_stage2_benchmark")
     if scope.get("boundary") != "free/free":
@@ -873,6 +963,8 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
         if model_path.suffix.lower() == ".json":
             frames, source_validation = _read_json_model_frames(model_path)
         else:
+            if model_path.suffix.lower() == ".npz":
+                source_validation = _validate_npz_source(model_path)
             if model_path.suffix.lower() == ".csv":
                 try:
                     source_validation = _validate_model_csv_source(model_path)
@@ -920,8 +1012,8 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
             scope_validation = _validate_model_scope(model_path, metadata if isinstance(metadata, Mapping) else None)
             if not isinstance(metadata, Mapping):
                 raise TypeError("model metadata must be an object")
-            model_metadata = metadata.get("metadata") or {}
-            model_manifest = metadata.get("manifest") or {}
+            model_metadata = metadata.get("metadata") if isinstance(metadata.get("metadata"), Mapping) else {}
+            model_manifest = metadata.get("manifest") if isinstance(metadata.get("manifest"), Mapping) else {}
             provenance.update(
                 {
                     "run_kind": model_metadata.get("run_kind") or model_manifest.get("run_kind"),
@@ -978,8 +1070,10 @@ def _feature_row(prefix: str, features: Mapping[str, Any] | None) -> dict[str, A
 
 
 def _compact_observation_provenance(observation_dir: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
-    source = manifest.get("input") or {}
-    artifacts = manifest.get("artifacts") or {}
+    source_value = manifest.get("input")
+    source = source_value if isinstance(source_value, Mapping) else {}
+    artifacts_value = manifest.get("artifacts")
+    artifacts = artifacts_value if isinstance(artifacts_value, Mapping) else {}
     return {
         "logical_id": source.get("logical_id") or observation_dir.name,
         "sha256": source.get("sha256"),
@@ -1123,6 +1217,8 @@ def scale_free_shape_comparison(
         for name in ("summary_artifact", "centerline_artifact", "lineage_artifact")
     ):
         reasons.append("observation_artifact_unavailable")
+    if not (observation_info.get("manifest_artifact_validation") or {}).get("valid", False):
+        reasons.append("observation_artifact_hash_invalid")
     if not observations:
         reasons.append("no_observation_frames")
     if not models:
@@ -1202,6 +1298,7 @@ def scale_free_shape_comparison(
                 "centerline": observation_info.get("centerline_artifact"),
                 "lineage": observation_info.get("lineage_artifact"),
             },
+            "manifest_artifacts": observation_info.get("manifest_artifact_validation"),
             "contract_valid": observation_contract_valid,
         },
         "progress_coordinate": "q=(L-L_initial)/(L_final-L_initial); nearest matching only; no interpolation",

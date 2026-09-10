@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import tempfile
 import unittest
@@ -79,7 +80,14 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             json.dumps(
                 {
                     "input": {"logical_id": "synthetic-observation.mp4", "sha256": "video-hash", "bytes": 12},
-                    "artifacts": {"centerline": {"path": "centerline.csv", "sha256": "centerline-hash", "bytes": 1}},
+                    "artifacts": {
+                        name: {
+                            "path": name,
+                            "sha256": hashlib.sha256((root / name).read_bytes()).hexdigest(),
+                            "bytes": (root / name).stat().st_size,
+                        }
+                        for name in ("centerline.csv", "observation_summary.csv", "lineage.csv")
+                    },
                     "video": {"fps": 2.0},
                     "run": {"frame_range": {"first": 0, "last": len(lengths) - 1, "stride": 1}},
                     "validation": {"valid": True, "errors": [], "warnings": []},
@@ -330,6 +338,35 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 1)
             self.assertEqual(result["summary"]["coverage"]["model"]["count"], 2)
 
+    def test_invalid_npz_offsets_are_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0])
+            model = self._write_model(root, [1.0, 2.0])
+            with np.load(model, allow_pickle=False) as archive:
+                positions = archive["positions"]
+                times = archive["times"]
+                metadata_json = archive["metadata_json"]
+            np.savez(model, positions=positions[:5], position_offsets=np.asarray([0, 2, 6]), times=times, metadata_json=metadata_json)
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertIn("position_offsets_end_mismatch", result["summary"]["model_validation"]["errors"])
+
+    def test_invalid_nested_model_metadata_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0])
+            model = self._write_model(root, [1.0, 2.0])
+            with np.load(model, allow_pickle=False) as archive:
+                positions = archive["positions"]
+                offsets = archive["position_offsets"]
+                times = archive["times"]
+            np.savez(model, positions=positions, position_offsets=offsets, times=times, metadata_json=np.asarray(json.dumps({"metadata": [], "manifest": {}})))
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertIn("model_metadata_not_mapping", result["summary"]["model_validation"]["errors"])
+
     def test_invalid_model_contract_is_unavailable_but_retains_coverage(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -488,6 +525,70 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
             self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
             self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertFalse(result["summary"]["observation_validation"]["consistency"]["valid"])
+
+    def test_observation_summary_length_mismatch_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            centerline = observation / "centerline.csv"
+            with centerline.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            for row in rows:
+                if row["frame"] == "1":
+                    row["x"] = str(float(row["x"]) * 5.0)
+            with centerline.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertIn("length mismatch", " ".join(result["summary"]["observation_validation"]["consistency"]["errors"]))
+
+    def test_observation_artifact_hash_mismatch_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            centerline = observation / "centerline.csv"
+            centerline.write_text(centerline.read_text(encoding="utf-8") + "", encoding="utf-8")
+            with centerline.open("a", encoding="utf-8") as handle:
+                handle.write("\n")
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertFalse(result["summary"]["observation_validation"]["manifest_artifacts"]["valid"])
+
+    def test_manifest_nested_shape_is_unavailable_with_coverage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            manifest_path = observation / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["validation"] = {"valid": True, "errors": None, "warnings": []}
+            manifest["input"] = []
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertEqual(result["summary"]["coverage"]["observation"]["count"], 3)
+
+    def test_summary_lineage_mismatch_without_centerline_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            (observation / "centerline.csv").unlink()
+            lineage = observation / "lineage.csv"
+            with lineage.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            rows[1]["time"] = "999.0"
+            with lineage.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
             self.assertFalse(result["summary"]["observation_validation"]["consistency"]["valid"])
 
     def test_invalid_observation_frame_key_is_unavailable(self):
