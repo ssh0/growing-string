@@ -216,6 +216,30 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertIn("missing required columns x", result["summary"]["model_validation"]["errors"])
             self.assertIn("model_centerline_contract_invalid", result["summary"]["input_quality"]["reasons"])
 
+    def test_invalid_json_model_frame_is_not_dropped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            model = root / "model.json"
+            model.write_text(
+                json.dumps(
+                    {
+                        "trajectory": [
+                            {"time": 1000.0, "points": [[0.0, 0.0], [1.0, 0.0]]},
+                            {"time": 1001.0, "points": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]},
+                            {"time": 1002.0, "points": [[0.0, 0.0], [2.0, 0.0]]},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertEqual(result["summary"]["model_validation"]["frame_count"], 3)
+            self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 1)
+            self.assertEqual(result["summary"]["coverage"]["model"]["count"], 3)
+
     def test_invalid_model_contract_is_unavailable_but_retains_coverage(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -247,6 +271,11 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
         ])
         self.assertEqual(args.shape_config, "shape.json")
         self.assertEqual(args.max_progress_error, 0.1)
+        self.assertFalse(hasattr(args, "video"))
+        self.assertFalse(hasattr(args, "config"))
+        self.assertFalse(hasattr(args, "registration"))
+        self.assertFalse(hasattr(args, "max_frames"))
+        self.assertFalse(hasattr(args, "representative_count"))
         with self.assertRaises(SystemExit):
             parser.parse_args(["extract", "--video", "video.mp4", "--output", "observation", "--shape-config", "shape.json"])
 
@@ -269,6 +298,21 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertEqual(result["summary"]["coverage"]["observation"]["count"], 3)
             self.assertFalse(result["summary"]["observation_validation"]["frame_keys"]["centerline"]["valid"])
             self.assertIn("observation_frame_key_invalid", result["summary"]["input_quality"]["reasons"])
+
+    def test_missing_lineage_is_unavailable_without_inferred_lineage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            (observation / "lineage.csv").unlink()
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertEqual(result["summary"]["coverage"]["observation"]["count"], 3)
+            self.assertFalse(result["summary"]["observation_validation"]["lineage"]["valid"])
+            self.assertTrue(all(row["lineage_status"] == "missing_lineage" for row in result["rows"]))
+            self.assertTrue(all(row["observation_censor"] == 1 for row in result["rows"]))
+            self.assertIn("observation_lineage_invalid", result["summary"]["input_quality"]["reasons"])
 
     def test_lineage_and_processed_coverage_survive_empty_summary(self):
         with tempfile.TemporaryDirectory() as directory:

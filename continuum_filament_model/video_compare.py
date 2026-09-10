@@ -69,17 +69,20 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     for command in ("extract", "compare", "scale-free", "render", "all"):
         child = sub.add_parser(command)
-        child.add_argument("--video", required=command in {"extract", "render", "all"})
+        if command != "scale-free":
+            child.add_argument("--video", required=command in {"extract", "render", "all"})
         child.add_argument("--output", required=True, help="analysis/artifact directory")
         child.add_argument("--model", help="trajectory .npz, model centerline CSV, or JSON")
-        child.add_argument("--config", help="segmentation JSON")
-        child.add_argument("--registration", help="registration JSON for calibrated comparison only")
-        if command == "scale-free":
+        if command != "scale-free":
+            child.add_argument("--config", help="segmentation JSON")
+            child.add_argument("--registration", help="registration JSON for calibrated comparison only")
+        else:
             child.add_argument("--shape-config", help="scale-free morphology comparison JSON")
             child.add_argument("--max-progress-error", type=float, help="maximum growth-progress mismatch for scale-free matching")
         child.add_argument("--filament-id")
-        child.add_argument("--max-frames", type=int)
-        child.add_argument("--representative-count", type=int, default=6)
+        if command != "scale-free":
+            child.add_argument("--max-frames", type=int)
+            child.add_argument("--representative-count", type=int, default=6)
         if command in {"extract", "all"}:
             child.add_argument("--polarity", choices=("dark", "bright"))
             child.add_argument("--background", choices=("none", "median", "local_median", "scalar"))
@@ -107,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output = Path(args.output)
     config = _config(args) if args.command in {"extract", "all"} else SegmentationConfig()
-    registration = RegistrationConfig.from_mapping(_json_file(args.registration))
+    registration = RegistrationConfig.from_mapping(_json_file(args.registration)) if args.command != "scale-free" else RegistrationConfig()
     if args.command == "scale-free":
         if not args.model:
             raise SystemExit("--model is required for scale-free")

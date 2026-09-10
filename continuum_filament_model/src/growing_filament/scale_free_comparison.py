@@ -372,10 +372,54 @@ def _index_frame_rows(rows: Sequence[Mapping[str, Any]]) -> dict[tuple[int, str]
     return indexed
 
 
+def _validate_lineage_rows(
+    rows: Sequence[Mapping[str, Any]],
+    summary_rows: Sequence[Mapping[str, Any]],
+    centerline_rows: Sequence[Mapping[str, Any]],
+    artifact_present: bool,
+) -> dict[str, Any]:
+    errors: list[str] = []
+    required = {"frame", "filament_id", "status", "censor"}
+    if not artifact_present:
+        errors.append("missing_lineage_artifact")
+    if artifact_present and not rows:
+        errors.append("empty_lineage_artifact")
+    seen: set[tuple[int, str]] = set()
+    for line_number, row in enumerate(rows, start=2):
+        missing = sorted(required.difference(row))
+        if missing:
+            errors.append(f"line {line_number}: missing lineage columns {','.join(missing)}")
+            continue
+        try:
+            key = (int(row["frame"]), str(row["filament_id"]))
+            if not str(row["status"]):
+                raise ValueError("empty status")
+            _bool_value(row["censor"])
+        except (TypeError, ValueError):
+            errors.append(f"line {line_number}: invalid lineage value")
+            continue
+        if key in seen:
+            errors.append(f"line {line_number}: duplicate lineage key")
+        seen.add(key)
+    expected_keys = set(_index_frame_rows(summary_rows)) | set(_index_frame_rows(centerline_rows))
+    lineage_keys = set(_index_frame_rows(rows))
+    for frame, filament in sorted(expected_keys - lineage_keys):
+        errors.append(f"missing lineage for frame={frame},filament={filament}")
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "warnings": [],
+        "artifact_present": artifact_present,
+        "row_count": len(rows),
+    }
+
+
 def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple[list[_Frame], str | None, dict[str, Any]]:
     summary_rows = _read_csv_rows(observation_dir / "observation_summary.csv")
     centerline_rows = _read_csv_rows(observation_dir / "centerline.csv")
-    lineage_rows = _read_csv_rows(observation_dir / "lineage.csv") if (observation_dir / "lineage.csv").exists() else []
+    lineage_path = observation_dir / "lineage.csv"
+    lineage_artifact_present = lineage_path.is_file()
+    lineage_rows = _read_csv_rows(lineage_path) if lineage_artifact_present else []
     manifest_path = observation_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
     frame_key_validation = {
@@ -383,6 +427,7 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         for artifact, rows in (("centerline", centerline_rows), ("summary", summary_rows), ("lineage", lineage_rows))
     }
     frame_keys_valid = all(item["valid"] for item in frame_key_validation.values())
+    lineage_validation = _validate_lineage_rows(lineage_rows, summary_rows, centerline_rows, lineage_artifact_present)
     segmentation_config = manifest.get("segmentation_config") or {}
     centerline_validation = validate_centerline_rows(
         centerline_rows,
@@ -392,7 +437,7 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     if not isinstance(manifest_validation, Mapping):
         manifest_validation = {"valid": False, "errors": ["missing_manifest_validation"]}
     manifest_validation_valid = manifest_validation.get("valid") is True
-    contract_valid = manifest_validation_valid and bool(centerline_validation.get("valid")) and frame_keys_valid
+    contract_valid = manifest_validation_valid and bool(centerline_validation.get("valid")) and frame_keys_valid and bool(lineage_validation.get("valid"))
     selected = filament_id or _choose_filament(summary_rows) or _choose_filament(lineage_rows)
     summary_by_key = _index_frame_rows(summary_rows)
     lineage_by_key = _index_frame_rows(lineage_rows)
@@ -432,8 +477,10 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
             raw_length = _length(points)  # type: ignore[arg-type]
         quality = _float_or_none((row or {}).get("quality"))
         flags = str((row or {}).get("quality_flags", "ok") or "ok")
-        lineage_status = str((lineage or {}).get("status", "observed"))
+        lineage_status = str((lineage or {}).get("status", "missing_lineage"))
         censor = _bool_value((row or {}).get("censor", "0")) or _bool_value((lineage or {}).get("censor", "0"))
+        if lineage is None:
+            censor = True
         if lineage_status not in _ALLOWED_LINEAGE_STATUSES:
             if lineage_status not in flags.split(";"):
                 flags = ";".join(part for part in (flags, lineage_status) if part)
@@ -446,6 +493,7 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         "manifest_validation_valid": manifest_validation_valid,
         "centerline_validation": centerline_validation,
         "frame_key_validation": frame_key_validation,
+        "lineage_validation": lineage_validation,
         "frame_keys_valid": frame_keys_valid,
         "contract_valid": contract_valid,
         "summary_count": len(summary_rows),
@@ -492,6 +540,34 @@ def _validate_model_frames(frames: Sequence[_Frame], config: ScaleFreeConfig) ->
     }
 
 
+def _read_json_model_frames(path: Path) -> tuple[list[_Frame], dict[str, Any]]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(value, dict) and isinstance(value.get("trajectory"), list):
+        source_frames = value["trajectory"]
+    elif isinstance(value, dict) and isinstance(value.get("frames"), list):
+        source_frames = value["frames"]
+    else:
+        return [], {"valid": False, "errors": ["no_model_centerline_frames"], "warnings": [], "source_frame_count": 0}
+    frames: list[_Frame] = []
+    for index, source_frame in enumerate(source_frames):
+        if not isinstance(source_frame, Mapping):
+            frames.append(_Frame(index, None, None, None, source="model"))
+            continue
+        raw_time = source_frame.get("time", source_frame.get("time_s", 0.0))
+        try:
+            time_s = float(raw_time)
+        except (TypeError, ValueError):
+            time_s = None
+        raw_points = source_frame.get("points", source_frame.get("positions", []))
+        try:
+            points = np.asarray(raw_points, dtype=float)
+        except (TypeError, ValueError):
+            points = None
+        length = _length(points) if points is not None and points.ndim == 2 and points.shape[1] == 2 and len(points) >= 2 else None
+        frames.append(_Frame(index, time_s, points, length, source="model"))
+    return frames, {"valid": True, "errors": [], "warnings": [], "source_frame_count": len(source_frames)}
+
+
 def _validate_model_csv_source(path: Path) -> dict[str, Any]:
     required = {"time", "x", "y"}
     errors: list[str] = []
@@ -535,18 +611,26 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
         "bytes": model_path.stat().st_size,
     }
     source_validation: dict[str, Any] = {"valid": True, "errors": [], "warnings": [], "source_row_count": None}
-    if model_path.suffix.lower() == ".csv":
-        try:
-            source_validation = _validate_model_csv_source(model_path)
-        except OSError as exc:
-            source_validation = {
-                "valid": False,
-                "errors": [f"model_csv_read_failed:{type(exc).__name__}"],
-                "warnings": [],
-                "source_row_count": 0,
-            }
     try:
-        loaded = load_model_output(model_path)
+        if model_path.suffix.lower() == ".json":
+            frames, source_validation = _read_json_model_frames(model_path)
+        else:
+            if model_path.suffix.lower() == ".csv":
+                try:
+                    source_validation = _validate_model_csv_source(model_path)
+                except OSError as exc:
+                    source_validation = {
+                        "valid": False,
+                        "errors": [f"model_csv_read_failed:{type(exc).__name__}"],
+                        "warnings": [],
+                        "source_row_count": 0,
+                    }
+            loaded = load_model_output(model_path)
+            frames = []
+            for index, frame in enumerate(loaded):
+                points = np.asarray(frame.points, dtype=float)
+                length = _length(points) if points.ndim == 2 and points.shape[1] == 2 and len(points) >= 2 else None
+                frames.append(_Frame(index, float(frame.time_s), points, length, source="model"))
     except (OSError, EOFError, KeyError, TypeError, ValueError, IndexError) as exc:
         provenance["validation"] = {
             "valid": False,
@@ -556,14 +640,10 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
             "valid_frame_count": 0,
             "invalid_frame_count": 0,
             "source_row_count": source_validation.get("source_row_count"),
+            "source_frame_count": source_validation.get("source_frame_count"),
         }
         provenance["population"] = "deterministic_or_unclassified"
         return [], provenance
-    frames: list[_Frame] = []
-    for index, frame in enumerate(loaded):
-        points = np.asarray(frame.points, dtype=float)
-        length = _length(points) if points.ndim == 2 and points.shape[1] == 2 and len(points) >= 2 else None
-        frames.append(_Frame(index, float(frame.time_s), points, length, source="model"))
     frame_validation = _validate_model_frames(frames, config)
     validation_errors = list(source_validation["errors"]) + list(frame_validation["errors"])
     provenance["validation"] = {
@@ -571,6 +651,7 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
         "valid": not validation_errors,
         "errors": validation_errors,
         "source_row_count": source_validation.get("source_row_count"),
+        "source_frame_count": source_validation.get("source_frame_count"),
     }
     if model_path.suffix.lower() == ".npz":
         try:
@@ -767,6 +848,8 @@ def scale_free_shape_comparison(
         reasons.append("observation_centerline_contract_invalid")
     if not observation_info.get("frame_keys_valid", False):
         reasons.append("observation_frame_key_invalid")
+    if not (observation_info.get("lineage_validation") or {}).get("valid", False):
+        reasons.append("observation_lineage_invalid")
     if not observations:
         reasons.append("no_observation_frames")
     if not models:
@@ -839,6 +922,7 @@ def scale_free_shape_comparison(
             "manifest": observation_info.get("manifest_validation"),
             "centerline": observation_info.get("centerline_validation"),
             "frame_keys": observation_info.get("frame_key_validation"),
+            "lineage": observation_info.get("lineage_validation"),
             "contract_valid": observation_contract_valid,
         },
         "progress_coordinate": "q=(L-L_initial)/(L_final-L_initial); nearest matching only; no interpolation",
