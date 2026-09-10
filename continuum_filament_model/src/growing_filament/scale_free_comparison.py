@@ -95,6 +95,7 @@ class _Frame:
     censor: bool = False
     q: float | None = None
     source: str = ""
+    filament_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -896,10 +897,11 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     lineage_by_key = _index_frame_rows(lineage_rows)
     grouped: dict[tuple[int, str], list[tuple[int, float, float]]] = {}
     for row in centerline_rows:
-        if selected is None or row.get("filament_id") != selected:
+        row_filament = str(row.get("filament_id", ""))
+        if selected is not None and row_filament != selected:
             continue
         try:
-            grouped.setdefault((int(row["frame"]), selected), []).append((int(row["point_id"]), float(row["x"]), float(row["y"])))
+            grouped.setdefault((int(row["frame"]), row_filament), []).append((int(row["point_id"]), float(row["x"]), float(row["y"])))
         except (KeyError, TypeError, ValueError):
             continue
     frame_range = run_section.get("frame_range", {})
@@ -949,7 +951,15 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         }
         manifest_validation_valid = False
     keys: set[tuple[int, str]] = set()
-    if selected is not None:
+    if selection_error:
+        keys.update(summary_by_key)
+        keys.update(lineage_by_key)
+        for row in centerline_rows:
+            try:
+                keys.add((int(row["frame"]), str(row.get("filament_id", ""))))
+            except (KeyError, TypeError, ValueError):
+                continue
+    elif selected is not None:
         keys.update(key for key in summary_by_key if key[1] == selected)
         keys.update(key for key in lineage_by_key if key[1] == selected)
         keys.update(key for key in lineage_by_key if key[1] == "unknown" and key[0] in set(processed_frames))
@@ -960,10 +970,10 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
                 keys.add((int(row["frame"]), str(row.get("filament_id", ""))))
             except (KeyError, TypeError, ValueError):
                 continue
-    for frame in processed_frames:
-        selected_key = (frame, selected) if selected is not None else (frame, "unknown")
-        if selected_key not in keys:
-            keys.add((frame, "unknown"))
+        for frame in processed_frames:
+            selected_key = (frame, selected)
+            if selected_key not in keys:
+                keys.add((frame, "unknown"))
     input_metadata = manifest_input.get("metadata", {}) if isinstance(manifest_input, Mapping) else {}
     fps_value = video_section.get("fps")
     if fps_value is None and isinstance(input_metadata, Mapping):
@@ -990,10 +1000,10 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         row = summary_by_key.get((frame_index, key_filament))
         lineage = lineage_by_key.get((frame_index, key_filament))
         if row is None and lineage is None and key_filament == "unknown":
-            frames.append(_Frame(frame_index, frame_index / fps if fps is not None else None, None, None, None, "missing_observation", "missing_unknown", True, source="observation"))
+            frames.append(_Frame(frame_index, frame_index / fps if fps is not None else None, None, None, None, "missing_observation", "missing_unknown", True, source="observation", filament_id="unknown"))
             continue
         source = row or lineage or {}
-        points_rows = sorted(grouped.get((frame_index, selected), []))
+        points_rows = sorted(grouped.get((frame_index, key_filament), []))
         points = np.asarray([[x, y] for _, x, y in points_rows], dtype=float) if points_rows else None
         raw_length = _float_or_none((row or {}).get("length_px"))
         quality = _float_or_none((row or {}).get("quality"))
@@ -1010,7 +1020,7 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
                 flags = ";".join(part for part in (flags, lineage_status) if part)
             censor = True
         time_s = _float_or_none(source.get("time"))
-        frames.append(_Frame(frame_index, time_s, points, raw_length, quality, flags, lineage_status, censor, source="observation"))
+        frames.append(_Frame(frame_index, time_s, points, raw_length, quality, flags, lineage_status, censor, source="observation", filament_id=key_filament))
     return frames, selected, {
         "manifest": manifest,
         "manifest_validation": manifest_validation,
@@ -1612,7 +1622,7 @@ def scale_free_shape_comparison(
         row: dict[str, Any] = {
             "observation_frame": observation.index,
             "observation_time_s": observation.time_s,
-            "filament_id": "unknown" if observation.lineage_status == "missing_unknown" else (selected or "unknown"),
+            "filament_id": observation.filament_id or selected or "unknown",
             "observation_length_px": observation.length,
             "observation_q": observation.q,
             "observation_quality": observation.quality,
