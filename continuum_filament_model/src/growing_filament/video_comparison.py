@@ -16,18 +16,18 @@ import csv
 import hashlib
 import json
 import math
-import os
 import shutil
 import subprocess
 import sys
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Mapping, Sequence
+from typing import Any, Iterator, Mapping, Sequence
 
 import numpy as np
 
 SCHEMA_VERSION = "continuum-filament-observation-0.1"
+ALLOWED_LINEAGE_STATUSES = frozenset({"observed", "matched", "initial_lineage"})
 
 
 # ---------------------------------------------------------------------------
@@ -38,9 +38,14 @@ def _jsonable(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, np.ndarray):
-        return value.tolist()
-    if isinstance(value, (np.floating, np.integer)):
+        return _jsonable(value.tolist())
+    if isinstance(value, np.floating):
+        number = float(value)
+        return number if math.isfinite(number) else None
+    if isinstance(value, np.integer):
         return value.item()
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
     if isinstance(value, dict):
         return {str(k): _jsonable(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -49,7 +54,7 @@ def _jsonable(value: Any) -> Any:
 
 
 def canonical_json(value: Any) -> str:
-    return json.dumps(_jsonable(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(_jsonable(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def sha256_file(path: str | Path, chunk_size: int = 1 << 20) -> str:
@@ -1541,7 +1546,7 @@ def compare_with_model(
         model_frame = model_match.frame if model_match is not None else None
         time_error_s = model_match.time_error_s if model_match is not None else None
         flags = [flag for flag in str((row or {}).get("quality_flags", "")).split(";") if flag and flag != "ok"]
-        if lineage_status not in {"observed", "matched", "initial_lineage"} and lineage_status not in flags:
+        if lineage_status not in ALLOWED_LINEAGE_STATUSES and lineage_status not in flags:
             flags.append(lineage_status)
         censored = bool(int((row or {}).get("censor", "0"))) or bool(int((lineage or {}).get("censor", "0"))) or not observed_present
         result: dict[str, Any] = {
@@ -1848,6 +1853,7 @@ def render_comparison(
 
 __all__ = [
     "SCHEMA_VERSION",
+    "ALLOWED_LINEAGE_STATUSES",
     "SegmentationConfig",
     "RegistrationConfig",
     "VideoMetadata",

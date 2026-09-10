@@ -46,6 +46,14 @@ from .reproducibility import (
     load_manifest,
     save_manifest,
 )
+from .scale_free_comparison import (
+    MODE_COUNT,
+    SCHEMA_VERSION as SCALE_FREE_SCHEMA_VERSION,
+    ScaleFreeConfig,
+    normalized_shape_distance,
+    scale_free_shape_comparison,
+    shape_observables,
+)
 from .video_comparison import (
     CenterlineCandidate,
     ModelFrame,
@@ -126,4 +134,10 @@ __all__ = [
     "segment_mask",
     "validate_centerline_csv",
     "validate_centerline_rows",
+    "MODE_COUNT",
+    "SCALE_FREE_SCHEMA_VERSION",
+    "ScaleFreeConfig",
+    "normalized_shape_distance",
+    "scale_free_shape_comparison",
+    "shape_observables",
 ]

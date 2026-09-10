@@ -160,3 +160,13 @@ pixel/model scaleとtime registrationを明示した場合だけ定量比較へ�
 
 この段階の compact result だけから、実動画のパラメータ同定、接触・摩擦・折りたたみの
 再現、臨界値、普遍性を主張しない。
+
+## 登録に依存しない形態比較
+
+独立モード `growing_filament.scale_free_comparison` は、Stage 2 の free/free 軌跡と
+`img/gray5.mp4` から `run_pipeline()` が抽出した中心線を、絶対 pixel/model-unit 登録および
+video/model-time 登録なしで比較する。これは形態専用で、品質・censor・lineageを保持し、
+補間や物性fit、`model_inadequacy` 判定を行わない。
+
+入力契約、進行度 `q`、出力schema、bounded runner、実行済み gray5 結果は
+`notes/scale_free_shape_comparison.md` を正本とする。
