@@ -372,7 +372,11 @@ def _validate_frame_keys(rows: Sequence[Mapping[str, Any]], artifact: str) -> di
             if raw_frame in (None, ""):
                 raise ValueError("empty frame")
             frame = int(raw_frame)
-            filament = str(row.get("filament_id", ""))
+            if frame < 0:
+                raise ValueError("negative frame")
+            filament = str(row.get("filament_id", "")).strip()
+            if not filament:
+                raise ValueError("empty filament_id")
             raw_time = row["time"]
             if raw_time in (None, ""):
                 raise ValueError("empty time")
@@ -447,6 +451,10 @@ def _read_observation_csv(path: Path, artifact: str) -> tuple[list[dict[str, str
 def _validate_manifest_artifacts(observation_dir: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
     artifacts = manifest.get("artifacts")
     errors: list[str] = []
+    allowed = {
+        "centerline", "centerline.csv", "observation_summary", "observation_summary.csv",
+        "lineage", "lineage.csv", "metadata", "metadata.json", "events", "events.csv",
+    }
     if not isinstance(artifacts, Mapping):
         return {"valid": False, "errors": ["artifacts_not_mapping"], "warnings": []}
     canonical = {
@@ -466,6 +474,9 @@ def _validate_manifest_artifacts(observation_dir: Path, manifest: Mapping[str, A
         if not isinstance(record.get("sha256"), str) or not record.get("sha256"):
             errors.append(f"artifact {logical_name}: hash_missing")
     for artifact_name, record in artifacts.items():
+        if artifact_name not in allowed:
+            errors.append(f"artifact {artifact_name}: unknown_artifact")
+            continue
         if not isinstance(record, Mapping):
             errors.append(f"artifact {artifact_name}: record_not_mapping")
             continue
@@ -473,7 +484,30 @@ def _validate_manifest_artifacts(observation_dir: Path, manifest: Mapping[str, A
         if not isinstance(artifact_path, str) or not artifact_path:
             errors.append(f"artifact {artifact_name}: path_missing")
             continue
-        path = observation_dir / artifact_path
+        path_value = Path(artifact_path)
+        if path_value.is_absolute() or ".." in path_value.parts:
+            errors.append(f"artifact {artifact_name}: path_outside_observation")
+            continue
+        canonical_path_by_name = {
+            "centerline": "centerline.csv", "centerline.csv": "centerline.csv",
+            "observation_summary": "observation_summary.csv", "observation_summary.csv": "observation_summary.csv",
+            "lineage": "lineage.csv", "lineage.csv": "lineage.csv",
+            "metadata": "metadata.json", "metadata.json": "metadata.json",
+            "events": "events.csv", "events.csv": "events.csv",
+        }
+        expected_path = canonical_path_by_name[artifact_name]
+        if artifact_name in canonical_path_by_name and artifact_path != expected_path:
+            errors.append(f"artifact {artifact_name}: noncanonical_path")
+            continue
+        path = observation_dir / path_value
+        if path.is_symlink():
+            errors.append(f"artifact {artifact_name}: symlink_not_allowed")
+            continue
+        try:
+            path.resolve().relative_to(observation_dir.resolve())
+        except ValueError:
+            errors.append(f"artifact {artifact_name}: path_outside_observation")
+            continue
         if not path.is_file():
             errors.append(f"artifact {artifact_name}: file_missing")
             continue
@@ -745,7 +779,7 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         manifest_structure_errors.append("frame_range_not_mapping")
         frame_range = {}
     if isinstance(frame_range, Mapping):
-        if "decode_complete" in frame_range and frame_range.get("decode_complete") is not True:
+        if frame_range.get("decode_complete") is not True:
             manifest_structure_errors.append("decode_incomplete")
         first = frame_range.get("first")
         last = frame_range.get("last")
@@ -765,8 +799,19 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
                 if stride_int < 1 or last_int < first_int:
                     raise ValueError("invalid frame range")
                 processed_frames = list(range(first_int, last_int + 1, stride_int))
+                if frame_range.get("count") != len(processed_frames):
+                    raise ValueError("frame range count mismatch")
             except (TypeError, ValueError):
                 manifest_structure_errors.append("invalid_frame_range")
+    artifact_frame_set: set[int] = set()
+    for rows in (summary_rows, centerline_rows, lineage_rows):
+        for row in rows:
+            try:
+                artifact_frame_set.add(int(row["frame"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+    if set(processed_frames) != artifact_frame_set:
+        manifest_structure_errors.append("frame_range_artifact_frame_mismatch")
     consistency_validation = _validate_observation_consistency(summary_rows, centerline_rows, lineage_rows, processed_frames)
     if manifest_structure_errors:
         manifest_validation = {

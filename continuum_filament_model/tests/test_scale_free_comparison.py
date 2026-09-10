@@ -89,7 +89,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                         for name in ("centerline.csv", "observation_summary.csv", "lineage.csv")
                     },
                     "video": {"fps": 2.0},
-                    "run": {"frame_range": {"first": 0, "last": len(lengths) - 1, "stride": 1}},
+                    "run": {"frame_range": {"first": 0, "last": len(lengths) - 1, "count": len(lengths), "stride": 1, "decode_complete": True}},
                     "validation": {"valid": True, "errors": [], "warnings": []},
                 }
             ),
