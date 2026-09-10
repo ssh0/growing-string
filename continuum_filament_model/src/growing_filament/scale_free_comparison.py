@@ -1168,7 +1168,9 @@ def _validate_model_scope(
                 value = float(parameter_source.get(key))
                 if key in {"contact_stiffness", "diameter"} and value != 0.0:
                     errors.append(f"model_contact_parameter_nonzero:{key}")
-                elif key in {"growth_rate", "energy_tolerance"} and value < 0.0:
+                elif key == "growth_rate" and value <= 0.0:
+                    errors.append("model_growth_rate_not_positive")
+                elif key == "energy_tolerance" and value < 0.0:
                     errors.append(f"model_parameter_negative:{key}")
             except (TypeError, ValueError):
                 pass
