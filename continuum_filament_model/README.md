@@ -139,6 +139,36 @@ python continuum_filament_model/benchmarks/free_end_benchmark.py \
   --output "$TMP_DIR"
 ```
 
+## Stage 2：free/free 成長–緩和–座屈探索
+
+`benchmarks/free_growth_buckling_stage2.py` は、既存の非接触 free/free solver を使った
+探索的な bounded experiment です。既定設定は
+`benchmarks/configs/stage2_free_free.json`、仕様と解釈の制約は
+`notes/stage2_free_growth_buckling.md` に記録します。成長率、曲げ/伸長比、基板drag、初期
+imperfection、時間刻み、空間解像度を探索し、axial stiffness と drag density の独立した
+parameter contrast を deterministic fixture/refinement、seed付き exploratory replicate と
+分けて保存します。endpoint trajectory、参照長・輪郭長、
+axial-force proxy、endpoint force/moment residual、transverse amplitude、曲率 RMS、
+mode fraction、energy/work/dissipation、accepted/rejected `dt`、無次元量、events、
+provenance を compact summary へ出力します。`buckling-candidate` は観測ラベルであり、
+相境界ではありません。
+接触、摩擦、接着、折りたたみは無効のまま維持します。
+
+```bash
+TMP_DIR=$(mktemp -d /tmp/growing-string-stage2.XXXXXX)
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/benchmarks/free_growth_buckling_stage2.py \
+  --config continuum_filament_model/benchmarks/configs/stage2_free_free.json \
+  --output "$TMP_DIR"
+```
+
+動画入力が存在する場合は、同runnerに `--video /path/to/video.mp4` を渡します。既存の
+video-comparison pipelineを読み取り専用で使い、入力hash、lineage/censor、品質、calibration/
+holdoutの状態をcompactに記録します。scaleやtime registrationを推測せず、未校正または
+censoredな場合の定量overlay・parameter fittingは抑制します。動画本体、中心線、軌跡などの
+大きな成果物は `_video_artifacts/`・`_runs/` の一時出力に残し、Gitへ追加しません。
+入力が欠ける場合は明示的な `input_missing` とし、legacy動画へ置換しません。
+
 ## P0-B：線形mode・時間／空間数値ゲート
 
 現行の非接触モデルについて、端点の**位置だけを固定し、接線は自由**とした離散線形化を検証します。これはクランプ端（位置と接線を固定）ではありません。
