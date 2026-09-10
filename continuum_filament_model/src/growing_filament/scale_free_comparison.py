@@ -1088,13 +1088,26 @@ def _validate_model_frames(frames: Sequence[_Frame], config: ScaleFreeConfig) ->
     }
 
 
+_MAX_SENSITIVITY_VALIDATION_DEPTH = 16
+
+
 def _validate_model_scope(
     model_path: Path,
     metadata: Mapping[str, Any] | None,
     parameters: Mapping[str, Any] | None,
+    *,
+    _visited_artifacts: set[str] | None = None,
+    _validation_depth: int = 0,
 ) -> dict[str, Any]:
     if model_path.suffix.lower() != ".npz" or metadata is None:
         return {"valid": False, "errors": ["stage2_scope_metadata_required"], "warnings": []}
+    visited_artifacts = _visited_artifacts if _visited_artifacts is not None else set()
+    artifact_identity = str(model_path.resolve())
+    if _validation_depth >= _MAX_SENSITIVITY_VALIDATION_DEPTH:
+        return {"valid": False, "errors": ["sensitivity_validation_depth_exceeded"], "warnings": [], "scope": {}, "population": "unclassified"}
+    if artifact_identity in visited_artifacts:
+        return {"valid": False, "errors": ["sensitivity_validation_cycle"], "warnings": [], "scope": {}, "population": "unclassified"}
+    visited_artifacts.add(artifact_identity)
     raw_metadata = metadata.get("metadata")
     raw_manifest = metadata.get("manifest")
     errors: list[str] = []
@@ -1310,16 +1323,25 @@ def _validate_model_scope(
                                             member_metadata_json = member_archive["metadata_json"]
                                         member_metadata = json.loads(str(member_metadata_json.item() if member_metadata_json.ndim == 0 else member_metadata_json.tolist()))
                                         member_parameters = member_metadata.get("parameters") if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("parameters"), Mapping) else None
-                                        member_scope_metadata = member_metadata
-                                        if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("metadata"), Mapping) and "sensitivity_protocol" in member_metadata["metadata"]:
+                                        member_manifest_metadata = member_metadata.get("manifest", {}).get("metadata") if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("manifest"), Mapping) else None
+                                        member_metadata_scope = member_metadata.get("metadata") if isinstance(member_metadata, Mapping) else None
+                                        nested_protocol = (
+                                            isinstance(member_metadata_scope, Mapping) and "sensitivity_protocol" in member_metadata_scope
+                                        ) or (
+                                            isinstance(member_manifest_metadata, Mapping) and "sensitivity_protocol" in member_manifest_metadata
+                                        )
+                                        if nested_protocol:
                                             errors.append("sensitivity_member_nested_protocol")
-                                            member_scope_valid = False
-                                        elif isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("metadata"), Mapping):
-                                            member_scope_metadata = dict(member_metadata)
-                                            member_scope_metadata["metadata"] = dict(member_metadata["metadata"])
-                                            member_scope_metadata["metadata"].pop("sensitivity_protocol", None)
-                                        member_scope = _validate_model_scope(member_file, member_scope_metadata if isinstance(member_scope_metadata, Mapping) else None, member_parameters)
-                                        member_scope_valid = member_scope.get("valid", False) and member_scope.get("population") == "stage2_deterministic" and "sensitivity_protocol" not in member_scope.get("scope", {})
+                                            member_scope = {"valid": False, "errors": ["sensitivity_member_nested_protocol"], "warnings": [], "scope": {}, "population": "unclassified"}
+                                        else:
+                                            member_scope = _validate_model_scope(
+                                                member_file,
+                                                member_metadata if isinstance(member_metadata, Mapping) else None,
+                                                member_parameters,
+                                                _visited_artifacts=visited_artifacts,
+                                                _validation_depth=_validation_depth + 1,
+                                            )
+                                        member_scope_valid = member_scope.get("valid", False) and member_scope.get("population") == "stage2_deterministic"
                                         if not member_scope_valid:
                                             errors.append("sensitivity_member_stage2_scope_invalid")
                                         else:
@@ -1344,7 +1366,7 @@ def _validate_model_scope(
                                                 errors.append("sensitivity_member_trajectory_empty")
                                             else:
                                                 member_metrics_from_npz = shape_observables(member_frames[-1].points, sample_points=80)
-                                    except (OSError, KeyError, TypeError, ValueError, OverflowError, zipfile.BadZipFile):
+                                    except (OSError, KeyError, TypeError, ValueError, OverflowError, RecursionError, zipfile.BadZipFile):
                                         errors.append("sensitivity_member_metadata_unreadable")
                             except OSError:
                                 errors.append("sensitivity_member_artifact_hash_unreadable")
@@ -1673,6 +1695,10 @@ def scale_free_shape_comparison(
     observation_manifest = observation_info.get("manifest") or {}
     observation_contract_valid = bool(observation_info.get("contract_valid"))
     model_validation = model_provenance.get("validation") or {}
+    sensitivity_attempted = (
+        model_provenance.get("population") == "initial_condition_sensitivity"
+        or isinstance(model_provenance.get("sensitivity_protocol"), Mapping)
+    )
     if model_provenance.get("population") == "initial_condition_sensitivity":
         protocol = model_provenance.get("sensitivity_protocol") or {}
         linkage_errors: list[str] = []
@@ -1689,9 +1715,13 @@ def scale_free_shape_comparison(
         if not external_artifact_ids or external_artifact_ids.get("model_run") != protocol.get("outer_run_id") or external_artifact_ids.get("model_sha256") != model_provenance.get("sha256"):
             linkage_errors.append("sensitivity_outer_linkage_unverified")
         if linkage_errors:
-            model_validation = dict(model_validation)
-            model_validation["errors"] = list(model_validation.get("errors", [])) + linkage_errors
-            model_validation["valid"] = False
+            for validation_key in ("validation", "scope_validation"):
+                validation = dict(model_provenance.get(validation_key) or {})
+                validation["errors"] = list(dict.fromkeys(list(validation.get("errors", [])) + linkage_errors))
+                validation["valid"] = False
+                validation["status"] = "unavailable"
+                model_provenance[validation_key] = validation
+            model_validation = dict(model_provenance["validation"])
     model_contract_valid = bool(models) and bool(model_validation.get("valid"))
     observation_progress = _progress(observations if observation_contract_valid and not observation_info.get("selection_error", False) else [], cfg)
     model_progress = _progress(models if model_contract_valid and not observation_info.get("selection_error", False) else [], cfg)
@@ -1791,6 +1821,8 @@ def scale_free_shape_comparison(
         reasons.append("no_observation_frames")
     if not models:
         reasons.append("model_centerline_unavailable")
+    if sensitivity_attempted and not model_contract_valid:
+        reasons.append("sensitivity_unavailable")
     if not model_contract_valid and "model_file_missing" not in model_validation.get("errors", []):
         reasons.append("model_centerline_contract_invalid")
     if observation_progress.status != "ok":
@@ -1808,6 +1840,8 @@ def scale_free_shape_comparison(
         status = "input_quality_no_centerline"
     elif not models:
         status = "model_centerline_unavailable"
+    elif sensitivity_attempted and not model_contract_valid:
+        status = "sensitivity_unavailable"
     elif not model_contract_valid:
         status = "input_quality_invalid_model_contract"
     elif observation_progress.status == "insufficient_length_observations":
