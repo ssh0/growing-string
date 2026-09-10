@@ -1336,11 +1336,11 @@ def _validate_model_scope(
                                         if provenance_member.get("baseline_run_id") != baseline_run_id:
                                             errors.append("sensitivity_member_baseline_mismatch")
                                         member_initial_hashes.add(member_initial_hash if isinstance(member_initial_hash, str) else "")
-                                        member_frames = load_model_output(member_file)
-                                        if not member_frames:
-                                            errors.append("sensitivity_member_trajectory_empty")
-                                        else:
-                                            member_metrics_from_npz = shape_observables(member_frames[-1].points, sample_points=80)
+                                        if member_scope_valid and (member_provenance.get("validation") or {}).get("valid", False):
+                                            if not member_frames:
+                                                errors.append("sensitivity_member_trajectory_empty")
+                                            else:
+                                                member_metrics_from_npz = shape_observables(member_frames[-1].points, sample_points=80)
                                     except (OSError, KeyError, TypeError, ValueError, OverflowError, zipfile.BadZipFile):
                                         errors.append("sensitivity_member_metadata_unreadable")
                             except OSError:
@@ -1801,6 +1801,10 @@ def scale_free_shape_comparison(
         status = "model_centerline_unavailable"
     elif not model_contract_valid:
         status = "input_quality_invalid_model_contract"
+    elif observation_progress.status == "insufficient_length_observations":
+        status = "growth_progress_insufficient_length_observations"
+    elif model_progress.status == "insufficient_length_observations":
+        status = "model_growth_progress_insufficient_length_observations"
     elif observation_progress.status == "zero_growth_span" or model_progress.status == "zero_growth_span":
         status = "growth_progress_undefined_zero_span"
     elif observation_progress.status == "non_monotonic_lengths" or model_progress.status == "non_monotonic_lengths":
