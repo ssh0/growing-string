@@ -106,11 +106,23 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             offsets.append(offsets[-1] + 3)
         metadata = {
             "parameters": {
+                "axial_stiffness": 10.0,
+                "bending_stiffness": 1.0,
+                "drag_density": 1.0,
                 "contact_stiffness": 0.0,
                 "diameter": 0.0,
+                "growth_rate": 0.02,
+                "reference_length": 1.0,
+                "dt": 0.001,
+                "t_end": 0.002,
+                "a_max": 1.0,
+                "dt_min": 1.0e-10,
+                "max_retries": 8,
+                "max_displacement_fraction": 1.0,
+                "energy_tolerance": 1.0e-9,
+                "reject_crossing": True,
                 "fixed_left": False,
                 "fixed_right": False,
-                "growth_rate": 0.02,
             },
             "metadata": {
                 "benchmark": "stage2_free_free_growth_relaxation_buckling",
@@ -124,7 +136,25 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 ],
                 "run_kind": "deterministic_fixture",
             },
-            "manifest": {},
+            "manifest": {"parameters": {
+                "axial_stiffness": 10.0,
+                "bending_stiffness": 1.0,
+                "drag_density": 1.0,
+                "contact_stiffness": 0.0,
+                "diameter": 0.0,
+                "growth_rate": 0.02,
+                "reference_length": 1.0,
+                "dt": 0.001,
+                "t_end": 0.002,
+                "a_max": 1.0,
+                "dt_min": 1.0e-10,
+                "max_retries": 8,
+                "max_displacement_fraction": 1.0,
+                "energy_tolerance": 1.0e-9,
+                "reject_crossing": True,
+                "fixed_left": False,
+                "fixed_right": False,
+            }},
         }
         np.savez(
             model,
@@ -400,6 +430,14 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 offsets = archive["position_offsets"]
                 times = archive["times"]
                 metadata = json.loads(str(archive["metadata_json"].item()))
+            baseline_artifact = root / "member-baseline.bin"
+            plus_artifact = root / "member-plus.bin"
+            baseline_artifact.write_bytes(b"baseline-member")
+            plus_artifact.write_bytes(b"plus-member")
+            baseline_hash = hashlib.sha256(baseline_artifact.read_bytes()).hexdigest()
+            plus_hash = hashlib.sha256(plus_artifact.read_bytes()).hexdigest()
+            baseline_metrics = {"normalized_shape_distance": 0.0}
+            plus_metrics = {"normalized_shape_distance": 0.1}
             metadata["metadata"].update(
                 {
                     "run_kind": "initial_condition_sensitivity",
@@ -410,16 +448,18 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                             {
                                 "id": "baseline",
                                 "perturbation_value": 0.0,
-                                "trajectory_sha256": "trajectory-baseline",
-                                "provenance": {"seed": 0, "trajectory_sha256": "trajectory-baseline"},
-                                "result": {"metrics": {"normalized_shape_distance": 0.0}, "metrics_sha256": hashlib.sha256(json.dumps({"normalized_shape_distance": 0.0}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
+                                "artifact_path": "member-baseline.bin",
+                                "trajectory_sha256": baseline_hash,
+                                "provenance": {"seed": 0, "trajectory_sha256": baseline_hash},
+                                "result": {"metrics": baseline_metrics, "metrics_sha256": hashlib.sha256(json.dumps(baseline_metrics, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
                             },
                             {
                                 "id": "plus",
                                 "perturbation_value": 0.1,
-                                "trajectory_sha256": "trajectory-plus",
-                                "provenance": {"seed": 1, "trajectory_sha256": "trajectory-plus"},
-                                "result": {"metrics": {"normalized_shape_distance": 0.1}, "metrics_sha256": hashlib.sha256(json.dumps({"normalized_shape_distance": 0.1}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
+                                "artifact_path": "member-plus.bin",
+                                "trajectory_sha256": plus_hash,
+                                "provenance": {"seed": 1, "trajectory_sha256": plus_hash},
+                                "result": {"metrics": plus_metrics, "metrics_sha256": hashlib.sha256(json.dumps(plus_metrics, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
                             },
                         ],
                         "metrics": ["normalized_shape_distance"],

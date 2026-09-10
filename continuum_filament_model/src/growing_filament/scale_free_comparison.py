@@ -326,6 +326,8 @@ def normalized_shape_distance(first: np.ndarray, second: np.ndarray, *, sample_p
 def _progress_eligible(frame: _Frame, config: ScaleFreeConfig) -> bool:
     if (
         not _finite_points(frame.points)
+        or frame.points is None
+        or len(frame.points) < config.min_points
         or frame.length is None
         or not math.isfinite(frame.length)
         or frame.length <= config.min_length
@@ -1089,24 +1091,70 @@ def _validate_model_scope(
             if normalized_value != normalized_first:
                 errors.append(f"model_scope_metadata_mismatch:{key}")
         scope[key] = first_value
-    if not isinstance(parameters, Mapping):
-        errors.append("model_parameters_not_mapping")
+    parameter_sources: list[Mapping[str, Any]] = []
+    if isinstance(parameters, Mapping):
+        parameter_sources.append(parameters)
     else:
-        for key in ("contact_stiffness", "diameter", "fixed_left", "fixed_right", "growth_rate"):
-            if key not in parameters:
+        errors.append("model_parameters_not_mapping")
+    if isinstance(raw_manifest, Mapping):
+        manifest_parameters = raw_manifest.get("parameters")
+        if isinstance(manifest_parameters, Mapping):
+            parameter_sources.append(manifest_parameters)
+        else:
+            errors.append("model_manifest_parameters_not_mapping")
+    required_parameters = (
+        "axial_stiffness", "bending_stiffness", "drag_density", "contact_stiffness", "diameter",
+        "growth_rate", "reference_length", "dt", "t_end", "a_max", "dt_min", "max_retries",
+        "max_displacement_fraction", "energy_tolerance",
+    )
+    for parameter_source in parameter_sources:
+        for key in required_parameters + ("fixed_left", "fixed_right", "reject_crossing"):
+            if key not in parameter_source:
                 errors.append(f"model_parameter_missing:{key}")
+        for key in required_parameters:
+            value = parameter_source.get(key)
+            if isinstance(value, bool):
+                errors.append(f"model_parameter_invalid:{key}")
+                continue
+            try:
+                if not math.isfinite(float(value)):
+                    raise ValueError
+            except (TypeError, ValueError):
+                errors.append(f"model_parameter_invalid:{key}")
+        for key in ("axial_stiffness", "bending_stiffness", "drag_density", "reference_length", "dt", "t_end", "a_max", "dt_min"):
+            try:
+                if float(parameter_source.get(key)) <= 0.0:
+                    errors.append(f"model_parameter_nonpositive:{key}")
+            except (TypeError, ValueError):
+                pass
+        for key in ("contact_stiffness", "diameter", "growth_rate", "energy_tolerance"):
+            try:
+                if float(parameter_source.get(key)) < 0.0:
+                    errors.append(f"model_parameter_negative:{key}")
+            except (TypeError, ValueError):
+                pass
         try:
-            if float(parameters.get("contact_stiffness")) != 0.0 or float(parameters.get("diameter")) != 0.0:
-                errors.append("model_contact_parameters_nonzero")
+            max_fraction = float(parameter_source.get("max_displacement_fraction"))
+            if not math.isfinite(max_fraction) or not 0.0 < max_fraction <= 1.0:
+                errors.append("model_max_displacement_fraction_invalid")
         except (TypeError, ValueError):
-            errors.append("model_contact_parameters_invalid")
-        if parameters.get("fixed_left") is not False or parameters.get("fixed_right") is not False:
+            errors.append("model_max_displacement_fraction_invalid")
+        try:
+            max_retries = float(parameter_source.get("max_retries"))
+            if not math.isfinite(max_retries) or max_retries < 0.0 or not max_retries.is_integer():
+                errors.append("model_max_retries_invalid")
+        except (TypeError, ValueError):
+            errors.append("model_max_retries_invalid")
+        if parameter_source.get("reject_crossing") is not True:
+            errors.append("model_reject_crossing_invalid")
+        if parameter_source.get("fixed_left") is not False or parameter_source.get("fixed_right") is not False:
             errors.append("model_boundary_parameters_not_free")
-        try:
-            if float(parameters.get("growth_rate")) < 0.0:
-                errors.append("model_growth_rate_invalid")
-        except (TypeError, ValueError):
-            errors.append("model_growth_rate_invalid")
+    if len(parameter_sources) >= 2:
+        first_parameters = parameter_sources[0]
+        for other_parameters in parameter_sources[1:]:
+            for key in required_parameters + ("fixed_left", "fixed_right", "reject_crossing"):
+                if first_parameters.get(key) != other_parameters.get(key):
+                    errors.append(f"model_parameter_metadata_mismatch:{key}")
     if scope.get("benchmark") != "stage2_free_free_growth_relaxation_buckling":
         errors.append("unsupported_stage2_benchmark")
     run_kind = scope.get("run_kind")
@@ -1122,6 +1170,7 @@ def _validate_model_scope(
         else:
             members = protocol.get("members")
             member_ids: set[str] = set()
+            member_hashes: set[str] = set()
             if not isinstance(members, list) or len(members) < 2:
                 errors.append("sensitivity_members_insufficient")
             else:
@@ -1153,7 +1202,24 @@ def _validate_model_scope(
                     if not isinstance(provenance_member, Mapping) or not isinstance(result_member, Mapping):
                         errors.append("sensitivity_member_provenance_result_missing")
                         continue
-                    if not isinstance(provenance_member.get("trajectory_sha256"), str) or provenance_member.get("trajectory_sha256") != member.get("trajectory_sha256"):
+                    trajectory_hash = member.get("trajectory_sha256")
+                    if not isinstance(trajectory_hash, str) or not trajectory_hash or trajectory_hash in member_hashes:
+                        errors.append("sensitivity_member_trajectory_hash_invalid")
+                    member_hashes.add(trajectory_hash if isinstance(trajectory_hash, str) else "")
+                    artifact_path = member.get("artifact_path")
+                    if not isinstance(artifact_path, str) or not artifact_path or Path(artifact_path).is_absolute() or ".." in Path(artifact_path).parts:
+                        errors.append("sensitivity_member_artifact_path_invalid")
+                    else:
+                        member_file = model_path.parent / artifact_path
+                        if not member_file.is_file() or member_file.is_symlink():
+                            errors.append("sensitivity_member_artifact_missing")
+                        else:
+                            try:
+                                if sha256_file(member_file) != trajectory_hash:
+                                    errors.append("sensitivity_member_artifact_hash_mismatch")
+                            except OSError:
+                                errors.append("sensitivity_member_artifact_hash_unreadable")
+                    if not isinstance(provenance_member.get("trajectory_sha256"), str) or provenance_member.get("trajectory_sha256") != trajectory_hash:
                         errors.append("sensitivity_member_trajectory_hash_mismatch")
                     metrics = result_member.get("metrics")
                     if not isinstance(metrics, Mapping) or not metrics:
@@ -1161,6 +1227,11 @@ def _validate_model_scope(
                     else:
                         if result_member.get("metrics_sha256") != sha256_text(canonical_json(metrics)):
                             errors.append("sensitivity_member_metrics_hash_mismatch")
+                        for metric_name in protocol.get("metrics", []):
+                            if metric_name not in metrics:
+                                errors.append("sensitivity_member_metric_missing")
+                            elif not isinstance(metrics[metric_name], (int, float)) or isinstance(metrics[metric_name], bool) or not math.isfinite(float(metrics[metric_name])):
+                                errors.append("sensitivity_member_metric_invalid")
             if protocol.get("parameter") != "initial_condition":
                 errors.append("invalid_sensitivity_parameter")
             if not isinstance(protocol.get("metrics"), list) or not protocol.get("metrics"):
@@ -1168,6 +1239,18 @@ def _validate_model_scope(
             aggregate = protocol.get("aggregate_metrics")
             if not isinstance(aggregate, Mapping) or aggregate.get("member_count") != len(members) if isinstance(members, list) else True:
                 errors.append("invalid_sensitivity_aggregate_metrics")
+            aggregate = protocol.get("aggregate_metrics")
+            acceptance = protocol.get("acceptance_criteria")
+            if isinstance(aggregate, Mapping) and isinstance(acceptance, Mapping) and isinstance(members, list):
+                if "normalized_shape_distance" in protocol.get("metrics", []):
+                    values = [float(member.get("result", {}).get("metrics", {}).get("normalized_shape_distance")) for member in members if isinstance(member, Mapping)]
+                    expected_delta = max(values) - min(values) if values else None
+                    aggregate_delta = aggregate.get("max_normalized_shape_distance_delta")
+                    if expected_delta is None or not isinstance(aggregate_delta, (int, float)) or abs(float(aggregate_delta) - expected_delta) > 1.0e-9:
+                        errors.append("sensitivity_aggregate_metric_mismatch")
+                    threshold = acceptance.get("max_metric_delta")
+                    if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or expected_delta is None or (protocol.get("accepted") is not (expected_delta <= float(threshold))):
+                        errors.append("sensitivity_acceptance_mismatch")
             if not isinstance(protocol.get("acceptance_criteria"), Mapping) or not protocol.get("acceptance_criteria") or protocol.get("accepted") is not True:
                 errors.append("sensitivity_acceptance_missing_or_failed")
     if scope.get("boundary") != "free/free":
@@ -1182,10 +1265,28 @@ def _validate_model_scope(
 
 
 def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Frame], dict[str, Any]]:
+    try:
+        model_sha256 = sha256_file(model_path)
+        model_bytes = model_path.stat().st_size
+    except OSError:
+        return [], {
+            "logical_id": model_path.name,
+            "sha256": None,
+            "bytes": None,
+            "population": "unknown",
+            "validation": {
+                "valid": False,
+                "errors": ["model_provenance_unavailable"],
+                "warnings": [],
+                "frame_count": 0,
+                "valid_frame_count": 0,
+                "invalid_frame_count": 0,
+            },
+        }
     provenance: dict[str, Any] = {
         "logical_id": model_path.name,
-        "sha256": sha256_file(model_path),
-        "bytes": model_path.stat().st_size,
+        "sha256": model_sha256,
+        "bytes": model_bytes,
     }
     source_validation: dict[str, Any] = {"valid": True, "errors": [], "warnings": [], "source_row_count": None}
     scope_validation: dict[str, Any] = {"valid": False, "errors": ["stage2_scope_metadata_required"], "warnings": []}
@@ -1278,7 +1379,7 @@ def _coverage(frames: Sequence[_Frame]) -> dict[str, Any]:
     present = [frame for frame in frames if frame.index is not None]
     if not present:
         return {"first_frame": None, "last_frame": None, "count": 0, "time_first_s": None, "time_last_s": None, "time_coverage_is_physical": False}
-    times = [frame.time_s for frame in present if frame.time_s is not None]
+    times = [frame.time_s for frame in present if frame.time_s is not None and math.isfinite(frame.time_s)]
     return {
         "first_frame": min(frame.index for frame in present),
         "last_frame": max(frame.index for frame in present),
