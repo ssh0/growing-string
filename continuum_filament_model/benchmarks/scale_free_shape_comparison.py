@@ -271,6 +271,8 @@ def run_bounded_comparison(
         "shape_config_sha256": report["shape_config_sha256"],
         "video": report["video"],
         "model_run_names": [record["run_name"] for record in model_records],
+        "configuration_errors": configuration_errors,
+        "comparison_suppressed": bool(configuration_errors),
         "model_artifacts": {
             record["run_name"]: {
                 "logical_id": record.get("model_logical_id"),

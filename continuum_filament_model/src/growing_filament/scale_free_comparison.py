@@ -1454,6 +1454,7 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
             except (OSError, EOFError, KeyError, TypeError, ValueError, IndexError, zipfile.BadZipFile):
                 scope_validation["errors"].append("trajectory_state_hash_unreadable")
             scope_validation = _json_sanitize(scope_validation)
+            scope_validation["valid"] = bool(scope_validation.get("valid")) and not scope_validation.get("errors")
             provenance.update(
                 {
                     "run_kind": _json_sanitize(model_metadata.get("run_kind") or model_manifest.get("run_kind")),
