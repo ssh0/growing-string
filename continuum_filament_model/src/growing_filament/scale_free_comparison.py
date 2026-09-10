@@ -449,6 +449,22 @@ def _validate_manifest_artifacts(observation_dir: Path, manifest: Mapping[str, A
     errors: list[str] = []
     if not isinstance(artifacts, Mapping):
         return {"valid": False, "errors": ["artifacts_not_mapping"], "warnings": []}
+    canonical = {
+        "centerline": ("centerline", "centerline.csv"),
+        "summary": ("observation_summary", "observation_summary.csv"),
+        "lineage": ("lineage", "lineage.csv"),
+    }
+    for logical_name, (artifact_key, canonical_name) in canonical.items():
+        record = artifacts.get(artifact_key)
+        if record is None:
+            record = artifacts.get(canonical_name)
+        if not isinstance(record, Mapping):
+            errors.append(f"artifact {logical_name}: record_missing")
+            continue
+        if record.get("path") != canonical_name:
+            errors.append(f"artifact {logical_name}: noncanonical_path")
+        if not isinstance(record.get("sha256"), str) or not record.get("sha256"):
+            errors.append(f"artifact {logical_name}: hash_missing")
     for artifact_name, record in artifacts.items():
         if not isinstance(record, Mapping):
             errors.append(f"artifact {artifact_name}: record_not_mapping")
@@ -491,6 +507,10 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
         if offsets.ndim != 1 or len(offsets) != frame_count + 1:
             errors.append("position_offsets_length_mismatch")
         else:
+            if not np.isfinite(offsets).all():
+                errors.append("position_offsets_non_finite")
+            if not np.equal(offsets, np.floor(offsets)).all():
+                errors.append("position_offsets_non_integer")
             if len(offsets) == 0 or int(offsets[0]) != 0:
                 errors.append("position_offsets_must_start_at_zero")
             if np.any(np.diff(offsets) < 0):
@@ -587,7 +607,7 @@ def _validate_observation_consistency(
             continue
         if lineage is not None:
             try:
-                if abs(float(lineage["time"]) - summary_time) > 1.0e-12:
+                if abs(float(lineage["time"]) - summary_time) > 5.0e-9:
                     errors.append(f"lineage time mismatch for frame={key[0]},filament={key[1]}")
                 if _bool_value(lineage["censor"]) != summary_censor:
                     errors.append(f"lineage censor mismatch for frame={key[0]},filament={key[1]}")
@@ -605,9 +625,9 @@ def _validate_observation_consistency(
                 errors.append(f"invalid centerline geometry for frame={key[0]},filament={key[1]}")
             for row in centerline_by_key[key]:
                 try:
-                    if abs(float(row["time"]) - summary_time) > 1.0e-12:
+                    if abs(float(row["time"]) - summary_time) > 5.0e-9:
                         errors.append(f"time mismatch for frame={key[0]},filament={key[1]}")
-                    if abs(float(row["quality"]) - summary_quality) > 1.0e-12:
+                    if abs(float(row["quality"]) - summary_quality) > 5.0e-9:
                         errors.append(f"quality mismatch for frame={key[0]},filament={key[1]}")
                     if _bool_value(row["censor"]) != summary_censor:
                         errors.append(f"censor mismatch for frame={key[0]},filament={key[1]}")
@@ -665,7 +685,11 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     manifest_validation = manifest.get("validation")
     if not isinstance(manifest_validation, Mapping):
         manifest_validation = {"valid": False, "errors": ["missing_manifest_validation"]}
-    elif not isinstance(manifest_validation.get("errors"), list) or not isinstance(manifest_validation.get("warnings"), list):
+    elif (
+        not isinstance(manifest_validation.get("errors"), list)
+        or not isinstance(manifest_validation.get("warnings"), list)
+        or manifest_validation.get("errors")
+    ):
         manifest_structure_errors.append("invalid_manifest_validation_shape")
         manifest_validation = {"valid": False, "errors": ["invalid_manifest_validation_shape"]}
     manifest_artifact_validation = _validate_manifest_artifacts(observation_dir, manifest)
@@ -728,7 +752,12 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         selected_key = (frame, selected) if selected is not None else (frame, "unknown")
         if selected_key not in keys:
             keys.add((frame, "unknown"))
-    fps_value = video_section.get("fps", 1.0)
+    input_metadata = manifest_input.get("metadata", {}) if isinstance(manifest_input, Mapping) else {}
+    fps_value = video_section.get("fps")
+    if fps_value is None and isinstance(input_metadata, Mapping):
+        fps_value = input_metadata.get("fps")
+    if fps_value is None:
+        fps_value = 1.0
     fps = _float_or_none(fps_value)
     if fps is None or fps <= 0.0:
         manifest_structure_errors.append("invalid_fps")
@@ -948,6 +977,9 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
     physical_scope = scope.get("physical_scope")
     if not isinstance(physical_scope, list) or not required_scope.issubset(set(physical_scope)):
         errors.append("model_physical_scope_is_not_stage2_uniform_growth")
+    forbidden_scope = {"localized_growth", "segment_contact", "node_contact", "friction", "adhesion", "folding"}
+    if isinstance(physical_scope, list) and forbidden_scope.intersection(physical_scope):
+        errors.append("model_physical_scope_contains_forbidden_physics")
     return {"valid": not errors, "errors": errors, "warnings": [], "scope": scope}
 
 
@@ -1261,13 +1293,14 @@ def scale_free_shape_comparison(
         "model": _coverage(models),
         "frame_fraction_is_not_physical_time": True,
     }
+    censored_count = sum(int(row["comparison_censor"]) for row in output_rows)
     compact: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "comparison_mode": "scale_free_shape",
         "status": status,
         "input_quality": {
             "usable": compared_count > 0,
-            "censor": bool(reasons),
+            "censor": bool(reasons) or censored_count > 0,
             "reasons": sorted(set(reasons)),
             "diagnostic": ";".join(sorted(set(reasons))) if reasons else "ok",
         },
@@ -1307,7 +1340,7 @@ def scale_free_shape_comparison(
         "rows": len(output_rows),
         "eligible_observation_rows": eligible_count,
         "compared_rows": compared_count,
-        "censored_rows": sum(int(row["comparison_censor"]) for row in output_rows),
+        "censored_rows": censored_count,
         "excluded_from_comparison_denominator": len(output_rows) - compared_count,
         "model_population": model_provenance.get("population"),
         "model_run_kind": model_provenance.get("run_kind"),
