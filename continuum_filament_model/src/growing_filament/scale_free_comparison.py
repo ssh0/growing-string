@@ -30,6 +30,7 @@ from .video_comparison import (
     load_model_output,
     sha256_file,
     sha256_text,
+    validate_centerline_rows,
 )
 from .reproducibility import detect_git_revision
 
@@ -101,6 +102,9 @@ class _Progress:
         return asdict(self)
 
 
+_ALLOWED_LINEAGE_STATUSES = frozenset({"observed", "matched", "initial_lineage"})
+
+
 def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]], fields: Sequence[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -131,13 +135,6 @@ def _float_or_none(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
-
-
-def _int_or_default(value: Any, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
 
 
 def _bool_value(value: Any) -> bool:
@@ -313,8 +310,22 @@ def normalized_shape_distance(first: np.ndarray, second: np.ndarray, *, sample_p
     return reverse, "reverse"
 
 
+def _progress_eligible(frame: _Frame, config: ScaleFreeConfig) -> bool:
+    if (
+        not _finite_points(frame.points)
+        or frame.length is None
+        or not math.isfinite(frame.length)
+        or frame.length <= config.min_length
+        or frame.censor
+    ):
+        return False
+    if frame.source == "observation":
+        return frame.quality is not None and frame.quality >= config.min_quality and frame.lineage_status in _ALLOWED_LINEAGE_STATUSES
+    return True
+
+
 def _progress(frames: Sequence[_Frame], config: ScaleFreeConfig) -> _Progress:
-    lengths = [frame.length for frame in frames if frame.length is not None and math.isfinite(frame.length) and frame.length > config.min_length]
+    lengths = [float(frame.length) for frame in frames if _progress_eligible(frame, config)]
     if len(lengths) < 2:
         return _Progress("insufficient_length_observations", None, None, None, len(lengths), 0)
     initial = float(lengths[0])
@@ -330,10 +341,10 @@ def _progress(frames: Sequence[_Frame], config: ScaleFreeConfig) -> _Progress:
 
 
 def _assign_progress(frames: Sequence[_Frame], progress: _Progress, config: ScaleFreeConfig) -> None:
-    if progress.growth_span is None or abs(progress.growth_span) <= config.min_length:
+    if progress.status != "ok" or progress.growth_span is None or abs(progress.growth_span) <= config.min_length:
         return
     for frame in frames:
-        if frame.length is not None and math.isfinite(frame.length) and frame.length > config.min_length:
+        if _progress_eligible(frame, config):
             frame.q = float((frame.length - progress.initial_length) / progress.growth_span)  # type: ignore[operator]
 
 
@@ -341,29 +352,40 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     summary_rows = _read_csv_rows(observation_dir / "observation_summary.csv")
     centerline_rows = _read_csv_rows(observation_dir / "centerline.csv")
     lineage_rows = _read_csv_rows(observation_dir / "lineage.csv") if (observation_dir / "lineage.csv").exists() else []
-    selected = filament_id or _choose_filament(summary_rows)
-    if selected is None:
-        return [], None, {"reason": "no_selected_filament"}
+    manifest_path = observation_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    segmentation_config = manifest.get("segmentation_config") or {}
+    centerline_validation = validate_centerline_rows(
+        centerline_rows,
+        max_jump_px=float(segmentation_config.get("max_jump_px", 80.0)),
+    )
+    manifest_validation = manifest.get("validation")
+    if not isinstance(manifest_validation, Mapping):
+        manifest_validation = {"valid": False, "errors": ["missing_manifest_validation"]}
+    manifest_validation_valid = manifest_validation.get("valid") is True
+    contract_valid = manifest_validation_valid and bool(centerline_validation.get("valid"))
+    selected = filament_id or _choose_filament(summary_rows) or _choose_filament(lineage_rows)
     summary_by_key = {(int(row["frame"]), row.get("filament_id", "")): row for row in summary_rows}
     lineage_by_key = {(int(row["frame"]), row.get("filament_id", "")): row for row in lineage_rows}
     grouped: dict[tuple[int, str], list[tuple[int, float, float]]] = {}
     for row in centerline_rows:
-        if row.get("filament_id") != selected:
+        if selected is None or row.get("filament_id") != selected:
             continue
         try:
             grouped.setdefault((int(row["frame"]), selected), []).append((int(row["point_id"]), float(row["x"]), float(row["y"])))
         except (KeyError, TypeError, ValueError):
             continue
-    manifest_path = observation_dir / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
     frame_range = (manifest.get("run") or {}).get("frame_range") or {}
     processed_frames: list[int] = []
     if frame_range.get("first") is not None and frame_range.get("last") is not None:
         processed_frames = list(range(int(frame_range["first"]), int(frame_range["last"]) + 1, int(frame_range.get("stride", 1))))
-    keys = {key for key in summary_by_key if key[1] == selected}
-    keys.update(key for key in lineage_by_key if key[1] == selected)
+    keys: set[tuple[int, str]] = set()
+    if selected is not None:
+        keys.update(key for key in summary_by_key if key[1] == selected)
+        keys.update(key for key in lineage_by_key if key[1] == selected)
     for frame in processed_frames:
-        if (frame, selected) not in keys:
+        selected_key = (frame, selected) if selected is not None else (frame, "unknown")
+        if selected_key not in keys:
             keys.add((frame, "unknown"))
     fps = _float_or_none((manifest.get("video") or {}).get("fps")) or 1.0
     frames: list[_Frame] = []
@@ -383,13 +405,21 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         flags = str((row or {}).get("quality_flags", "ok") or "ok")
         lineage_status = str((lineage or {}).get("status", "observed"))
         censor = _bool_value((row or {}).get("censor", "0")) or _bool_value((lineage or {}).get("censor", "0"))
-        if lineage_status not in {"observed", "matched", "initial_lineage"}:
+        if lineage_status not in _ALLOWED_LINEAGE_STATUSES:
             if lineage_status not in flags.split(";"):
                 flags = ";".join(part for part in (flags, lineage_status) if part)
             censor = True
         time_s = _float_or_none(source.get("time"))
         frames.append(_Frame(frame_index, time_s, points, raw_length, quality, flags, lineage_status, censor, source="observation"))
-    return frames, selected, {"manifest": manifest, "summary_count": len(summary_rows), "lineage_count": len(lineage_rows)}
+    return frames, selected, {
+        "manifest": manifest,
+        "manifest_validation": manifest_validation,
+        "manifest_validation_valid": manifest_validation_valid,
+        "centerline_validation": centerline_validation,
+        "contract_valid": contract_valid,
+        "summary_count": len(summary_rows),
+        "lineage_count": len(lineage_rows),
+    }
 
 
 def _model_frames(model_path: Path) -> tuple[list[_Frame], dict[str, Any]]:
@@ -443,10 +473,6 @@ def _coverage(frames: Sequence[_Frame]) -> dict[str, Any]:
         "time_last_s": max(times) if times else None,
         "time_coverage_is_physical": False,
     }
-
-
-def _progress_reason(progress: _Progress) -> str | None:
-    return None if progress.status == "ok" else progress.status
 
 
 def _feature_row(prefix: str, features: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -506,26 +532,20 @@ def scale_free_shape_comparison(
     observations, selected, observation_info = _observation_frames(obs_dir, filament_id)
     models, model_provenance = _model_frames(model_file) if model_file.is_file() else ([], {"logical_id": model_file.name, "sha256": None, "bytes": None, "population": "unknown"})
     observation_manifest = observation_info.get("manifest") or {}
-    observation_progress = _progress(observations, cfg)
+    observation_contract_valid = bool(observation_info.get("contract_valid"))
+    observation_progress = _progress(observations if observation_contract_valid else [], cfg)
     model_progress = _progress(models, cfg)
     _assign_progress(observations, observation_progress, cfg)
     _assign_progress(models, model_progress, cfg)
     observation_features: dict[int, dict[str, Any] | None] = {}
     for frame in observations:
-        eligible = (
-            _finite_points(frame.points)
-            and frame.quality is not None
-            and frame.quality >= cfg.min_quality
-            and not frame.censor
-            and frame.length is not None
-            and frame.length > cfg.min_length
-        )
+        eligible = observation_contract_valid and _progress_eligible(frame, cfg)
         observation_features[frame.index] = shape_observables(frame.points, sample_points=cfg.sample_points, min_length=cfg.min_length) if eligible else None  # type: ignore[arg-type]
     model_features: dict[int, dict[str, Any] | None] = {
         frame.index: shape_observables(frame.points, sample_points=cfg.sample_points, min_length=cfg.min_length) if _finite_points(frame.points) else None  # type: ignore[arg-type]
         for frame in models
     }
-    progress_alignment_possible = observation_progress.status == "ok" and model_progress.status == "ok"
+    progress_alignment_possible = observation_contract_valid and observation_progress.status == "ok" and model_progress.status == "ok"
     model_by_observation: dict[int, tuple[_Frame, float]] = {}
     if progress_alignment_possible:
         usable_models = [frame for frame in models if frame.q is not None and model_features.get(frame.index) is not None]
@@ -584,6 +604,10 @@ def scale_free_shape_comparison(
     reasons: list[str] = []
     if selected is None:
         reasons.append("no_selected_filament")
+    if not observation_info.get("manifest_validation_valid", False):
+        reasons.append("observation_manifest_validation_invalid")
+    if not (observation_info.get("centerline_validation") or {}).get("valid", False):
+        reasons.append("observation_centerline_contract_invalid")
     if not observations:
         reasons.append("no_observation_frames")
     if not models:
@@ -597,7 +621,9 @@ def scale_free_shape_comparison(
     if progress_alignment_possible and eligible_count > 0 and compared_count == 0:
         reasons.append("no_valid_growth_progress_matches")
     status = "computed" if compared_count > 0 else "input_quality_comparison_unavailable"
-    if not observations or selected is None:
+    if not observation_contract_valid:
+        status = "input_quality_invalid_observation_contract"
+    elif not observations or selected is None:
         status = "input_quality_no_centerline"
     elif observation_progress.status == "zero_growth_span" or model_progress.status == "zero_growth_span":
         status = "growth_progress_undefined_zero_span"
@@ -645,6 +671,11 @@ def scale_free_shape_comparison(
         "model_provenance": model_provenance,
         "observation_progress": observation_progress.to_dict(),
         "model_progress": model_progress.to_dict(),
+        "observation_validation": {
+            "manifest": observation_info.get("manifest_validation"),
+            "centerline": observation_info.get("centerline_validation"),
+            "contract_valid": observation_contract_valid,
+        },
         "progress_coordinate": "q=(L-L_initial)/(L_final-L_initial); nearest matching only; no interpolation",
         "spatial_normalization": "independent current contour length L; shape samples parameterized by s/L",
         "coverage": coverage,

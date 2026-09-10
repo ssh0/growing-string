@@ -81,6 +81,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                     "artifacts": {"centerline": {"path": "centerline.csv", "sha256": "centerline-hash", "bytes": 1}},
                     "video": {"fps": 2.0},
                     "run": {"frame_range": {"first": 0, "last": len(lengths) - 1, "stride": 1}},
+                    "validation": {"valid": True, "errors": [], "warnings": []},
                 }
             ),
             encoding="utf-8",
@@ -156,6 +157,64 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertIsNone(censored["observation_normalized_endpoint_distance"])
             self.assertIsNone(censored["normalized_shape_distance"])
             self.assertEqual(censored["lineage_status"], "matched")
+
+    def test_invalid_observation_contract_is_unavailable_but_retains_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0])
+            centerline = observation / "centerline.csv"
+            with centerline.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            rows.append(dict(rows[-1]))
+            with centerline.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            manifest_path = observation / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["validation"] = {"valid": False, "errors": ["duplicate point_id"]}
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            model = self._write_model(root, [1.0, 2.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertEqual(result["summary"]["rows"], 2)
+            self.assertEqual(result["summary"]["coverage"]["observation"]["count"], 2)
+            self.assertIn("observation_manifest_validation_invalid", result["summary"]["input_quality"]["reasons"])
+            self.assertIn("observation_centerline_contract_invalid", result["summary"]["input_quality"]["reasons"])
+            self.assertFalse(result["summary"]["observation_validation"]["contract_valid"])
+
+    def test_progress_uses_only_valid_uncensored_observation_lengths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 100.0], censored={2})
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "computed")
+            self.assertEqual([row["observation_q"] for row in result["rows"]], [0.0, 1.0, None])
+            self.assertEqual([row["model_frame"] for row in result["rows"]], [0, 2, None])
+            self.assertEqual(result["summary"]["observation_progress"]["valid_length_count"], 2)
+            self.assertEqual(result["summary"]["compared_rows"], 2)
+
+    def test_lineage_and_processed_coverage_survive_empty_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            (observation / "observation_summary.csv").write_text(
+                "frame,time,filament_id,n_points,centerline_exported,component_area,component_count_total,endpoint_count,junction_count,cycle_rank,length_px,endpoint_distance_px,curvature_mean_px_inv,curvature_max_px_inv,quality,quality_flags,censor\n",
+                encoding="utf-8",
+            )
+            (observation / "centerline.csv").write_text(
+                "time,filament_id,point_id,x,y,quality,frame,coordinate_system,quality_flags,censor\n",
+                encoding="utf-8",
+            )
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["rows"], 3)
+            self.assertEqual(result["summary"]["censored_rows"], 3)
+            self.assertEqual(result["summary"]["coverage"]["observation"]["count"], 3)
+            self.assertEqual([row["lineage_status"] for row in result["rows"]], ["initial_lineage", "matched", "matched"])
+            self.assertTrue(all(row["comparison_censor"] == 1 for row in result["rows"]))
 
     def test_zero_growth_is_explicitly_unavailable(self):
         with tempfile.TemporaryDirectory() as directory:
