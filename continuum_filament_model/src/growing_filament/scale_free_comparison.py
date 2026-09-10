@@ -896,8 +896,9 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         for row in summary_rows + centerline_rows + lineage_rows
         if str(row.get("filament_id", "")).strip()
     }
-    selection_error = filament_id is not None and filament_id.strip() not in available_filaments
-    selected = None if selection_error else (filament_id or _choose_filament(summary_rows) or _choose_filament(lineage_rows))
+    requested_filament_id = filament_id.strip() if filament_id is not None else None
+    selection_error = requested_filament_id is not None and requested_filament_id not in available_filaments
+    selected = None if selection_error else (requested_filament_id or _choose_filament(summary_rows) or _choose_filament(lineage_rows))
     summary_by_key = _index_frame_rows(summary_rows)
     lineage_by_key = _index_frame_rows(lineage_rows)
     grouped: dict[tuple[int, str], list[tuple[int, float, float]]] = {}
