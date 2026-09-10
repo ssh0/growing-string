@@ -818,7 +818,13 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
             "errors": manifest_errors + list(manifest_validation.get("errors", [])),
         }
     manifest_validation_valid = manifest_validation.get("valid") is True
-    selected = filament_id or _choose_filament(summary_rows) or _choose_filament(lineage_rows)
+    available_filaments = {
+        str(row.get("filament_id", "")).strip()
+        for row in summary_rows + centerline_rows + lineage_rows
+        if str(row.get("filament_id", "")).strip()
+    }
+    selection_error = filament_id is not None and filament_id.strip() not in available_filaments
+    selected = None if selection_error else (filament_id or _choose_filament(summary_rows) or _choose_filament(lineage_rows))
     summary_by_key = _index_frame_rows(summary_rows)
     lineage_by_key = _index_frame_rows(lineage_rows)
     grouped: dict[tuple[int, str], list[tuple[int, float, float]]] = {}
@@ -949,6 +955,7 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         "centerline_artifact": centerline_artifact,
         "lineage_artifact": lineage_artifact,
         "manifest_artifact_validation": manifest_artifact_validation,
+        "selection_error": selection_error,
         "frame_keys_valid": frame_keys_valid,
         "contract_valid": contract_valid,
         "summary_count": len(summary_rows),
@@ -1537,7 +1544,7 @@ def scale_free_shape_comparison(
     compared_count = sum(row["normalized_shape_distance"] is not None for row in output_rows)
     reasons: list[str] = []
     if selected is None:
-        reasons.append("no_selected_filament")
+        reasons.append("requested_filament_not_found" if observation_info.get("selection_error") else "no_selected_filament")
     if not observation_info.get("manifest_validation_valid", False):
         reasons.append("observation_manifest_validation_invalid")
     if not (observation_info.get("centerline_validation") or {}).get("valid", False):
