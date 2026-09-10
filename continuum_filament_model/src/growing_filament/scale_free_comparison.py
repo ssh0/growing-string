@@ -16,6 +16,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -314,8 +315,8 @@ def _procrustes_distance(first: np.ndarray, second: np.ndarray) -> float:
 def normalized_shape_distance(first: np.ndarray, second: np.ndarray, *, sample_points: int = 80, min_length: float = 1.0e-9) -> tuple[float | None, str | None]:
     """Compare two shapes after independent length normalization.
 
-    Translation, rotation, and endpoint orientation are nuisance degrees of
-    freedom.  Reflection is not removed because it changes a handed shape.
+    Translation, rotation, endpoint orientation, and reflection are nuisance
+    degrees of freedom because observation and model coordinate handedness is not registered.
     """
 
     if not _finite_points(first) or not _finite_points(second):
@@ -326,13 +327,19 @@ def normalized_shape_distance(first: np.ndarray, second: np.ndarray, *, sample_p
         return None, None
     first_sampled = _resample(first, sample_points) / first_length
     second_sampled = _resample(second, sample_points) / second_length
-    forward = _procrustes_distance(first_sampled, second_sampled)
-    reverse = _procrustes_distance(first_sampled, second_sampled[::-1])
-    if not math.isfinite(forward) and not math.isfinite(reverse):
+    reversed_sampled = second_sampled[::-1]
+    candidates = (
+        ("forward", second_sampled),
+        ("reverse", reversed_sampled),
+        ("forward_reflected", np.column_stack((second_sampled[:, 0], -second_sampled[:, 1]))),
+        ("reverse_reflected", np.column_stack((reversed_sampled[:, 0], -reversed_sampled[:, 1]))),
+    )
+    valid = [(orientation, _procrustes_distance(first_sampled, candidate)) for orientation, candidate in candidates]
+    valid = [(orientation, distance) for orientation, distance in valid if math.isfinite(distance)]
+    if not valid:
         return None, None
-    if forward <= reverse:
-        return forward, "forward"
-    return reverse, "reverse"
+    orientation, distance = min(valid, key=lambda item: item[1])
+    return distance, orientation
 
 
 def _progress_eligible(frame: _Frame, config: ScaleFreeConfig) -> bool:
@@ -582,7 +589,7 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
                     errors.append("position_offsets_end_mismatch")
                 if np.any(offsets < 0) or np.any(offsets > len(positions)):
                     errors.append("position_offsets_out_of_bounds")
-    except (OSError, EOFError, KeyError, TypeError, ValueError):
+    except (OSError, EOFError, KeyError, TypeError, ValueError, zipfile.BadZipFile):
         errors.append("npz_trajectory_arrays_unreadable")
     return {"valid": not errors, "errors": errors, "warnings": [], "source_frame_count": frame_count}
 
@@ -1283,7 +1290,7 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
             points = np.asarray(frame.points, dtype=float)
             length = _length(points) if points.ndim == 2 and points.shape[1] == 2 and len(points) >= 2 else None
             frames.append(_Frame(index, float(frame.time_s), points, length, source="model"))
-    except (OSError, EOFError, KeyError, TypeError, ValueError, IndexError) as exc:
+    except (OSError, EOFError, KeyError, TypeError, ValueError, IndexError, zipfile.BadZipFile) as exc:
         provenance["validation"] = {
             "valid": False,
             "errors": list(source_validation["errors"]) + [f"model_load_failed:{type(exc).__name__}"],

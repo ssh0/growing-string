@@ -193,6 +193,14 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
         for first, second in zip(coarse["mode_fractions"], subdivided["mode_fractions"]):
             self.assertAlmostEqual(first, second, places=10)
 
+    def test_reflection_is_a_recorded_nuisance_transform(self):
+        shape = np.asarray([[0.0, 0.0], [1.0, 0.4], [2.0, 0.0]])
+        reflected = shape * np.asarray([1.0, -1.0])
+        distance, orientation = normalized_shape_distance(shape, reflected)
+        self.assertIsNotNone(distance)
+        self.assertAlmostEqual(distance, 0.0, places=10)
+        self.assertIn(orientation, {"forward_reflected", "reverse_reflected"})
+
     def test_independent_pixel_and_model_rescaling_cancels(self):
         t = np.linspace(0.0, 1.0, 41)
         shape = np.column_stack((t, 0.25 * np.sin(2.0 * np.pi * t)))
@@ -218,7 +226,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertAlmostEqual(base[key], moved[key], places=10)
         distance, orientation = normalized_shape_distance(shape, transformed * 4.0)
         self.assertAlmostEqual(distance or 1.0, 0.0, places=10)
-        self.assertIn(orientation, {"forward", "reverse"})
+        self.assertIn(orientation, {"forward", "reverse", "forward_reflected", "reverse_reflected"})
 
     def test_growth_progress_alignment_does_not_use_time_registration(self):
         with tempfile.TemporaryDirectory() as directory:
