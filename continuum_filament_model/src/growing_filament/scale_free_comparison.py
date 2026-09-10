@@ -1273,6 +1273,17 @@ def _validate_model_scope(
                                 member_source = _validate_npz_source(member_file)
                                 if not member_source.get("valid", False):
                                     errors.append("sensitivity_member_artifact_invalid")
+                                else:
+                                    try:
+                                        with np.load(member_file, allow_pickle=False) as member_archive:
+                                            member_metadata_json = member_archive["metadata_json"]
+                                        member_metadata = json.loads(str(member_metadata_json.item() if member_metadata_json.ndim == 0 else member_metadata_json.tolist()))
+                                        member_parameters = member_metadata.get("parameters") if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("parameters"), Mapping) else None
+                                        member_scope = _validate_model_scope(member_file, member_metadata if isinstance(member_metadata, Mapping) else None, member_parameters)
+                                        if not member_scope.get("valid", False) or member_scope.get("population") != "stage2_deterministic":
+                                            errors.append("sensitivity_member_stage2_scope_invalid")
+                                    except (OSError, KeyError, TypeError, ValueError, OverflowError, zipfile.BadZipFile):
+                                        errors.append("sensitivity_member_metadata_unreadable")
                             except OSError:
                                 errors.append("sensitivity_member_artifact_hash_unreadable")
                     if not isinstance(provenance_member.get("trajectory_sha256"), str) or provenance_member.get("trajectory_sha256") != trajectory_hash:
@@ -1487,7 +1498,7 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
                     "failure_reason": _json_sanitize(model_metadata.get("failure_reason") or model_manifest.get("failure_reason")),
                 }
             )
-        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        except (OSError, KeyError, TypeError, ValueError, OverflowError, json.JSONDecodeError):
             provenance["metadata_status"] = "unavailable"
     provenance["scope_validation"] = scope_validation
     failure_reason = provenance.get("failure_reason")
@@ -1595,7 +1606,7 @@ def scale_free_shape_comparison(
     observation_contract_valid = bool(observation_info.get("contract_valid"))
     model_validation = model_provenance.get("validation") or {}
     model_contract_valid = bool(models) and bool(model_validation.get("valid"))
-    observation_progress = _progress(observations if observation_contract_valid else [], cfg)
+    observation_progress = _progress(observations if observation_contract_valid and not observation_info.get("selection_error", False) else [], cfg)
     model_progress = _progress(models if model_contract_valid else [], cfg)
     _assign_progress(observations, observation_progress, cfg)
     _assign_progress(models, model_progress, cfg)

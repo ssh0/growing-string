@@ -274,6 +274,7 @@ def run_bounded_comparison(
         "configuration_errors": configuration_errors,
         "comparison_suppressed": bool(configuration_errors) or extraction.get("status") != "extracted" or any(
             (record.get("comparison") or {}).get("status", "").startswith("input_quality_")
+            or (record.get("comparison") or {}).get("compared_rows", 0) == 0
             for record in model_records
         ),
         "model_artifacts": {
