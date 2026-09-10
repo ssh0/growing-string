@@ -172,14 +172,14 @@ censoredな場合の定量overlay・parameter fittingは抑制します。動画
 ### 登録に依存しない形態比較
 
 `growing_filament.scale_free_comparison` と
-`benchmarks/scale_free_shape_comparison.py` は、`img/gray5.mp4` の既存中心線抽出と
-Stage 2 free/free 軌跡を、pixel/model-unit および video/model-time 登録なしで比較します。
-輪郭長で各系列を独立に正規化し、`q=(L-L_initial)/(L_final-L_initial)` と `s/L` を使って
-形態遷移を対応付けます。quality、censor、lineage、frame/time coverage、入力・モデル・
-設定・revision hashを保存し、物性fit・parameter identification・`model_inadequacy`判定は
-抑制します。zero-growth、non-monotonic、中心線不適格時は比較不能のdiagnosticを残し、
-補間や絶対登録の推測をしません。詳細は
-`notes/scale_free_shape_comparison.md` を参照してください。
+`benchmarks/scale_free_shape_comparison.py` は、`img/gray5.mp4` から
+`run_pipeline()` が抽出した中心線と Stage 2 free/free 軌跡を、pixel/model-unit および
+video/model-time 登録なしで比較します。輪郭長で各系列を独立に正規化し、
+`q=(L-L_initial)/(L_final-L_initial)` と `s/L` を使って形態遷移を対応付けます。
+quality、censor、lineage、frame/time coverage、入力・モデル・設定・revision hashを保存し、
+物性fit・parameter identification・`model_inadequacy`判定は抑制します。zero-growth、
+non-monotonic、中心線不適格時は比較不能のdiagnosticを残し、補間や絶対登録の推測をしません。
+詳細は `notes/scale_free_shape_comparison.md` を参照してください。
 
 ## P0-B：線形mode・時間／空間数値ゲート
 

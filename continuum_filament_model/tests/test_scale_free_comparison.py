@@ -13,7 +13,6 @@ from continuum_filament_model.video_compare import build_parser
 from growing_filament.model import FilamentState
 from growing_filament.reproducibility import canonical_state_hash, event_sequence_hash
 from growing_filament.scale_free_comparison import (
-    ScaleFreeConfig,
     _trajectory_sha256,
     normalized_shape_distance,
     scale_free_shape_comparison,

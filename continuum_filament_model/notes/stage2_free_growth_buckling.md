@@ -163,15 +163,10 @@ pixel/model scaleとtime registrationを明示した場合だけ定量比較へ�
 
 ## 登録に依存しない形態比較
 
-次段階の独立モード `growing_filament.scale_free_comparison` は、Stage 2 の free/free
-軌跡と `img/gray5.mp4` の既存抽出中心線を、絶対 pixel/model-unit 登録および
-video/model-time 登録なしで比較する。両系列の現在輪郭長で座標を独立に正規化し、
-`q=(L-L_initial)/(L_final-L_initial)` の最近傍だけを対応付ける。`s/L` による輪郭形状、
-endpoint distance、`R_g/L`、peak deflection、curvature RMS×L、mode fraction、
-normalized shape distance と quality/censor/lineage を保存する。
+独立モード `growing_filament.scale_free_comparison` は、Stage 2 の free/free 軌跡と
+`img/gray5.mp4` から `run_pipeline()` が抽出した中心線を、絶対 pixel/model-unit 登録および
+video/model-time 登録なしで比較する。これは形態専用で、品質・censor・lineageを保持し、
+補間や物性fit、`model_inadequacy` 判定を行わない。
 
-このモードの結果は scale-free morphology evidence であり、calibrated dynamics、物性
-fit、時刻同期、parameter identification の証拠ではない。品質不良、missing、lineage境界、
-zero-growth、non-monotonic length、または censor により valid centerline がなくなった
-場合は、比較不能の diagnostic を出して補間や推測を行わない。`model_inadequacy` は判定
-しない。詳細な schema と bounded runner は `notes/scale_free_shape_comparison.md` を参照する。
+入力契約、進行度 `q`、出力schema、bounded runner、実行済み gray5 結果は
+`notes/scale_free_shape_comparison.md` を正本とする。

@@ -36,7 +36,8 @@ physical time とは扱わない。
 `new_lineage`、`reconnected_after_missing`、missing、branch/loop、low quality、ROI/image
 boundary 等の既存 censor はそのまま保持し、shape distance の分母から除外する。モデルは free/free・一様成長・非接触 Stage 2 の deterministic baseline、または
 明示的な `initial_condition_sensitivity` protocol（perturbation range、metrics、acceptance
-criteria付き）に限定する。`exploratory_replicate` は deterministic として受理しない。
+criteria、および内部 run ID と artifact SHA-256 による検証済み outer linkage 付き）に限定する。
+`exploratory_replicate` は deterministic として受理しない。
 video alignment は translation/rotation/endpoint orientation の shape alignment として記録し、
 initial-condition sensitivity や物性 fitとは分離する。`model_inadequacy`、parameter
 identification、calibrated dynamics は、このモードの成果物に作成しない。
@@ -76,8 +77,8 @@ python continuum_filament_model/video_compare.py scale-free \
 ```
 
 実際の Stage 2 run と gray5 を一度に比較する bounded runner は次である。既定で
-`fast_growth_low_bend` と `fast_growth_high_bend` の deterministic run を実行する。
-trajectory、raw centerline、per-case CSV は一時 artifact とし、root の `compact_summary.json`、
+`fast_growth_low_bend` と `fast_growth_high_bend` の deterministic run を実行し、動画から
+中心線を抽出する。trajectory、raw centerline、per-case CSV は一時 artifact とし、root の `compact_summary.json`、
 `summary.csv`、`compact_manifest.json` のみをレビュー対象にする。
 
 ```bash
