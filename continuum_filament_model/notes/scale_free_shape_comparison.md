@@ -91,14 +91,13 @@ python continuum_filament_model/benchmarks/scale_free_shape_comparison.py \
 ### gray5 bounded 実行記録
 
 コミット済み `gray5.mp4` を使い、source revision
-`2494b4f1c21bc6316190eb10e61e05878903d07d` で上記の2 deterministic fixtureを
-`t_end=4.0` の長い Stage 2 軌跡と比較した。入力は `extracted`、24 sampled frames、
-20 candidates が censor となった。両ケースとも観測長の `non_monotonic_lengths` と
-有効中心線0件により `growth_progress_undefined_non_monotonic`、`compared_rows=0` となった。
-これは scale-free agreement の証拠ではなく、中心線品質による比較不能を明示した結果である。
-動画の SHA-256、設定・shape設定 SHA-256、model runのSHA-256、external artifact IDは
-`results/scale_free_shape_comparison/compact_summary.json` と
-`compact_manifest.json` に保存した。
+`1c8510d057b229df8169455422f799914be59f22` で上記の2 deterministic fixtureを
+比較した。入力は `extracted`、24 sampled frames、20 candidates が censor となった。
+両ケースとも有効中心線0件と観測長の `insufficient_length_observations` により
+`input_quality_no_eligible_centerline`、`compared_rows=0` となった。これは scale-free
+agreement の証拠ではなく、中心線品質による比較不能を明示した結果である。動画の
+SHA-256、設定・shape設定 SHA-256、model runのSHA-256、external artifact IDは
+`results/scale_free_shape_comparison/compact_summary.json` と `compact_manifest.json` に保存した。
 
 成果物の schema version は `continuum-filament-scale-free-shape-0.1`、runner は
 `continuum-filament-scale-free-runner-0.1`。manifest の `registration.status` は常に

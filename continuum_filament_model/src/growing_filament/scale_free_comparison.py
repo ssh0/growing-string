@@ -555,18 +555,21 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
         if offsets.ndim != 1 or len(offsets) != frame_count + 1:
             errors.append("position_offsets_length_mismatch")
         else:
-            if not np.isfinite(offsets).all():
+            offsets_finite = bool(np.isfinite(offsets).all())
+            offsets_integer = bool(np.equal(offsets, np.floor(offsets)).all()) if offsets_finite else False
+            if not offsets_finite:
                 errors.append("position_offsets_non_finite")
-            if not np.equal(offsets, np.floor(offsets)).all():
+            if not offsets_integer:
                 errors.append("position_offsets_non_integer")
-            if len(offsets) == 0 or int(offsets[0]) != 0:
-                errors.append("position_offsets_must_start_at_zero")
-            if np.any(np.diff(offsets) < 0):
-                errors.append("position_offsets_must_be_monotonic")
-            if int(offsets[-1]) != len(positions):
-                errors.append("position_offsets_end_mismatch")
-            if np.any(offsets < 0) or np.any(offsets > len(positions)):
-                errors.append("position_offsets_out_of_bounds")
+            if offsets_finite and offsets_integer:
+                if len(offsets) == 0 or int(offsets[0]) != 0:
+                    errors.append("position_offsets_must_start_at_zero")
+                if np.any(np.diff(offsets) < 0):
+                    errors.append("position_offsets_must_be_monotonic")
+                if int(offsets[-1]) != len(positions):
+                    errors.append("position_offsets_end_mismatch")
+                if np.any(offsets < 0) or np.any(offsets > len(positions)):
+                    errors.append("position_offsets_out_of_bounds")
     except (OSError, EOFError, KeyError, TypeError, ValueError):
         errors.append("npz_trajectory_arrays_unreadable")
     return {"valid": not errors, "errors": errors, "warnings": [], "source_frame_count": frame_count}
@@ -1129,7 +1132,10 @@ def _validate_model_scope(
                 pass
         for key in ("contact_stiffness", "diameter", "growth_rate", "energy_tolerance"):
             try:
-                if float(parameter_source.get(key)) < 0.0:
+                value = float(parameter_source.get(key))
+                if key in {"contact_stiffness", "diameter"} and value != 0.0:
+                    errors.append(f"model_contact_parameter_nonzero:{key}")
+                elif key in {"growth_rate", "energy_tolerance"} and value < 0.0:
                     errors.append(f"model_parameter_negative:{key}")
             except (TypeError, ValueError):
                 pass
@@ -1242,15 +1248,23 @@ def _validate_model_scope(
             aggregate = protocol.get("aggregate_metrics")
             acceptance = protocol.get("acceptance_criteria")
             if isinstance(aggregate, Mapping) and isinstance(acceptance, Mapping) and isinstance(members, list):
-                if "normalized_shape_distance" in protocol.get("metrics", []):
-                    values = [float(member.get("result", {}).get("metrics", {}).get("normalized_shape_distance")) for member in members if isinstance(member, Mapping)]
-                    expected_delta = max(values) - min(values) if values else None
-                    aggregate_delta = aggregate.get("max_normalized_shape_distance_delta")
-                    if expected_delta is None or not isinstance(aggregate_delta, (int, float)) or abs(float(aggregate_delta) - expected_delta) > 1.0e-9:
-                        errors.append("sensitivity_aggregate_metric_mismatch")
-                    threshold = acceptance.get("max_metric_delta")
-                    if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or expected_delta is None or (protocol.get("accepted") is not (expected_delta <= float(threshold))):
-                        errors.append("sensitivity_acceptance_mismatch")
+                all_metrics_accepted = True
+                for metric_name in protocol.get("metrics", []):
+                    try:
+                        values = [float(member["result"]["metrics"][metric_name]) for member in members]
+                        expected_delta = max(values) - min(values)
+                        aggregate_key = f"max_{metric_name}_delta"
+                        aggregate_delta = aggregate.get(aggregate_key)
+                        if not isinstance(aggregate_delta, (int, float)) or isinstance(aggregate_delta, bool) or abs(float(aggregate_delta) - expected_delta) > 1.0e-9:
+                            errors.append(f"sensitivity_aggregate_metric_mismatch:{metric_name}")
+                        threshold = acceptance.get(f"max_{metric_name}_delta", acceptance.get("max_metric_delta"))
+                        if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or expected_delta > float(threshold):
+                            all_metrics_accepted = False
+                    except (KeyError, TypeError, ValueError):
+                        errors.append(f"sensitivity_aggregate_metric_uncomputable:{metric_name}")
+                        all_metrics_accepted = False
+                if protocol.get("accepted") is not all_metrics_accepted:
+                    errors.append("sensitivity_acceptance_mismatch")
             if not isinstance(protocol.get("acceptance_criteria"), Mapping) or not protocol.get("acceptance_criteria") or protocol.get("accepted") is not True:
                 errors.append("sensitivity_acceptance_missing_or_failed")
     if scope.get("boundary") != "free/free":
