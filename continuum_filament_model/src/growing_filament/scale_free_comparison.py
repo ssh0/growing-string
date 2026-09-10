@@ -1038,7 +1038,7 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
     else:
         errors.append("model_manifest_not_mapping")
     scope: dict[str, Any] = {}
-    for key in ("benchmark", "boundary", "contact_enabled", "physical_scope"):
+    for key in ("benchmark", "boundary", "contact_enabled", "physical_scope", "run_kind", "sensitivity_protocol"):
         values = [source[key] for source in sources if key in source]
         if not values:
             continue
@@ -1051,6 +1051,25 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
         scope[key] = first_value
     if scope.get("benchmark") != "stage2_free_free_growth_relaxation_buckling":
         errors.append("unsupported_stage2_benchmark")
+    run_kind = scope.get("run_kind")
+    baseline_kinds = {"deterministic_fixture", "numerical_refinement", "parameter_contrast"}
+    population = "stage2_deterministic"
+    if run_kind not in baseline_kinds and run_kind != "initial_condition_sensitivity":
+        errors.append("unsupported_model_run_kind")
+    if run_kind == "initial_condition_sensitivity":
+        population = "initial_condition_sensitivity"
+        protocol = scope.get("sensitivity_protocol")
+        if not isinstance(protocol, Mapping):
+            errors.append("missing_sensitivity_protocol")
+        else:
+            if protocol.get("parameter") != "initial_condition":
+                errors.append("invalid_sensitivity_parameter")
+            if not protocol.get("perturbation_range"):
+                errors.append("missing_sensitivity_perturbation_range")
+            if not isinstance(protocol.get("metrics"), list) or not protocol.get("metrics"):
+                errors.append("missing_sensitivity_metrics")
+            if not isinstance(protocol.get("acceptance_criteria"), Mapping) or not protocol.get("acceptance_criteria"):
+                errors.append("missing_sensitivity_acceptance_criteria")
     if scope.get("boundary") != "free/free":
         errors.append("model_boundary_is_not_free_free")
     if scope.get("contact_enabled") is not False:
@@ -1064,7 +1083,14 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
     physical_scope = scope.get("physical_scope")
     if not isinstance(physical_scope, list) or set(physical_scope) != required_scope:
         errors.append("model_physical_scope_not_exact_stage2_allowlist")
-    return {"valid": not errors, "errors": errors, "warnings": [], "scope": scope}
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "warnings": [],
+        "scope": scope,
+        "population": population,
+        "sensitivity_protocol": scope.get("sensitivity_protocol"),
+    }
 
 
 def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Frame], dict[str, Any]]:
@@ -1154,7 +1180,8 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
     provenance["validation"]["scope"] = scope_validation
     provenance["validation"]["valid"] = not validation_errors
     provenance["validation"]["errors"] = validation_errors
-    provenance["population"] = "stage2_deterministic" if scope_validation.get("valid") else "unclassified"
+    provenance["population"] = scope_validation.get("population") if scope_validation.get("valid") else "unclassified"
+    provenance["sensitivity_protocol"] = scope_validation.get("sensitivity_protocol")
     return frames, provenance
 
 
@@ -1408,6 +1435,25 @@ def scale_free_shape_comparison(
         "observation_progress": observation_progress.to_dict(),
         "model_progress": model_progress.to_dict(),
         "model_validation": model_validation,
+        "video_alignment": {
+            "status": "shape_alignment_only",
+            "fit_performed": compared_count > 0,
+            "fit_components": ["translation", "rotation", "endpoint_orientation"],
+            "absolute_registration_used": False,
+            "distinguished_from_initial_condition_sensitivity": True,
+        },
+        "initial_condition_sensitivity": {
+            "population": model_provenance.get("population"),
+            "protocol": model_provenance.get("sensitivity_protocol"),
+            "metrics": (
+                (model_provenance.get("sensitivity_protocol") or {}).get("metrics", [])
+                if model_provenance.get("population") == "initial_condition_sensitivity" else []
+            ),
+            "acceptance_criteria": (
+                (model_provenance.get("sensitivity_protocol") or {}).get("acceptance_criteria")
+                if model_provenance.get("population") == "initial_condition_sensitivity" else None
+            ),
+        },
         "observation_validation": {
             "manifest": observation_info.get("manifest_validation"),
             "centerline": observation_info.get("centerline_validation"),
@@ -1473,6 +1519,8 @@ def scale_free_shape_comparison(
         "source_revision": revision,
         "config_sha256": config_hash,
         "model_population": model_provenance.get("population"),
+        "video_alignment": compact["video_alignment"],
+        "initial_condition_sensitivity": compact["initial_condition_sensitivity"],
         "status": status,
         "eligible_observation_rows": eligible_count,
         "compared_rows": compared_count,

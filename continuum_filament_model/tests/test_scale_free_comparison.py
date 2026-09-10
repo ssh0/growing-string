@@ -367,6 +367,49 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
             self.assertIn("model_metadata_not_mapping", result["summary"]["model_validation"]["errors"])
 
+    def test_exploratory_replicate_is_not_deterministic_stage2(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0])
+            model = self._write_model(root, [1.0, 2.0])
+            with np.load(model, allow_pickle=False) as archive:
+                positions = archive["positions"]
+                offsets = archive["position_offsets"]
+                times = archive["times"]
+                metadata = json.loads(str(archive["metadata_json"].item()))
+            metadata["metadata"]["run_kind"] = "exploratory_replicate"
+            np.savez(model, positions=positions, position_offsets=offsets, times=times, metadata_json=np.asarray(json.dumps(metadata)))
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertIn("unsupported_model_run_kind", result["summary"]["model_validation"]["errors"])
+
+    def test_initial_condition_sensitivity_protocol_is_labeled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0])
+            model = self._write_model(root, [1.0, 2.0])
+            with np.load(model, allow_pickle=False) as archive:
+                positions = archive["positions"]
+                offsets = archive["position_offsets"]
+                times = archive["times"]
+                metadata = json.loads(str(archive["metadata_json"].item()))
+            metadata["metadata"].update(
+                {
+                    "run_kind": "initial_condition_sensitivity",
+                    "sensitivity_protocol": {
+                        "parameter": "initial_condition",
+                        "perturbation_range": {"amplitude_fraction": [-0.1, 0.1]},
+                        "metrics": ["normalized_shape_distance", "mode_fractions"],
+                        "acceptance_criteria": {"max_metric_delta": 0.2},
+                    },
+                }
+            )
+            np.savez(model, positions=positions, position_offsets=offsets, times=times, metadata_json=np.asarray(json.dumps(metadata)))
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["model_population"], "initial_condition_sensitivity")
+            self.assertEqual(result["summary"]["initial_condition_sensitivity"]["metrics"], ["normalized_shape_distance", "mode_fractions"])
+            self.assertTrue(result["summary"]["video_alignment"]["distinguished_from_initial_condition_sensitivity"])
+
     def test_invalid_model_contract_is_unavailable_but_retains_coverage(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

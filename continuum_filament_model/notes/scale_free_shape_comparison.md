@@ -34,9 +34,12 @@ physical time とは扱わない。
 - 回転・平行移動・端点方向を除いた normalized shape distance（valid な matched 行のみ）
 
 `new_lineage`、`reconnected_after_missing`、missing、branch/loop、low quality、ROI/image
-boundary 等の既存 censor はそのまま保持し、shape distance の分母から除外する。モデルは
-free/free・一様成長・非接触 Stage 2 の deterministic run に限定する。`model_inadequacy`、
-parameter identification、calibrated dynamics は、このモードの成果物に作成しない。
+boundary 等の既存 censor はそのまま保持し、shape distance の分母から除外する。モデルは free/free・一様成長・非接触 Stage 2 の deterministic baseline、または
+明示的な `initial_condition_sensitivity` protocol（perturbation range、metrics、acceptance
+criteria付き）に限定する。`exploratory_replicate` は deterministic として受理しない。
+video alignment は translation/rotation/endpoint orientation の shape alignment として記録し、
+initial-condition sensitivity や物性 fitとは分離する。`model_inadequacy`、parameter
+identification、calibrated dynamics は、このモードの成果物に作成しない。
 
 次の状態は推測で補わず、`status` と `input_quality.reasons` に明示する。manifest の `validation.valid`、中心線の厳密な frame/time/point/censor/quality contract、または lineage の整合性が invalid の場合は、中心線の行・lineage・frame coverage を保持したまま比較不能とする。成長進行度の端点と `q` は、有効・非censor・許可された lineage の中心線だけから計算し、除外されたフレームへ補間しない。曲率 RMS は固定弧長サンプリング後に計算し、入力点の細分割に依存させない。
 
