@@ -91,7 +91,7 @@ python continuum_filament_model/benchmarks/scale_free_shape_comparison.py \
 ### gray5 bounded 実行記録
 
 コミット済み `gray5.mp4` を使い、source revision
-`ad461ca43e47aa784755f8293ed5991689e2c5d9` で上記の2 deterministic fixtureを
+`b4d38ded1819fcab7d1e8066a2e08729d3636800` で上記の2 deterministic fixtureを
 比較した。入力は `extracted`、24 sampled frames、20 candidates が censor となった。
 両ケースとも有効中心線0件と観測長の `insufficient_length_observations` により
 `input_quality_no_eligible_centerline`、`compared_rows=0` となった。これは scale-free
