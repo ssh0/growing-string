@@ -1258,6 +1258,8 @@ def _validate_model_scope(
                         errors.append("sensitivity_member_trajectory_hash_invalid")
                     member_hashes.add(trajectory_hash if isinstance(trajectory_hash, str) else "")
                     artifact_path = member.get("artifact_path")
+                    if not isinstance(artifact_path, str) or not artifact_path or Path(artifact_path).suffix.lower() != ".npz" or Path(artifact_path).is_absolute() or ".." in Path(artifact_path).parts:
+                        errors.append("sensitivity_member_npz_required")
                     if not isinstance(artifact_path, str) or not artifact_path or Path(artifact_path).is_absolute() or ".." in Path(artifact_path).parts:
                         errors.append("sensitivity_member_artifact_path_invalid")
                     else:
@@ -1268,6 +1270,9 @@ def _validate_model_scope(
                             try:
                                 if sha256_file(member_file) != trajectory_hash:
                                     errors.append("sensitivity_member_artifact_hash_mismatch")
+                                member_source = _validate_npz_source(member_file)
+                                if not member_source.get("valid", False):
+                                    errors.append("sensitivity_member_artifact_invalid")
                             except OSError:
                                 errors.append("sensitivity_member_artifact_hash_unreadable")
                     if not isinstance(provenance_member.get("trajectory_sha256"), str) or provenance_member.get("trajectory_sha256") != trajectory_hash:
@@ -1596,13 +1601,19 @@ def scale_free_shape_comparison(
     _assign_progress(models, model_progress, cfg)
     observation_features: dict[int, dict[str, Any] | None] = {}
     for frame in observations:
-        eligible = observation_contract_valid and _progress_eligible(frame, cfg)
+        eligible = observation_contract_valid and not observation_info.get("selection_error", False) and _progress_eligible(frame, cfg)
         observation_features[frame.index] = shape_observables(frame.points, sample_points=cfg.sample_points, min_length=cfg.min_length) if eligible else None  # type: ignore[arg-type]
     model_features: dict[int, dict[str, Any] | None] = {
         frame.index: shape_observables(frame.points, sample_points=cfg.sample_points, min_length=cfg.min_length) if _finite_points(frame.points) else None  # type: ignore[arg-type]
         for frame in models
     }
-    progress_alignment_possible = observation_contract_valid and model_contract_valid and observation_progress.status == "ok" and model_progress.status == "ok"
+    progress_alignment_possible = (
+        observation_contract_valid
+        and not observation_info.get("selection_error", False)
+        and model_contract_valid
+        and observation_progress.status == "ok"
+        and model_progress.status == "ok"
+    )
     model_by_observation: dict[int, tuple[_Frame, float]] = {}
     if progress_alignment_possible:
         usable_models = [frame for frame in models if frame.q is not None and model_features.get(frame.index) is not None]
@@ -1832,8 +1843,13 @@ def scale_free_shape_comparison(
     _write_json(out_dir / "scale_free_comparison.json", compact)
     artifacts = {
         "comparison_csv": _file_record(out_dir / "scale_free_comparison.csv"),
-        "comparison_json": _file_record(out_dir / "scale_free_comparison.json"),
+        "comparison_json": {"path": "scale_free_comparison.json", "bytes": None, "sha256": None},
     }
+    compact["artifacts"] = artifacts
+    compact["manifest_logical_id"] = "scale_free_comparison_manifest.json"
+    _write_json(out_dir / "scale_free_comparison.json", compact)
+    manifest_artifacts = dict(artifacts)
+    manifest_artifacts["comparison_json"] = _file_record(out_dir / "scale_free_comparison.json")
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "comparison_mode": "scale_free_shape",
@@ -1850,15 +1866,13 @@ def scale_free_shape_comparison(
         "eligible_observation_rows": eligible_count,
         "compared_rows": compared_count,
         "censored_rows": compact["censored_rows"],
-        "artifacts": artifacts,
+        "artifacts": manifest_artifacts,
         "external_artifact_ids": dict(external_artifact_ids or {}),
         "registration": compact["registration"],
         "spatial_normalization": compact["spatial_normalization"],
         "progress_coordinate": compact["progress_coordinate"],
     }
     _write_json(out_dir / "scale_free_comparison_manifest.json", manifest)
-    compact["artifacts"] = artifacts
-    compact["manifest_logical_id"] = "scale_free_comparison_manifest.json"
     return {"summary": compact, "rows": output_rows, "manifest": manifest}
 
 

@@ -473,10 +473,10 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 times = archive["times"]
                 steps = archive["steps"]
                 metadata = json.loads(str(archive["metadata_json"].item()))
-            baseline_artifact = root / "member-baseline.bin"
-            plus_artifact = root / "member-plus.bin"
-            baseline_artifact.write_bytes(b"baseline-member")
-            plus_artifact.write_bytes(b"plus-member")
+            (root / "member-baseline").mkdir()
+            (root / "member-plus").mkdir()
+            baseline_artifact = self._write_model(root / "member-baseline", [1.0, 2.0])
+            plus_artifact = self._write_model(root / "member-plus", [1.1, 2.1])
             baseline_hash = hashlib.sha256(baseline_artifact.read_bytes()).hexdigest()
             plus_hash = hashlib.sha256(plus_artifact.read_bytes()).hexdigest()
             baseline_metrics = {"normalized_shape_distance": 0.0}
@@ -491,7 +491,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                             {
                                 "id": "baseline",
                                 "perturbation_value": 0.0,
-                                "artifact_path": "member-baseline.bin",
+                                "artifact_path": "member-baseline/model.npz",
                                 "trajectory_sha256": baseline_hash,
                                 "provenance": {"seed": 0, "trajectory_sha256": baseline_hash},
                                 "result": {"metrics": baseline_metrics, "metrics_sha256": hashlib.sha256(json.dumps(baseline_metrics, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
@@ -499,7 +499,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                             {
                                 "id": "plus",
                                 "perturbation_value": 0.1,
-                                "artifact_path": "member-plus.bin",
+                                "artifact_path": "member-plus/model.npz",
                                 "trajectory_sha256": plus_hash,
                                 "provenance": {"seed": 1, "trajectory_sha256": plus_hash},
                                 "result": {"metrics": plus_metrics, "metrics_sha256": hashlib.sha256(json.dumps(plus_metrics, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},

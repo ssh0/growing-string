@@ -272,7 +272,10 @@ def run_bounded_comparison(
         "video": report["video"],
         "model_run_names": [record["run_name"] for record in model_records],
         "configuration_errors": configuration_errors,
-        "comparison_suppressed": bool(configuration_errors),
+        "comparison_suppressed": bool(configuration_errors) or extraction.get("status") != "extracted" or any(
+            (record.get("comparison") or {}).get("status", "").startswith("input_quality_")
+            for record in model_records
+        ),
         "model_artifacts": {
             record["run_name"]: {
                 "logical_id": record.get("model_logical_id"),
