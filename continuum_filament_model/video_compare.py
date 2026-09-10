@@ -72,7 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
         if command != "scale-free":
             child.add_argument("--video", required=command in {"extract", "render", "all"})
         child.add_argument("--output", required=True, help="analysis/artifact directory")
-        child.add_argument("--model", help="trajectory .npz, model centerline CSV, or JSON")
+        child.add_argument("--model", help="provenance-bearing Stage 2 trajectory .npz")
         if command != "scale-free":
             child.add_argument("--config", help="segmentation JSON")
             child.add_argument("--registration", help="registration JSON for calibrated comparison only")

@@ -44,7 +44,7 @@ identification、calibrated dynamics は、このモードの成果物に作成�
 次の状態は推測で補わず、`status` と `input_quality.reasons` に明示する。manifest の `validation.valid`、中心線の厳密な frame/time/point/censor/quality contract、または lineage の整合性が invalid の場合は、中心線の行・lineage・frame coverage を保持したまま比較不能とする。成長進行度の端点と `q` は、有効・非censor・許可された lineage の中心線だけから計算し、除外されたフレームへ補間しない。曲率 RMS は固定弧長サンプリング後に計算し、入力点の細分割に依存させない。
 
 - manifest、観測中心線 contract、または観測 frame key が invalid：`input_quality_invalid_observation_contract`
-- モデル中心線 contract、model CSV、または JSON の frame が invalid：`input_quality_invalid_model_contract`（フレームがない場合は `model_centerline_unavailable`）
+- provenance-bearing Stage 2 NPZ が invalid、または unsupported model format：`input_quality_invalid_model_contract`（フレームがない場合は `model_centerline_unavailable`）
 - lineage artifact が欠落または summary/centerline と整合しない：`input_quality_invalid_observation_contract`
 - 有効な長さが2点未満：`insufficient_length_observations`
 - 初期・終端長の差がほぼ0：`zero_growth_span`

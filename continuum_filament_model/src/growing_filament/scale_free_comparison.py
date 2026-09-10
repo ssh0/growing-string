@@ -966,85 +966,6 @@ def _validate_model_frames(frames: Sequence[_Frame], config: ScaleFreeConfig) ->
     }
 
 
-def _read_json_model_frames(path: Path) -> tuple[list[_Frame], dict[str, Any]]:
-    value = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(value, dict) and isinstance(value.get("trajectory"), list):
-        source_frames = value["trajectory"]
-    elif isinstance(value, dict) and isinstance(value.get("frames"), list):
-        source_frames = value["frames"]
-    else:
-        return [], {"valid": False, "errors": ["no_model_centerline_frames"], "warnings": [], "source_frame_count": 0}
-    frames: list[_Frame] = []
-    for index, source_frame in enumerate(source_frames):
-        if not isinstance(source_frame, Mapping):
-            frames.append(_Frame(index, None, None, None, source="model"))
-            continue
-        if "time" not in source_frame and "time_s" not in source_frame:
-            time_s = None
-        else:
-            raw_time = source_frame.get("time", source_frame.get("time_s"))
-            try:
-                time_s = float(raw_time)
-            except (TypeError, ValueError):
-                time_s = None
-        if time_s is None:
-            raw_points = source_frame.get("points", source_frame.get("positions", []))
-        else:
-            raw_points = source_frame.get("points", source_frame.get("positions", []))
-        try:
-            points = np.asarray(raw_points, dtype=float)
-        except (TypeError, ValueError):
-            points = None
-        length = _length(points) if points is not None and points.ndim == 2 and points.shape[1] == 2 and len(points) >= 2 else None
-        frames.append(_Frame(index, time_s, points, length, source="model"))
-    return frames, {"valid": True, "errors": [], "warnings": [], "source_frame_count": len(source_frames)}
-
-
-def _validate_model_csv_source(path: Path) -> dict[str, Any]:
-    required = {"time", "x", "y"}
-    errors: list[str] = []
-    row_count = 0
-    point_ids_by_time: dict[float, list[int]] = {}
-    with path.open(newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        fieldnames = set(reader.fieldnames or [])
-        missing_columns = sorted(required.difference(fieldnames))
-        if missing_columns:
-            errors.append(f"missing required columns {','.join(missing_columns)}")
-        for line_number, row in enumerate(reader, start=2):
-            row_count += 1
-            missing_values = sorted(field for field in required if field not in row or row[field] in (None, ""))
-            if missing_values:
-                errors.append(f"line {line_number}: missing required values {','.join(missing_values)}")
-                continue
-            try:
-                time_s = float(row["time"])
-                values = [time_s, float(row["x"]), float(row["y"])]
-            except (TypeError, ValueError):
-                errors.append(f"line {line_number}: invalid time or coordinate")
-                continue
-            if not np.isfinite(values).all():
-                errors.append(f"line {line_number}: non-finite time or coordinate")
-            if "point_id" in fieldnames:
-                try:
-                    point_id = int(row["point_id"])
-                except (TypeError, ValueError):
-                    errors.append(f"line {line_number}: invalid point_id")
-                else:
-                    point_ids_by_time.setdefault(time_s, []).append(point_id)
-    if "point_id" in fieldnames:
-        for time_s, point_ids in point_ids_by_time.items():
-            expected = list(range(len(point_ids)))
-            if point_ids != expected:
-                errors.append(f"time {time_s}: point_id must be ordered and contiguous from zero")
-    return {
-        "valid": not errors,
-        "errors": errors,
-        "warnings": [],
-        "source_row_count": row_count,
-    }
-
-
 def _validate_model_scope(
     model_path: Path,
     metadata: Mapping[str, Any] | None,
@@ -1304,28 +1225,42 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
     }
     source_validation: dict[str, Any] = {"valid": True, "errors": [], "warnings": [], "source_row_count": None}
     scope_validation: dict[str, Any] = {"valid": False, "errors": ["stage2_scope_metadata_required"], "warnings": []}
+    if model_path.suffix.lower() != ".npz":
+        return [], {
+            "logical_id": model_path.name,
+            "sha256": model_sha256,
+            "bytes": model_bytes,
+            "population": "unknown",
+            "validation": {
+                "valid": False,
+                "errors": ["model_npz_required"],
+                "warnings": [],
+                "frame_count": 0,
+                "valid_frame_count": 0,
+                "invalid_frame_count": 0,
+            },
+        }
     try:
-        if model_path.suffix.lower() == ".json":
-            frames, source_validation = _read_json_model_frames(model_path)
-        else:
-            if model_path.suffix.lower() == ".npz":
-                source_validation = _validate_npz_source(model_path)
-            if model_path.suffix.lower() == ".csv":
-                try:
-                    source_validation = _validate_model_csv_source(model_path)
-                except OSError as exc:
-                    source_validation = {
-                        "valid": False,
-                        "errors": [f"model_csv_read_failed:{type(exc).__name__}"],
-                        "warnings": [],
-                        "source_row_count": 0,
-                    }
-            loaded = load_model_output(model_path)
-            frames = []
-            for index, frame in enumerate(loaded):
-                points = np.asarray(frame.points, dtype=float)
-                length = _length(points) if points.ndim == 2 and points.shape[1] == 2 and len(points) >= 2 else None
-                frames.append(_Frame(index, float(frame.time_s), points, length, source="model"))
+        source_validation = _validate_npz_source(model_path)
+        if not source_validation.get("valid", False):
+            return [], {
+                **provenance,
+                "population": "unknown",
+                "validation": {
+                    "valid": False,
+                    "errors": list(source_validation.get("errors", [])),
+                    "warnings": [],
+                    "frame_count": int(source_validation.get("source_frame_count", 0) or 0),
+                    "valid_frame_count": 0,
+                    "invalid_frame_count": int(source_validation.get("source_frame_count", 0) or 0),
+                },
+            }
+        loaded = load_model_output(model_path)
+        frames = []
+        for index, frame in enumerate(loaded):
+            points = np.asarray(frame.points, dtype=float)
+            length = _length(points) if points.ndim == 2 and points.shape[1] == 2 and len(points) >= 2 else None
+            frames.append(_Frame(index, float(frame.time_s), points, length, source="model"))
     except (OSError, EOFError, KeyError, TypeError, ValueError, IndexError) as exc:
         provenance["validation"] = {
             "valid": False,
@@ -1451,8 +1386,8 @@ def scale_free_shape_comparison(
     """Compare observation and model morphology without absolute registration.
 
     ``observation_dir`` must be the output of :func:`run_pipeline`; ``model_path``
-    may be the existing ``trajectory.npz``, centreline CSV, or JSON trajectory
-    format.  No coordinate conversion or time conversion is performed.
+    must be a provenance-bearing Stage 2 ``trajectory.npz``.  No coordinate
+    conversion or time conversion is performed.
     """
 
     cfg = config if isinstance(config, ScaleFreeConfig) else ScaleFreeConfig.from_mapping(config)

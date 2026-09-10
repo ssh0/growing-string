@@ -306,7 +306,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertEqual(result["summary"]["status"], "model_centerline_unavailable")
             self.assertEqual(result["summary"]["compared_rows"], 0)
             self.assertFalse(result["summary"]["model_validation"]["valid"])
-            self.assertIn("missing required columns x", result["summary"]["model_validation"]["errors"])
+            self.assertIn("model_npz_required", result["summary"]["model_validation"]["errors"])
             self.assertIn("model_centerline_contract_invalid", result["summary"]["input_quality"]["reasons"])
 
     def test_model_csv_rejects_duplicate_point_ids(self):
@@ -322,9 +322,9 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 writer.writeheader()
                 writer.writerows(rows)
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
-            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["status"], "model_centerline_unavailable")
             self.assertEqual(result["summary"]["compared_rows"], 0)
-            self.assertTrue(any("point_id must be ordered" in error for error in result["summary"]["model_validation"]["errors"]))
+            self.assertIn("model_npz_required", result["summary"]["model_validation"]["errors"])
 
     def test_model_scope_metadata_is_required(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -332,9 +332,9 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
             model = self._write_model_csv(root, [1.0, 2.0, 3.0])
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
-            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["status"], "model_centerline_unavailable")
             self.assertEqual(result["summary"]["compared_rows"], 0)
-            self.assertIn("stage2_scope_metadata_required", result["summary"]["model_validation"]["errors"])
+            self.assertIn("model_npz_required", result["summary"]["model_validation"]["errors"])
 
     def test_invalid_json_model_frame_is_not_dropped(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -354,11 +354,11 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 encoding="utf-8",
             )
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
-            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["status"], "model_centerline_unavailable")
             self.assertEqual(result["summary"]["compared_rows"], 0)
-            self.assertEqual(result["summary"]["model_validation"]["frame_count"], 3)
-            self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 1)
-            self.assertEqual(result["summary"]["coverage"]["model"]["count"], 3)
+            self.assertEqual(result["summary"]["model_validation"]["frame_count"], 0)
+            self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 0)
+            self.assertEqual(result["summary"]["coverage"]["model"]["count"], 0)
 
     def test_missing_json_model_time_is_not_inferred(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -370,10 +370,10 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 encoding="utf-8",
             )
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
-            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["status"], "model_centerline_unavailable")
             self.assertEqual(result["summary"]["compared_rows"], 0)
-            self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 1)
-            self.assertEqual(result["summary"]["coverage"]["model"]["count"], 2)
+            self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 0)
+            self.assertEqual(result["summary"]["coverage"]["model"]["count"], 0)
 
     def test_invalid_npz_offsets_are_unavailable(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -386,7 +386,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 metadata_json = archive["metadata_json"]
             np.savez(model, positions=positions[:5], position_offsets=np.asarray([0, 2, 6]), times=times, metadata_json=metadata_json)
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
-            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["status"], "model_centerline_unavailable")
             self.assertEqual(result["summary"]["compared_rows"], 0)
             self.assertIn("position_offsets_end_mismatch", result["summary"]["model_validation"]["errors"])
 
@@ -488,11 +488,11 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 writer.writeheader()
                 writer.writerows(rows)
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
-            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["status"], "model_centerline_unavailable")
             self.assertEqual(result["summary"]["compared_rows"], 0)
             self.assertFalse(result["summary"]["model_validation"]["valid"])
-            self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 1)
-            self.assertEqual(result["summary"]["coverage"]["model"]["count"], 3)
+            self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 0)
+            self.assertEqual(result["summary"]["coverage"]["model"]["count"], 0)
             self.assertIn("model_centerline_contract_invalid", result["summary"]["input_quality"]["reasons"])
 
     def test_scale_free_cli_options_are_not_accepted_by_extract(self):
