@@ -1652,9 +1652,9 @@ def scale_free_shape_comparison(
     model_validation = model_provenance.get("validation") or {}
     model_contract_valid = bool(models) and bool(model_validation.get("valid"))
     observation_progress = _progress(observations if observation_contract_valid and not observation_info.get("selection_error", False) else [], cfg)
-    model_progress = _progress(models if model_contract_valid else [], cfg)
+    model_progress = _progress(models if model_contract_valid and not observation_info.get("selection_error", False) else [], cfg)
     _assign_progress(observations, observation_progress, cfg)
-    _assign_progress(models, model_progress, cfg)
+    _assign_progress(models if not observation_info.get("selection_error", False) else [], model_progress, cfg)
     observation_features: dict[int, dict[str, Any] | None] = {}
     for frame in observations:
         eligible = observation_contract_valid and not observation_info.get("selection_error", False) and _progress_eligible(frame, cfg)
