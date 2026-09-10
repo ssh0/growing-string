@@ -613,8 +613,26 @@ def _validate_observation_consistency(
                     errors.append(f"lineage censor mismatch for frame={key[0]},filament={key[1]}")
             except (KeyError, TypeError, ValueError):
                 errors.append(f"invalid lineage metadata for frame={key[0]},filament={key[1]}")
+        try:
+            exported = int(summary["centerline_exported"])
+            expected_points = int(summary["n_points"])
+            actual_points = len(centerline_by_key.get(key, []))
+            if exported == 1 and (key not in centerline_by_key or actual_points != expected_points):
+                errors.append(f"centerline count mismatch for frame={key[0]},filament={key[1]}")
+            if exported == 0 and key in centerline_by_key:
+                errors.append(f"unexpected centerline for frame={key[0]},filament={key[1]}")
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"invalid centerline summary metadata for frame={key[0]},filament={key[1]}")
         if key in centerline_by_key:
-            point_rows = sorted(centerline_by_key[key], key=lambda row: int(row["point_id"]))
+            point_rows: list[Mapping[str, Any]] = []
+            for row in centerline_by_key[key]:
+                try:
+                    int(row["point_id"])
+                except (KeyError, TypeError, ValueError):
+                    errors.append(f"invalid point_id for frame={key[0]},filament={key[1]}")
+                else:
+                    point_rows.append(row)
+            point_rows.sort(key=lambda row: int(row["point_id"]))
             try:
                 points = np.asarray([[float(row["x"]), float(row["y"])] for row in point_rows], dtype=float)
                 centerline_length = _length(points)
@@ -729,9 +747,14 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
             manifest_structure_errors.append("incomplete_frame_range")
         elif first is not None:
             try:
-                first_int = int(first)
-                last_int = int(last)
-                stride_int = int(stride)
+                first_float = float(first)
+                last_float = float(last)
+                stride_float = float(stride)
+                if not all(math.isfinite(value) and value.is_integer() for value in (first_float, last_float, stride_float)):
+                    raise ValueError("frame range values must be finite integers")
+                first_int = int(first_float)
+                last_int = int(last_float)
+                stride_int = int(stride_float)
                 if stride_int < 1 or last_int < first_int:
                     raise ValueError("invalid frame range")
                 processed_frames = list(range(first_int, last_int + 1, stride_int))
@@ -756,15 +779,13 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     fps_value = video_section.get("fps")
     if fps_value is None and isinstance(input_metadata, Mapping):
         fps_value = input_metadata.get("fps")
-    if fps_value is None:
-        fps_value = 1.0
     fps = _float_or_none(fps_value)
     if fps is None or fps <= 0.0:
-        manifest_structure_errors.append("invalid_fps")
-        fps = 1.0
+        manifest_structure_errors.append("missing_or_invalid_fps")
+        fps = None
         manifest_validation = {
             "valid": False,
-            "errors": ["invalid_fps"] + list(manifest_validation.get("errors", [])),
+            "errors": ["missing_or_invalid_fps"] + list(manifest_validation.get("errors", [])),
         }
         manifest_validation_valid = False
     contract_valid = (
@@ -780,7 +801,7 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         row = summary_by_key.get((frame_index, key_filament))
         lineage = lineage_by_key.get((frame_index, key_filament))
         if row is None and lineage is None and key_filament == "unknown":
-            frames.append(_Frame(frame_index, frame_index / fps, None, None, None, "missing_observation", "missing_unknown", True, source="observation"))
+            frames.append(_Frame(frame_index, frame_index / fps if fps is not None else None, None, None, None, "missing_observation", "missing_unknown", True, source="observation"))
             continue
         source = row or lineage or {}
         points_rows = sorted(grouped.get((frame_index, selected), []))
@@ -975,11 +996,8 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
         "isotropic_substrate_drag",
     }
     physical_scope = scope.get("physical_scope")
-    if not isinstance(physical_scope, list) or not required_scope.issubset(set(physical_scope)):
-        errors.append("model_physical_scope_is_not_stage2_uniform_growth")
-    forbidden_scope = {"localized_growth", "segment_contact", "node_contact", "friction", "adhesion", "folding"}
-    if isinstance(physical_scope, list) and forbidden_scope.intersection(physical_scope):
-        errors.append("model_physical_scope_contains_forbidden_physics")
+    if not isinstance(physical_scope, list) or set(physical_scope) != required_scope:
+        errors.append("model_physical_scope_not_exact_stage2_allowlist")
     return {"valid": not errors, "errors": errors, "warnings": [], "scope": scope}
 
 
