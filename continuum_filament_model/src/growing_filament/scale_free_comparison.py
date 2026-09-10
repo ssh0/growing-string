@@ -587,6 +587,14 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
             errors.append("positions_must_be_n_by_two")
         if times.ndim != 1:
             errors.append("times_must_be_one_dimensional")
+        if not np.isfinite(positions).all():
+            errors.append("positions_non_finite")
+        if not np.isfinite(times).all():
+            errors.append("times_non_finite")
+        if not np.isfinite(rest_lengths).all():
+            errors.append("rest_lengths_non_finite")
+        if not np.isfinite(steps).all() or not np.equal(steps, np.floor(steps)).all():
+            errors.append("steps_invalid")
         if rest_lengths.ndim != 1:
             errors.append("rest_lengths_must_be_one_dimensional")
         if steps.ndim != 1:
@@ -595,9 +603,13 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
         if rest_offsets.ndim != 1 or len(rest_offsets) != frame_count + 1:
             errors.append("rest_offsets_length_mismatch")
         if rest_offsets.ndim == 1 and len(rest_offsets) == frame_count + 1:
-            if np.any(rest_offsets < 0) or np.any(rest_offsets > len(rest_lengths)) or np.any(np.diff(rest_offsets) < 0):
+            rest_offsets_finite = bool(np.isfinite(rest_offsets).all())
+            rest_offsets_integer = bool(np.equal(rest_offsets, np.floor(rest_offsets)).all()) if rest_offsets_finite else False
+            if not rest_offsets_finite or not rest_offsets_integer:
                 errors.append("rest_offsets_invalid")
-            if len(rest_offsets) and int(rest_offsets[-1]) != len(rest_lengths):
+            elif np.any(rest_offsets < 0) or np.any(rest_offsets > len(rest_lengths)) or np.any(np.diff(rest_offsets) < 0):
+                errors.append("rest_offsets_invalid")
+            elif len(rest_offsets) and int(rest_offsets[-1]) != len(rest_lengths):
                 errors.append("rest_offsets_end_mismatch")
         if steps.ndim == 1 and len(steps) != frame_count:
             errors.append("steps_length_mismatch")
@@ -619,6 +631,25 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
                     errors.append("position_offsets_end_mismatch")
                 if np.any(offsets < 0) or np.any(offsets > len(positions)):
                     errors.append("position_offsets_out_of_bounds")
+        if (
+            offsets.ndim == 1 and rest_offsets.ndim == 1 and steps.ndim == 1
+            and len(offsets) == frame_count + 1
+            and len(rest_offsets) == frame_count + 1
+            and len(steps) == frame_count
+            and not errors
+        ):
+            for index in range(frame_count):
+                node_count = int(offsets[index + 1] - offsets[index])
+                rest_count = int(rest_offsets[index + 1] - rest_offsets[index])
+                if node_count < 3 or rest_count != node_count - 1:
+                    errors.append(f"frame_{index}_state_shape_invalid")
+                    continue
+                if index and times[index] < times[index - 1]:
+                    errors.append(f"frame_{index}_time_not_monotonic")
+                if index and steps[index] < steps[index - 1]:
+                    errors.append(f"frame_{index}_step_not_monotonic")
+                if np.any(rest_lengths[rest_offsets[index]:rest_offsets[index + 1]] <= 0.0):
+                    errors.append(f"frame_{index}_rest_lengths_invalid")
     except (OSError, EOFError, KeyError, TypeError, ValueError, zipfile.BadZipFile):
         errors.append("npz_trajectory_arrays_unreadable")
     return {"valid": not errors, "errors": errors, "warnings": [], "source_frame_count": frame_count}

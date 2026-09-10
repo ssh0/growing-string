@@ -105,6 +105,9 @@ def run_bounded_comparison(
         if unknown_cases:
             configuration_errors.append("unknown_scale_free_cases:" + ",".join(unknown_cases))
         case_names = [name for name in requested_cases if name in specs]
+    elif "scale_free_cases" in effective:
+        configuration_errors.append("scale_free_cases_must_be_list")
+        case_names = []
     else:
         case_names = [name for name in DEFAULT_CASES if name in specs]
         if not case_names:
@@ -183,16 +186,10 @@ def run_bounded_comparison(
         }
 
     if configuration_errors:
-        extraction = {
-            "status": "input_quality_invalid_configuration",
-            "processed_frames": 0,
-            "candidate_count": 0,
-            "candidate_censor_count": 0,
-            "selected_filament_id": None,
-            "validation": {"valid": False, "errors": configuration_errors},
-            "decode_complete": False,
-            "external_artifact_ids": {},
-        }
+        extraction = dict(extraction)
+        extraction["status"] = "input_quality_invalid_configuration"
+        extraction["configuration_errors"] = configuration_errors
+        extraction["comparison_suppressed"] = True
     shape_cfg = shape_config if isinstance(shape_config, ScaleFreeConfig) else ScaleFreeConfig.from_mapping(shape_config)
     if extraction["status"] == "extracted":
         for record in model_records:
