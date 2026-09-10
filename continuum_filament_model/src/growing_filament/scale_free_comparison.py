@@ -1313,6 +1313,9 @@ def _validate_model_scope(
                                         member_scope = _validate_model_scope(member_file, member_metadata if isinstance(member_metadata, Mapping) else None, member_parameters)
                                         if not member_scope.get("valid", False) or member_scope.get("population") != "stage2_deterministic":
                                             errors.append("sensitivity_member_stage2_scope_invalid")
+                                        member_frames, member_provenance = _model_frames(member_file, ScaleFreeConfig())
+                                        if not (member_provenance.get("validation") or {}).get("valid", False):
+                                            errors.append("sensitivity_member_provenance_invalid")
                                         member_manifest = member_metadata.get("manifest") if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("manifest"), Mapping) else {}
                                         member_initial_hash = member_manifest.get("initial_state_hash")
                                         if not isinstance(member_initial_hash, str) or not member_initial_hash or member_initial_hash in member_initial_hashes:
@@ -1354,6 +1357,8 @@ def _validate_model_scope(
                                 errors.append("sensitivity_member_metric_recomputed_mismatch")
             if protocol.get("parameter") != "initial_condition":
                 errors.append("invalid_sensitivity_parameter")
+            if baseline_run_id not in member_ids:
+                errors.append("sensitivity_baseline_member_missing")
             if not isinstance(protocol.get("metrics"), list) or not protocol.get("metrics"):
                 errors.append("missing_sensitivity_metrics")
             aggregate = protocol.get("aggregate_metrics")

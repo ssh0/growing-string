@@ -114,6 +114,10 @@ def run_bounded_comparison(
         case_names = [name for name in DEFAULT_CASES if name in specs]
         if not case_names:
             case_names = [spec.name for spec in all_specs if spec.kind == "deterministic_fixture"][:2]
+    unsupported_cases = [name for name in case_names if specs[name].kind not in {"deterministic_fixture", "numerical_refinement", "parameter_contrast"}]
+    if unsupported_cases:
+        configuration_errors.append("unsupported_scale_free_cases:" + ",".join(unsupported_cases))
+    case_names = [name for name in case_names if name not in unsupported_cases]
     if not case_names:
         configuration_errors.append("no_scale_free_cases_selected")
     model_records: list[dict[str, Any]] = []
