@@ -348,12 +348,41 @@ def _assign_progress(frames: Sequence[_Frame], progress: _Progress, config: Scal
             frame.q = float((frame.length - progress.initial_length) / progress.growth_span)  # type: ignore[operator]
 
 
+def _validate_frame_keys(rows: Sequence[Mapping[str, Any]], artifact: str) -> dict[str, Any]:
+    errors: list[str] = []
+    for line_number, row in enumerate(rows, start=2):
+        try:
+            value = row["frame"]
+            if value in (None, ""):
+                raise ValueError("empty frame")
+            int(value)
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"{artifact} line {line_number}: invalid frame key")
+    return {"valid": not errors, "errors": errors, "row_count": len(rows)}
+
+
+def _index_frame_rows(rows: Sequence[Mapping[str, Any]]) -> dict[tuple[int, str], Mapping[str, Any]]:
+    indexed: dict[tuple[int, str], Mapping[str, Any]] = {}
+    for row in rows:
+        try:
+            key = (int(row["frame"]), str(row.get("filament_id", "")))
+        except (KeyError, TypeError, ValueError):
+            continue
+        indexed[key] = row
+    return indexed
+
+
 def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple[list[_Frame], str | None, dict[str, Any]]:
     summary_rows = _read_csv_rows(observation_dir / "observation_summary.csv")
     centerline_rows = _read_csv_rows(observation_dir / "centerline.csv")
     lineage_rows = _read_csv_rows(observation_dir / "lineage.csv") if (observation_dir / "lineage.csv").exists() else []
     manifest_path = observation_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    frame_key_validation = {
+        artifact: _validate_frame_keys(rows, artifact)
+        for artifact, rows in (("centerline", centerline_rows), ("summary", summary_rows), ("lineage", lineage_rows))
+    }
+    frame_keys_valid = all(item["valid"] for item in frame_key_validation.values())
     segmentation_config = manifest.get("segmentation_config") or {}
     centerline_validation = validate_centerline_rows(
         centerline_rows,
@@ -363,10 +392,10 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     if not isinstance(manifest_validation, Mapping):
         manifest_validation = {"valid": False, "errors": ["missing_manifest_validation"]}
     manifest_validation_valid = manifest_validation.get("valid") is True
-    contract_valid = manifest_validation_valid and bool(centerline_validation.get("valid"))
+    contract_valid = manifest_validation_valid and bool(centerline_validation.get("valid")) and frame_keys_valid
     selected = filament_id or _choose_filament(summary_rows) or _choose_filament(lineage_rows)
-    summary_by_key = {(int(row["frame"]), row.get("filament_id", "")): row for row in summary_rows}
-    lineage_by_key = {(int(row["frame"]), row.get("filament_id", "")): row for row in lineage_rows}
+    summary_by_key = _index_frame_rows(summary_rows)
+    lineage_by_key = _index_frame_rows(lineage_rows)
     grouped: dict[tuple[int, str], list[tuple[int, float, float]]] = {}
     for row in centerline_rows:
         if selected is None or row.get("filament_id") != selected:
@@ -416,6 +445,8 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         "manifest_validation": manifest_validation,
         "manifest_validation_valid": manifest_validation_valid,
         "centerline_validation": centerline_validation,
+        "frame_key_validation": frame_key_validation,
+        "frame_keys_valid": frame_keys_valid,
         "contract_valid": contract_valid,
         "summary_count": len(summary_rows),
         "lineage_count": len(lineage_rows),
@@ -425,6 +456,8 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
 def _validate_model_frames(frames: Sequence[_Frame], config: ScaleFreeConfig) -> dict[str, Any]:
     errors: list[str] = []
     valid_count = 0
+    if not frames:
+        errors.append("no_model_centerline_frames")
     previous_time: float | None = None
     for frame in frames:
         frame_errors: list[str] = []
@@ -459,22 +492,70 @@ def _validate_model_frames(frames: Sequence[_Frame], config: ScaleFreeConfig) ->
     }
 
 
+def _validate_model_csv_source(path: Path) -> dict[str, Any]:
+    required = {"time", "x", "y"}
+    errors: list[str] = []
+    row_count = 0
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = set(reader.fieldnames or [])
+        missing_columns = sorted(required.difference(fieldnames))
+        if missing_columns:
+            errors.append(f"missing required columns {','.join(missing_columns)}")
+        for line_number, row in enumerate(reader, start=2):
+            row_count += 1
+            missing_values = sorted(field for field in required if field not in row or row[field] in (None, ""))
+            if missing_values:
+                errors.append(f"line {line_number}: missing required values {','.join(missing_values)}")
+                continue
+            try:
+                values = [float(row[field]) for field in sorted(required)]
+            except (TypeError, ValueError):
+                errors.append(f"line {line_number}: invalid time or coordinate")
+                continue
+            if not np.isfinite(values).all():
+                errors.append(f"line {line_number}: non-finite time or coordinate")
+            if "point_id" in row and row["point_id"] not in (None, ""):
+                try:
+                    int(row["point_id"])
+                except (TypeError, ValueError):
+                    errors.append(f"line {line_number}: invalid point_id")
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "warnings": [],
+        "source_row_count": row_count,
+    }
+
+
 def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Frame], dict[str, Any]]:
     provenance: dict[str, Any] = {
         "logical_id": model_path.name,
         "sha256": sha256_file(model_path),
         "bytes": model_path.stat().st_size,
     }
+    source_validation: dict[str, Any] = {"valid": True, "errors": [], "warnings": [], "source_row_count": None}
+    if model_path.suffix.lower() == ".csv":
+        try:
+            source_validation = _validate_model_csv_source(model_path)
+        except OSError as exc:
+            source_validation = {
+                "valid": False,
+                "errors": [f"model_csv_read_failed:{type(exc).__name__}"],
+                "warnings": [],
+                "source_row_count": 0,
+            }
     try:
         loaded = load_model_output(model_path)
     except (OSError, EOFError, KeyError, TypeError, ValueError, IndexError) as exc:
         provenance["validation"] = {
             "valid": False,
-            "errors": [f"model_load_failed:{type(exc).__name__}"],
+            "errors": list(source_validation["errors"]) + [f"model_load_failed:{type(exc).__name__}"],
             "warnings": [],
             "frame_count": 0,
             "valid_frame_count": 0,
             "invalid_frame_count": 0,
+            "source_row_count": source_validation.get("source_row_count"),
         }
         provenance["population"] = "deterministic_or_unclassified"
         return [], provenance
@@ -483,7 +564,14 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
         points = np.asarray(frame.points, dtype=float)
         length = _length(points) if points.ndim == 2 and points.shape[1] == 2 and len(points) >= 2 else None
         frames.append(_Frame(index, float(frame.time_s), points, length, source="model"))
-    provenance["validation"] = _validate_model_frames(frames, config)
+    frame_validation = _validate_model_frames(frames, config)
+    validation_errors = list(source_validation["errors"]) + list(frame_validation["errors"])
+    provenance["validation"] = {
+        **frame_validation,
+        "valid": not validation_errors,
+        "errors": validation_errors,
+        "source_row_count": source_validation.get("source_row_count"),
+    }
     if model_path.suffix.lower() == ".npz":
         try:
             with np.load(model_path, allow_pickle=False) as archive:
@@ -677,11 +765,13 @@ def scale_free_shape_comparison(
         reasons.append("observation_manifest_validation_invalid")
     if not (observation_info.get("centerline_validation") or {}).get("valid", False):
         reasons.append("observation_centerline_contract_invalid")
+    if not observation_info.get("frame_keys_valid", False):
+        reasons.append("observation_frame_key_invalid")
     if not observations:
         reasons.append("no_observation_frames")
     if not models:
         reasons.append("model_centerline_unavailable")
-    elif not model_contract_valid:
+    if not model_contract_valid and "model_file_missing" not in model_validation.get("errors", []):
         reasons.append("model_centerline_contract_invalid")
     if observation_progress.status != "ok":
         reasons.append(f"observation_{observation_progress.status}")
@@ -748,6 +838,7 @@ def scale_free_shape_comparison(
         "observation_validation": {
             "manifest": observation_info.get("manifest_validation"),
             "centerline": observation_info.get("centerline_validation"),
+            "frame_keys": observation_info.get("frame_key_validation"),
             "contract_valid": observation_contract_valid,
         },
         "progress_coordinate": "q=(L-L_initial)/(L_final-L_initial); nearest matching only; no interpolation",

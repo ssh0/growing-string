@@ -197,6 +197,25 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertEqual(result["summary"]["observation_progress"]["valid_length_count"], 2)
             self.assertEqual(result["summary"]["compared_rows"], 2)
 
+    def test_malformed_model_csv_is_not_silently_skipped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            model = root / "model.csv"
+            with model.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["time", "point_id", "y"])
+                for index, length in enumerate((1.0, 2.0, 3.0)):
+                    writer.writerow([1000.0 + index * 11.0, 0, 0.0])
+                    writer.writerow([1000.0 + index * 11.0, 1, length * 0.5])
+                    writer.writerow([1000.0 + index * 11.0, 2, length])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "model_centerline_unavailable")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertFalse(result["summary"]["model_validation"]["valid"])
+            self.assertIn("missing required columns x", result["summary"]["model_validation"]["errors"])
+            self.assertIn("model_centerline_contract_invalid", result["summary"]["input_quality"]["reasons"])
+
     def test_invalid_model_contract_is_unavailable_but_retains_coverage(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -230,6 +249,26 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
         self.assertEqual(args.max_progress_error, 0.1)
         with self.assertRaises(SystemExit):
             parser.parse_args(["extract", "--video", "video.mp4", "--output", "observation", "--shape-config", "shape.json"])
+
+    def test_invalid_observation_frame_key_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            centerline = observation / "centerline.csv"
+            with centerline.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            rows[3]["frame"] = "bad"
+            with centerline.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertEqual(result["summary"]["coverage"]["observation"]["count"], 3)
+            self.assertFalse(result["summary"]["observation_validation"]["frame_keys"]["centerline"]["valid"])
+            self.assertIn("observation_frame_key_invalid", result["summary"]["input_quality"]["reasons"])
 
     def test_lineage_and_processed_coverage_survive_empty_summary(self):
         with tempfile.TemporaryDirectory() as directory:

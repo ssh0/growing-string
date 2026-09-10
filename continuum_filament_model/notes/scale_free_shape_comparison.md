@@ -39,8 +39,8 @@ replicate は `run_kind=exploratory_replicate` として deterministic fixture/r
 
 次の状態は推測で補わず、`status` と `input_quality.reasons` に明示する。manifest の `validation.valid` と既存の中心線 contract validation のどちらかが invalid の場合は、中心線の行・lineage・frame coverage を保持したまま比較不能とする。成長進行度の端点と `q` は、有効・非censor・許可された lineage の中心線だけから計算し、除外されたフレームへ補間しない。
 
-- manifest または観測中心線 contract が invalid：`input_quality_invalid_observation_contract`
-- モデル中心線 contract が invalid：`input_quality_invalid_model_contract`
+- manifest、観測中心線 contract、または観測 frame key が invalid：`input_quality_invalid_observation_contract`
+- モデル中心線 contract または model CSV が invalid：`input_quality_invalid_model_contract`（フレームがない場合は `model_centerline_unavailable`）
 - 有効な長さが2点未満：`insufficient_length_observations`
 - 初期・終端長の差がほぼ0：`zero_growth_span`
 - 長さが減少する系列：`non_monotonic_lengths`
