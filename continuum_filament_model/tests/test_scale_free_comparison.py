@@ -490,6 +490,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                     "run_kind": "initial_condition_sensitivity",
                     "sensitivity_protocol": {
                         "parameter": "initial_condition",
+                        "outer_run_id": "model",
                         "baseline_run_id": "baseline",
                         "baseline_initial_state_hash": baseline_initial_hash,
                         "perturbation_range": {"min": -0.1, "max": 0.1},
@@ -523,7 +524,12 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 }
             )
             np.savez(model, positions=positions, position_offsets=offsets, rest_lengths=rest_lengths, rest_offsets=rest_offsets, times=times, steps=steps, metadata_json=np.asarray(json.dumps(metadata)))
-            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            result = scale_free_shape_comparison(
+                observation,
+                model,
+                output_dir=root / "comparison",
+                external_artifact_ids={"model_run": "model", "model_sha256": hashlib.sha256(model.read_bytes()).hexdigest()},
+            )
             self.assertEqual(result["summary"]["model_population"], "initial_condition_sensitivity")
             self.assertEqual(result["summary"]["initial_condition_sensitivity"]["metrics"], ["normalized_endpoint_distance"])
             self.assertTrue(result["summary"]["video_alignment"]["distinguished_from_initial_condition_sensitivity"])

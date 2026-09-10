@@ -1310,7 +1310,12 @@ def _validate_model_scope(
                                             member_metadata_json = member_archive["metadata_json"]
                                         member_metadata = json.loads(str(member_metadata_json.item() if member_metadata_json.ndim == 0 else member_metadata_json.tolist()))
                                         member_parameters = member_metadata.get("parameters") if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("parameters"), Mapping) else None
-                                        member_scope = _validate_model_scope(member_file, member_metadata if isinstance(member_metadata, Mapping) else None, member_parameters)
+                                        member_scope_metadata = member_metadata
+                                        if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("metadata"), Mapping):
+                                            member_scope_metadata = dict(member_metadata)
+                                            member_scope_metadata["metadata"] = dict(member_metadata["metadata"])
+                                            member_scope_metadata["metadata"].pop("sensitivity_protocol", None)
+                                        member_scope = _validate_model_scope(member_file, member_scope_metadata if isinstance(member_scope_metadata, Mapping) else None, member_parameters)
                                         if not member_scope.get("valid", False) or member_scope.get("population") != "stage2_deterministic":
                                             errors.append("sensitivity_member_stage2_scope_invalid")
                                         member_frames, member_provenance = _model_frames(member_file, ScaleFreeConfig())
@@ -1663,6 +1668,19 @@ def scale_free_shape_comparison(
     observation_manifest = observation_info.get("manifest") or {}
     observation_contract_valid = bool(observation_info.get("contract_valid"))
     model_validation = model_provenance.get("validation") or {}
+    if model_provenance.get("population") == "initial_condition_sensitivity":
+        protocol = model_provenance.get("sensitivity_protocol") or {}
+        linkage_errors: list[str] = []
+        if not isinstance(protocol.get("outer_run_id"), str) or not protocol.get("outer_run_id"):
+            linkage_errors.append("sensitivity_outer_run_id_missing")
+        if protocol.get("outer_trajectory_sha256") is not None and protocol.get("outer_trajectory_sha256") != model_provenance.get("sha256"):
+            linkage_errors.append("sensitivity_outer_trajectory_hash_mismatch")
+        if not external_artifact_ids or external_artifact_ids.get("model_run") != protocol.get("outer_run_id") or external_artifact_ids.get("model_sha256") != model_provenance.get("sha256"):
+            linkage_errors.append("sensitivity_outer_linkage_unverified")
+        if linkage_errors:
+            model_validation = dict(model_validation)
+            model_validation["errors"] = list(model_validation.get("errors", [])) + linkage_errors
+            model_validation["valid"] = False
     model_contract_valid = bool(models) and bool(model_validation.get("valid"))
     observation_progress = _progress(observations if observation_contract_valid and not observation_info.get("selection_error", False) else [], cfg)
     model_progress = _progress(models if model_contract_valid and not observation_info.get("selection_error", False) else [], cfg)

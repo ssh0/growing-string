@@ -218,6 +218,7 @@ def run_bounded_comparison(
                     "video": source.name,
                     "video_manifest": "_video_artifacts/manifest.json",
                     "model_run": record["run_name"],
+                    "model_sha256": record.get("model_sha256"),
                 },
             )
             record["comparison"] = comparison["summary"]
