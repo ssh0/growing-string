@@ -471,6 +471,13 @@ def _validate_frame_keys(rows: Sequence[Mapping[str, Any]], artifact: str) -> di
                     raise ValueError("quality outside [0,1]")
             except (KeyError, TypeError, ValueError):
                 errors.append(f"{artifact} line {line_number}: invalid quality value")
+    times_by_filament: dict[str, list[tuple[int, float]]] = {}
+    for (frame, filament), time_s in frame_times.items():
+        times_by_filament.setdefault(filament, []).append((frame, time_s))
+    for filament, values in times_by_filament.items():
+        values.sort()
+        if any(current < previous for (_, previous), (_, current) in zip(values, values[1:])):
+            errors.append(f"{artifact}: time is not monotonic in frame order for filament={filament}")
     return {"valid": not errors, "errors": errors, "row_count": len(rows)}
 
 
@@ -607,6 +614,8 @@ def _validate_npz_source(path: Path) -> dict[str, Any]:
             rest_offsets_integer = bool(np.equal(rest_offsets, np.floor(rest_offsets)).all()) if rest_offsets_finite else False
             if not rest_offsets_finite or not rest_offsets_integer:
                 errors.append("rest_offsets_invalid")
+            elif len(rest_offsets) == 0 or int(rest_offsets[0]) != 0:
+                errors.append("rest_offsets_must_start_at_zero")
             elif np.any(rest_offsets < 0) or np.any(rest_offsets > len(rest_lengths)) or np.any(np.diff(rest_offsets) < 0):
                 errors.append("rest_offsets_invalid")
             elif len(rest_offsets) and int(rest_offsets[-1]) != len(rest_lengths):

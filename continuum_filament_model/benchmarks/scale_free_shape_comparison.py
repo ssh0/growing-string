@@ -101,6 +101,8 @@ def run_bounded_comparison(
     configuration_errors: list[str] = []
     if isinstance(configured_cases, list):
         requested_cases = [str(name) for name in configured_cases]
+        if len(requested_cases) != len(set(requested_cases)):
+            configuration_errors.append("duplicate_scale_free_cases")
         unknown_cases = [name for name in requested_cases if name not in specs]
         if unknown_cases:
             configuration_errors.append("unknown_scale_free_cases:" + ",".join(unknown_cases))
