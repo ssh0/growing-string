@@ -14,6 +14,7 @@ lineage, and censoring, and never turns a shape difference into a
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 import zipfile
@@ -583,6 +584,33 @@ def _validate_manifest_artifacts(observation_dir: Path, manifest: Mapping[str, A
                 if actual_hash != expected_hash:
                     errors.append(f"artifact {artifact_name}: sha256_mismatch")
     return {"valid": not errors, "errors": errors, "warnings": []}
+
+
+def _trajectory_sha256(
+    positions: np.ndarray,
+    position_offsets: np.ndarray,
+    rest_lengths: np.ndarray,
+    rest_offsets: np.ndarray,
+    times: np.ndarray,
+    steps: np.ndarray,
+) -> str:
+    digest = hashlib.sha256()
+    for name, values, dtype in (
+        ("positions", positions, "<f8"),
+        ("position_offsets", position_offsets, "<i8"),
+        ("rest_lengths", rest_lengths, "<f8"),
+        ("rest_offsets", rest_offsets, "<i8"),
+        ("times", times, "<f8"),
+        ("steps", steps, "<i8"),
+    ):
+        array = np.asarray(values, dtype=dtype, order="C")
+        digest.update(name.encode("ascii"))
+        digest.update(b"\0")
+        digest.update(canonical_json(list(array.shape)).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(array.tobytes(order="C"))
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def _validate_npz_source(path: Path) -> dict[str, Any]:
@@ -1242,6 +1270,16 @@ def _validate_model_scope(
         else:
             baseline_run_id = protocol.get("baseline_run_id")
             baseline_initial_state_hash = protocol.get("baseline_initial_state_hash")
+            internal_run_id = None
+            if isinstance(raw_manifest, Mapping):
+                internal_run_id = raw_manifest.get("run_id") or raw_manifest.get("run_name")
+            if internal_run_id is None:
+                internal_run_id = metadata.get("run_id") or metadata.get("run_name")
+            outer_run_id = protocol.get("outer_run_id")
+            if not isinstance(internal_run_id, str) or not internal_run_id:
+                errors.append("sensitivity_internal_run_id_missing")
+            elif outer_run_id != internal_run_id:
+                errors.append("sensitivity_outer_run_id_mismatch")
             if not isinstance(baseline_run_id, str) or not baseline_run_id:
                 errors.append("sensitivity_baseline_run_missing")
             if not isinstance(baseline_initial_state_hash, str) or not baseline_initial_state_hash:
@@ -1462,6 +1500,7 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
         "logical_id": model_path.name,
         "sha256": model_sha256,
         "bytes": model_bytes,
+        "trajectory_sha256": None,
     }
     source_validation: dict[str, Any] = {"valid": True, "errors": [], "warnings": [], "source_row_count": None}
     scope_validation: dict[str, Any] = {"valid": False, "errors": ["stage2_scope_metadata_required"], "warnings": []}
@@ -1559,6 +1598,7 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
                     float(times[-1]),
                     int(steps[-1]),
                 )
+                trajectory_sha256 = _trajectory_sha256(positions, position_offsets, rest_lengths, rest_offsets, times, steps)
                 if model_manifest.get("initial_state_hash") != canonical_state_hash(initial_state):
                     scope_validation["errors"].append("initial_state_hash_mismatch")
                 if model_manifest.get("canonical_state_hash") != canonical_state_hash(final_state):
@@ -1576,6 +1616,8 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
             provenance.update(
                 {
                     "run_kind": _json_sanitize(model_metadata.get("run_kind") or model_manifest.get("run_kind")),
+                    "run_id": _json_sanitize(model_manifest.get("run_id") or model_manifest.get("run_name") or model_metadata.get("run_id") or model_metadata.get("run_name")),
+                    "trajectory_sha256": _json_sanitize(trajectory_sha256),
                     "base_fixture": _json_sanitize(model_metadata.get("base_fixture") or model_manifest.get("base_fixture")),
                     "seed": _json_sanitize(model_metadata.get("seed")),
                     "trial": _json_sanitize(model_metadata.get("trial")),
@@ -1702,26 +1744,36 @@ def scale_free_shape_comparison(
     if model_provenance.get("population") == "initial_condition_sensitivity":
         protocol = model_provenance.get("sensitivity_protocol") or {}
         linkage_errors: list[str] = []
+        internal_run_id = model_provenance.get("run_id")
+        if not isinstance(internal_run_id, str) or not internal_run_id:
+            linkage_errors.append("sensitivity_internal_run_id_missing")
         if not isinstance(protocol.get("outer_run_id"), str) or not protocol.get("outer_run_id"):
             linkage_errors.append("sensitivity_outer_run_id_missing")
+        elif protocol.get("outer_run_id") != internal_run_id:
+            linkage_errors.append("sensitivity_outer_run_id_mismatch")
         outer_member_id = protocol.get("outer_member_id")
         outer_member_hash = protocol.get("outer_member_sha256")
         protocol_members = protocol.get("members") if isinstance(protocol, Mapping) else []
         linked_member = next((member for member in protocol_members if isinstance(member, Mapping) and member.get("id") == outer_member_id), None)
         if not isinstance(outer_member_id, str) or not isinstance(outer_member_hash, str) or linked_member is None or linked_member.get("trajectory_sha256") != outer_member_hash:
             linkage_errors.append("sensitivity_outer_member_linkage_invalid")
-        if protocol.get("outer_trajectory_sha256") is not None and protocol.get("outer_trajectory_sha256") != model_provenance.get("sha256"):
+        if protocol.get("outer_trajectory_sha256") != model_provenance.get("trajectory_sha256"):
             linkage_errors.append("sensitivity_outer_trajectory_hash_mismatch")
         if not external_artifact_ids or external_artifact_ids.get("model_run") != protocol.get("outer_run_id") or external_artifact_ids.get("model_sha256") != model_provenance.get("sha256"):
             linkage_errors.append("sensitivity_outer_linkage_unverified")
         if linkage_errors:
-            for validation_key in ("validation", "scope_validation"):
-                validation = dict(model_provenance.get(validation_key) or {})
-                validation["errors"] = list(dict.fromkeys(list(validation.get("errors", [])) + linkage_errors))
-                validation["valid"] = False
-                validation["status"] = "unavailable"
-                model_provenance[validation_key] = validation
-            model_validation = dict(model_provenance["validation"])
+            scope_validation = dict(model_provenance.get("scope_validation") or {})
+            scope_validation["errors"] = list(dict.fromkeys(list(scope_validation.get("errors", [])) + linkage_errors))
+            scope_validation["valid"] = False
+            scope_validation["status"] = "unavailable"
+            validation = dict(model_provenance.get("validation") or {})
+            validation["errors"] = list(dict.fromkeys(list(validation.get("errors", [])) + linkage_errors))
+            validation["valid"] = False
+            validation["status"] = "unavailable"
+            validation["scope"] = scope_validation
+            model_provenance["scope_validation"] = scope_validation
+            model_provenance["validation"] = validation
+            model_validation = validation
     model_contract_valid = bool(models) and bool(model_validation.get("valid"))
     observation_progress = _progress(observations if observation_contract_valid and not observation_info.get("selection_error", False) else [], cfg)
     model_progress = _progress(models if model_contract_valid and not observation_info.get("selection_error", False) else [], cfg)
@@ -1844,6 +1896,8 @@ def scale_free_shape_comparison(
         status = "sensitivity_unavailable"
     elif not model_contract_valid:
         status = "input_quality_invalid_model_contract"
+    elif eligible_count == 0:
+        status = "input_quality_no_eligible_centerline"
     elif observation_progress.status == "insufficient_length_observations":
         status = "growth_progress_insufficient_length_observations"
     elif model_progress.status == "insufficient_length_observations":
@@ -1852,8 +1906,6 @@ def scale_free_shape_comparison(
         status = "growth_progress_undefined_zero_span"
     elif observation_progress.status == "non_monotonic_lengths" or model_progress.status == "non_monotonic_lengths":
         status = "growth_progress_undefined_non_monotonic"
-    elif eligible_count == 0:
-        status = "input_quality_no_eligible_centerline"
     elif compared_count == 0:
         status = "no_valid_growth_progress_matches"
 

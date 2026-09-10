@@ -14,6 +14,7 @@ from growing_filament.model import FilamentState
 from growing_filament.reproducibility import canonical_state_hash, event_sequence_hash
 from growing_filament.scale_free_comparison import (
     ScaleFreeConfig,
+    _trajectory_sha256,
     normalized_shape_distance,
     scale_free_shape_comparison,
     shape_observables,
@@ -148,6 +149,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                 "run_kind": "deterministic_fixture",
             },
             "manifest": {
+                "run_name": "model",
                 "manifest_schema_version": "continuum-filament-manifest-1",
                 "input_hash": "input-hash",
                 "initial_state_hash": canonical_state_hash(initial_state),
@@ -493,6 +495,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                         "outer_run_id": "model",
                         "outer_member_id": "baseline",
                         "outer_member_sha256": baseline_hash,
+                        "outer_trajectory_sha256": _trajectory_sha256(positions, offsets, rest_lengths, rest_offsets, times, steps),
                         "baseline_run_id": "baseline",
                         "baseline_initial_state_hash": baseline_initial_hash,
                         "perturbation_range": {"min": -0.1, "max": 0.1},
