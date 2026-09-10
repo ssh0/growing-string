@@ -399,7 +399,12 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                     "sensitivity_protocol": {
                         "parameter": "initial_condition",
                         "perturbation_range": {"amplitude_fraction": [-0.1, 0.1]},
+                        "members": [
+                            {"id": "baseline", "perturbation_value": 0.0, "provenance": {"seed": 0}, "result": {"normalized_shape_distance": 0.0}},
+                            {"id": "plus", "perturbation_value": 0.1, "provenance": {"seed": 1}, "result": {"normalized_shape_distance": 0.1}},
+                        ],
                         "metrics": ["normalized_shape_distance", "mode_fractions"],
+                        "aggregate_metrics": {"max_normalized_shape_distance_delta": 0.1},
                         "acceptance_criteria": {"max_metric_delta": 0.2},
                     },
                 }

@@ -38,6 +38,11 @@ from .reproducibility import detect_git_revision
 
 SCHEMA_VERSION = "continuum-filament-scale-free-shape-0.1"
 MODE_COUNT = 6
+_CENSOR_FLAGS = frozenset({
+    "short_centerline", "skeleton_loss", "large_jump", "ambiguous_components",
+    "components_truncated", "branched_component", "loop_component", "disconnected_skeleton",
+    "out_of_view", "roi_clipped", "low_quality", "reconnected_after_missing", "new_lineage",
+})
 
 
 @dataclass(frozen=True)
@@ -328,10 +333,12 @@ def _progress_eligible(frame: _Frame, config: ScaleFreeConfig) -> bool:
     ):
         return False
     if frame.source == "observation":
+        flags = {flag.strip() for flag in frame.quality_flags.split(";") if flag.strip()}
         return (
             frame.quality is not None
             and config.min_quality <= frame.quality <= 1.0
             and frame.lineage_status in ALLOWED_LINEAGE_STATUSES
+            and not _CENSOR_FLAGS.intersection(flags)
         )
     return True
 
@@ -410,13 +417,18 @@ def _validate_frame_keys(rows: Sequence[Mapping[str, Any]], artifact: str) -> di
         if previous_frame is not None and previous_frame != frame:
             errors.append(f"{artifact} line {line_number}: time maps to multiple frames")
         time_frames[time_key] = frame
+        parsed_censor: bool | None = None
         if "censor" not in row or row["censor"] in (None, ""):
             errors.append(f"{artifact} line {line_number}: missing censor value")
         else:
             try:
-                _bool_value(row["censor"])
+                parsed_censor = _bool_value(row["censor"])
             except ValueError:
                 errors.append(f"{artifact} line {line_number}: invalid censor value")
+        if artifact in {"summary", "centerline"}:
+            flags = {flag.strip() for flag in str(row.get("quality_flags", "")).split(";") if flag.strip()}
+            if parsed_censor is False and _CENSOR_FLAGS.intersection(flags):
+                errors.append(f"{artifact} line {line_number}: censor inconsistent with quality_flags")
         if artifact in {"summary", "centerline"}:
             try:
                 quality = float(row["quality"])
@@ -580,7 +592,9 @@ def _validate_lineage_rows(
             key = (int(row["frame"]), str(row["filament_id"]))
             if not str(row["status"]):
                 raise ValueError("empty status")
-            _bool_value(row["censor"])
+            lineage_censor = _bool_value(row["censor"])
+            if str(row["status"]) not in ALLOWED_LINEAGE_STATUSES and not lineage_censor:
+                raise ValueError("lineage status requires censor")
         except (TypeError, ValueError):
             errors.append(f"line {line_number}: invalid lineage value")
             continue
@@ -755,6 +769,14 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     manifest_input = manifest.get("input", {})
     if not isinstance(manifest_input, Mapping):
         manifest_structure_errors.append("input_not_mapping")
+    else:
+        if not isinstance(manifest_input.get("logical_id"), str) or not manifest_input.get("logical_id"):
+            manifest_structure_errors.append("input_logical_id_missing")
+        if not isinstance(manifest_input.get("sha256"), str) or not manifest_input.get("sha256"):
+            manifest_structure_errors.append("input_sha256_missing")
+        input_bytes = manifest_input.get("bytes")
+        if isinstance(input_bytes, bool) or not isinstance(input_bytes, int) or input_bytes < 0:
+            manifest_structure_errors.append("input_bytes_invalid")
     manifest_errors = manifest_load_errors + manifest_structure_errors
     if manifest_errors:
         manifest_validation = {
@@ -1064,10 +1086,31 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
         else:
             if protocol.get("parameter") != "initial_condition":
                 errors.append("invalid_sensitivity_parameter")
+            members = protocol.get("members")
+            if not isinstance(members, list) or len(members) < 2:
+                errors.append("sensitivity_members_insufficient")
+            else:
+                member_ids: set[str] = set()
+                for member in members:
+                    if not isinstance(member, Mapping):
+                        errors.append("sensitivity_member_not_mapping")
+                        continue
+                    member_id = member.get("id")
+                    if not isinstance(member_id, str) or not member_id.strip() or member_id in member_ids:
+                        errors.append("sensitivity_member_id_invalid")
+                    member_ids.add(str(member_id))
+                    if "perturbation_value" not in member:
+                        errors.append("sensitivity_member_value_missing")
+                    if not isinstance(member.get("provenance"), Mapping) or not member.get("provenance"):
+                        errors.append("sensitivity_member_provenance_missing")
+                    if not isinstance(member.get("result"), Mapping) or not member.get("result"):
+                        errors.append("sensitivity_member_result_missing")
             if not protocol.get("perturbation_range"):
                 errors.append("missing_sensitivity_perturbation_range")
             if not isinstance(protocol.get("metrics"), list) or not protocol.get("metrics"):
                 errors.append("missing_sensitivity_metrics")
+            if not isinstance(protocol.get("aggregate_metrics"), Mapping) or not protocol.get("aggregate_metrics"):
+                errors.append("missing_sensitivity_aggregate_metrics")
             if not isinstance(protocol.get("acceptance_criteria"), Mapping) or not protocol.get("acceptance_criteria"):
                 errors.append("missing_sensitivity_acceptance_criteria")
     if scope.get("boundary") != "free/free":
@@ -1445,9 +1488,17 @@ def scale_free_shape_comparison(
         "initial_condition_sensitivity": {
             "population": model_provenance.get("population"),
             "protocol": model_provenance.get("sensitivity_protocol"),
+            "members": (
+                (model_provenance.get("sensitivity_protocol") or {}).get("members", [])
+                if model_provenance.get("population") == "initial_condition_sensitivity" else []
+            ),
             "metrics": (
                 (model_provenance.get("sensitivity_protocol") or {}).get("metrics", [])
                 if model_provenance.get("population") == "initial_condition_sensitivity" else []
+            ),
+            "aggregate_metrics": (
+                (model_provenance.get("sensitivity_protocol") or {}).get("aggregate_metrics", {})
+                if model_provenance.get("population") == "initial_condition_sensitivity" else {}
             ),
             "acceptance_criteria": (
                 (model_provenance.get("sensitivity_protocol") or {}).get("acceptance_criteria")
