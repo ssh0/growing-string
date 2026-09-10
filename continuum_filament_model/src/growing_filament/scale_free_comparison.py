@@ -60,10 +60,10 @@ class ScaleFreeConfig:
     min_growth_span_relative: float = 1.0e-8
 
     def __post_init__(self) -> None:
-        if self.sample_points < 8:
-            raise ValueError("sample_points must be at least 8")
-        if self.min_points < 2:
-            raise ValueError("min_points must be at least 2")
+        if isinstance(self.sample_points, bool) or not isinstance(self.sample_points, int) or self.sample_points < 8:
+            raise ValueError("sample_points must be an integer of at least 8")
+        if isinstance(self.min_points, bool) or not isinstance(self.min_points, int) or self.min_points < 2:
+            raise ValueError("min_points must be an integer of at least 2")
         if not math.isfinite(self.min_length) or self.min_length <= 0.0:
             raise ValueError("min_length must be positive and finite")
         if not 0.0 <= self.min_quality <= 1.0:
@@ -1311,12 +1311,15 @@ def _validate_model_scope(
                                         member_metadata = json.loads(str(member_metadata_json.item() if member_metadata_json.ndim == 0 else member_metadata_json.tolist()))
                                         member_parameters = member_metadata.get("parameters") if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("parameters"), Mapping) else None
                                         member_scope_metadata = member_metadata
-                                        if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("metadata"), Mapping):
+                                        if isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("metadata"), Mapping) and "sensitivity_protocol" in member_metadata["metadata"]:
+                                            errors.append("sensitivity_member_nested_protocol")
+                                            member_scope_valid = False
+                                        elif isinstance(member_metadata, Mapping) and isinstance(member_metadata.get("metadata"), Mapping):
                                             member_scope_metadata = dict(member_metadata)
                                             member_scope_metadata["metadata"] = dict(member_metadata["metadata"])
                                             member_scope_metadata["metadata"].pop("sensitivity_protocol", None)
                                         member_scope = _validate_model_scope(member_file, member_scope_metadata if isinstance(member_scope_metadata, Mapping) else None, member_parameters)
-                                        member_scope_valid = member_scope.get("valid", False) and member_scope.get("population") == "stage2_deterministic"
+                                        member_scope_valid = member_scope.get("valid", False) and member_scope.get("population") == "stage2_deterministic" and "sensitivity_protocol" not in member_scope.get("scope", {})
                                         if not member_scope_valid:
                                             errors.append("sensitivity_member_stage2_scope_invalid")
                                         else:
@@ -1675,6 +1678,12 @@ def scale_free_shape_comparison(
         linkage_errors: list[str] = []
         if not isinstance(protocol.get("outer_run_id"), str) or not protocol.get("outer_run_id"):
             linkage_errors.append("sensitivity_outer_run_id_missing")
+        outer_member_id = protocol.get("outer_member_id")
+        outer_member_hash = protocol.get("outer_member_sha256")
+        protocol_members = protocol.get("members") if isinstance(protocol, Mapping) else []
+        linked_member = next((member for member in protocol_members if isinstance(member, Mapping) and member.get("id") == outer_member_id), None)
+        if not isinstance(outer_member_id, str) or not isinstance(outer_member_hash, str) or linked_member is None or linked_member.get("trajectory_sha256") != outer_member_hash:
+            linkage_errors.append("sensitivity_outer_member_linkage_invalid")
         if protocol.get("outer_trajectory_sha256") is not None and protocol.get("outer_trajectory_sha256") != model_provenance.get("sha256"):
             linkage_errors.append("sensitivity_outer_trajectory_hash_mismatch")
         if not external_artifact_ids or external_artifact_ids.get("model_run") != protocol.get("outer_run_id") or external_artifact_ids.get("model_sha256") != model_provenance.get("sha256"):

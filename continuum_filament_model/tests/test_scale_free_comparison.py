@@ -491,6 +491,8 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                     "sensitivity_protocol": {
                         "parameter": "initial_condition",
                         "outer_run_id": "model",
+                        "outer_member_id": "baseline",
+                        "outer_member_sha256": baseline_hash,
                         "baseline_run_id": "baseline",
                         "baseline_initial_state_hash": baseline_initial_hash,
                         "perturbation_range": {"min": -0.1, "max": 0.1},
