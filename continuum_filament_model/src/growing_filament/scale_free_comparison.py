@@ -1,0 +1,722 @@
+"""Registration-independent morphology comparison for growing filaments.
+
+The comparison in this module intentionally does not use a pixel/model-unit
+registration or a video/model clock registration.  Observation centre-lines
+remain in pixel coordinates and model centre-lines remain in model
+coordinates; both are reduced by their own current contour length and aligned
+by the data-derived growth progress ``q``.
+
+This is a morphology-only comparison.  It preserves observation quality,
+lineage, and censoring, and never turns a shape difference into a
+``model_inadequacy`` assessment.
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+import math
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Mapping, Sequence
+
+import numpy as np
+
+from .video_comparison import (
+    _choose_filament,
+    _file_record,
+    _read_csv_rows,
+    canonical_json,
+    load_model_output,
+    sha256_file,
+    sha256_text,
+)
+from .reproducibility import detect_git_revision
+
+
+SCHEMA_VERSION = "continuum-filament-scale-free-shape-0.1"
+MODE_COUNT = 6
+
+
+@dataclass(frozen=True)
+class ScaleFreeConfig:
+    """Numerical and eligibility settings for the morphology comparison."""
+
+    sample_points: int = 80
+    min_points: int = 2
+    min_length: float = 1.0e-9
+    min_quality: float = 0.20
+    max_progress_error: float = 0.05
+    monotonic_tolerance: float = 1.0e-8
+    min_growth_span_relative: float = 1.0e-8
+
+    def __post_init__(self) -> None:
+        if self.sample_points < 8:
+            raise ValueError("sample_points must be at least 8")
+        if self.min_points < 2:
+            raise ValueError("min_points must be at least 2")
+        if not math.isfinite(self.min_length) or self.min_length <= 0.0:
+            raise ValueError("min_length must be positive and finite")
+        if not 0.0 <= self.min_quality <= 1.0:
+            raise ValueError("min_quality must be in [0, 1]")
+        if self.max_progress_error < 0.0 or not math.isfinite(self.max_progress_error):
+            raise ValueError("max_progress_error must be finite and non-negative")
+        if self.monotonic_tolerance < 0.0 or not math.isfinite(self.monotonic_tolerance):
+            raise ValueError("monotonic_tolerance must be finite and non-negative")
+        if self.min_growth_span_relative <= 0.0 or not math.isfinite(self.min_growth_span_relative):
+            raise ValueError("min_growth_span_relative must be positive and finite")
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any] | None) -> "ScaleFreeConfig":
+        return cls(**dict(value or {}))
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class _Frame:
+    index: int
+    time_s: float | None
+    points: np.ndarray | None
+    length: float | None
+    quality: float | None = None
+    quality_flags: str = "ok"
+    lineage_status: str = "observed"
+    censor: bool = False
+    q: float | None = None
+    source: str = ""
+
+
+@dataclass(frozen=True)
+class _Progress:
+    status: str
+    initial_length: float | None
+    final_length: float | None
+    growth_span: float | None
+    valid_length_count: int
+    nonmonotonic_decrease_count: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]], fields: Sequence[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(fields), extrasaction="ignore", lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            clean: dict[str, Any] = {}
+            for field in fields:
+                value = row.get(field, "")
+                if isinstance(value, (dict, list, tuple)):
+                    value = canonical_json(value)
+                elif isinstance(value, np.generic):
+                    value = value.item()
+                clean[field] = value
+            writer.writerow(clean)
+
+
+def _write_json(path: Path, value: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(canonical_json(value) + "\n", encoding="utf-8")
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _int_or_default(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _bool_value(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes"}
+    return bool(value)
+
+
+def _length(points: np.ndarray) -> float:
+    if len(points) < 2:
+        return 0.0
+    return float(np.sum(np.linalg.norm(np.diff(points, axis=0), axis=1)))
+
+
+def _finite_points(points: np.ndarray | None) -> bool:
+    return bool(points is not None and points.ndim == 2 and points.shape[1] == 2 and len(points) >= 2 and np.isfinite(points).all())
+
+
+def _resample(points: np.ndarray, count: int) -> np.ndarray:
+    values = np.asarray(points, dtype=float)
+    if len(values) == 0:
+        return np.zeros((count, 2), dtype=float)
+    if len(values) == 1:
+        return np.repeat(values, count, axis=0)
+    distances = np.concatenate(([0.0], np.cumsum(np.linalg.norm(np.diff(values, axis=0), axis=1))))
+    keep = np.concatenate(([True], np.diff(distances) > 1.0e-15))
+    distances = distances[keep]
+    values = values[keep]
+    if len(values) == 1 or distances[-1] <= 1.0e-15:
+        return np.repeat(values[:1], count, axis=0)
+    target = np.linspace(0.0, float(distances[-1]), count)
+    return np.column_stack([np.interp(target, distances, values[:, axis]) for axis in range(2)])
+
+
+def _arc_length_radius_of_gyration(points: np.ndarray, total_length: float) -> float:
+    starts = points[:-1]
+    ends = points[1:]
+    lengths = np.linalg.norm(ends - starts, axis=1)
+    if total_length <= 0.0:
+        return float("nan")
+    center = np.sum(lengths[:, None] * 0.5 * (starts + ends), axis=0) / total_length
+    second = np.sum(
+        lengths
+        * (
+            np.sum(starts * starts, axis=1)
+            + np.sum(starts * ends, axis=1)
+            + np.sum(ends * ends, axis=1)
+        )
+        / 3.0
+    ) / total_length
+    return float(math.sqrt(max(float(second - np.dot(center, center)), 0.0)))
+
+
+def _peak_deflection(points: np.ndarray, total_length: float) -> float:
+    chord = points[-1] - points[0]
+    chord_length = float(np.linalg.norm(chord))
+    if chord_length <= 1.0e-15:
+        distances = np.linalg.norm(points - points[0], axis=1)
+    else:
+        relative = points - points[0]
+        distances = np.abs(relative[:, 0] * chord[1] - relative[:, 1] * chord[0]) / chord_length
+    return float(np.max(distances) / total_length)
+
+
+def _curvature_rms_times_length(points: np.ndarray, total_length: float) -> float:
+    if len(points) < 3:
+        return 0.0
+    segments = np.diff(points, axis=0)
+    lengths = np.linalg.norm(segments, axis=1)
+    values: list[float] = []
+    for index in range(1, len(points) - 1):
+        left = segments[index - 1]
+        right = segments[index]
+        left_norm = float(lengths[index - 1])
+        right_norm = float(lengths[index])
+        if left_norm <= 1.0e-15 or right_norm <= 1.0e-15:
+            continue
+        cosine = float(np.clip(np.dot(left, right) / (left_norm * right_norm), -1.0, 1.0))
+        angle = math.acos(cosine)
+        values.append(angle / max(0.5 * (left_norm + right_norm), 1.0e-15))
+    return float(math.sqrt(np.mean(np.square(values))) * total_length) if values else 0.0
+
+
+def _mode_fractions(points: np.ndarray, total_length: float) -> np.ndarray:
+    if total_length <= 0.0:
+        return np.zeros(MODE_COUNT, dtype=float)
+    chord = points[-1] - points[0]
+    chord_length = float(np.linalg.norm(chord))
+    if chord_length <= 1.0e-15:
+        return np.zeros(MODE_COUNT, dtype=float)
+    tangent = chord / chord_length
+    normal = np.asarray([-tangent[1], tangent[0]])
+    sampled = _resample(points, max(128, min(512, len(points) * 4)))
+    u = np.linspace(0.0, 1.0, len(sampled))
+    transverse = (sampled - points[0]) @ normal / total_length
+    integrate = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
+    coefficients = np.asarray(
+        [2.0 * integrate(transverse * np.sin(mode * np.pi * u), u) for mode in range(1, MODE_COUNT + 1)],
+        dtype=float,
+    )
+    power = coefficients * coefficients
+    total = float(np.sum(power))
+    return power / total if total > 1.0e-30 else np.zeros(MODE_COUNT, dtype=float)
+
+
+def shape_observables(points: np.ndarray, *, sample_points: int = 80, min_length: float = 1.0e-9) -> dict[str, Any] | None:
+    """Return dimensionless polyline observables or ``None`` for invalid input."""
+
+    values = np.asarray(points, dtype=float)
+    if not _finite_points(values):
+        return None
+    total_length = _length(values)
+    if not math.isfinite(total_length) or total_length <= min_length:
+        return None
+    endpoint = float(np.linalg.norm(values[-1] - values[0]))
+    fractions = _mode_fractions(values, total_length)
+    return {
+        "normalized_endpoint_distance": endpoint / total_length,
+        "normalized_radius_of_gyration": _arc_length_radius_of_gyration(values, total_length) / total_length,
+        "normalized_peak_deflection": _peak_deflection(values, total_length),
+        "curvature_rms_times_length": _curvature_rms_times_length(values, total_length),
+        "mode_fractions": [float(value) for value in fractions],
+        "length": total_length,
+        "point_count": int(len(values)),
+    }
+
+
+def _procrustes_distance(first: np.ndarray, second: np.ndarray) -> float:
+    """Return rotation/translation-invariant RMS distance for equal arc samples."""
+
+    a = np.asarray(first, dtype=float)
+    b = np.asarray(second, dtype=float)
+    if len(a) != len(b) or len(a) < 2:
+        return float("nan")
+    a = a - np.mean(a, axis=0)
+    b = b - np.mean(b, axis=0)
+    # The curves have already been normalized by their own contour length.
+    # Do not normalize their centred RMS again: that would erase legitimate
+    # differences in deflection amplitude.
+    a_complex = a[:, 0] + 1j * a[:, 1]
+    b_complex = b[:, 0] + 1j * b[:, 1]
+    cross = np.vdot(b_complex, a_complex)
+    if abs(cross) <= 1.0e-15:
+        rotated = b
+    else:
+        phase = cross / abs(cross)
+        rotated_complex = b_complex * phase
+        rotated = np.column_stack((rotated_complex.real, rotated_complex.imag))
+    return float(np.sqrt(np.mean(np.sum((a - rotated) ** 2, axis=1))))
+
+
+def normalized_shape_distance(first: np.ndarray, second: np.ndarray, *, sample_points: int = 80, min_length: float = 1.0e-9) -> tuple[float | None, str | None]:
+    """Compare two shapes after independent length normalization.
+
+    Translation, rotation, and endpoint orientation are nuisance degrees of
+    freedom.  Reflection is not removed because it changes a handed shape.
+    """
+
+    if not _finite_points(first) or not _finite_points(second):
+        return None, None
+    first_length = _length(first)
+    second_length = _length(second)
+    if first_length <= min_length or second_length <= min_length:
+        return None, None
+    first_sampled = _resample(first, sample_points) / first_length
+    second_sampled = _resample(second, sample_points) / second_length
+    forward = _procrustes_distance(first_sampled, second_sampled)
+    reverse = _procrustes_distance(first_sampled, second_sampled[::-1])
+    if not math.isfinite(forward) and not math.isfinite(reverse):
+        return None, None
+    if forward <= reverse:
+        return forward, "forward"
+    return reverse, "reverse"
+
+
+def _progress(frames: Sequence[_Frame], config: ScaleFreeConfig) -> _Progress:
+    lengths = [frame.length for frame in frames if frame.length is not None and math.isfinite(frame.length) and frame.length > config.min_length]
+    if len(lengths) < 2:
+        return _Progress("insufficient_length_observations", None, None, None, len(lengths), 0)
+    initial = float(lengths[0])
+    final = float(lengths[-1])
+    span = final - initial
+    relative_floor = config.min_growth_span_relative * max(abs(initial), config.min_length)
+    decreases = sum(1 for before, after in zip(lengths, lengths[1:]) if after < before - config.monotonic_tolerance * max(abs(initial), 1.0))
+    if abs(span) <= relative_floor:
+        return _Progress("zero_growth_span", initial, final, span, len(lengths), decreases)
+    if decreases:
+        return _Progress("non_monotonic_lengths", initial, final, span, len(lengths), decreases)
+    return _Progress("ok", initial, final, span, len(lengths), decreases)
+
+
+def _assign_progress(frames: Sequence[_Frame], progress: _Progress, config: ScaleFreeConfig) -> None:
+    if progress.growth_span is None or abs(progress.growth_span) <= config.min_length:
+        return
+    for frame in frames:
+        if frame.length is not None and math.isfinite(frame.length) and frame.length > config.min_length:
+            frame.q = float((frame.length - progress.initial_length) / progress.growth_span)  # type: ignore[operator]
+
+
+def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple[list[_Frame], str | None, dict[str, Any]]:
+    summary_rows = _read_csv_rows(observation_dir / "observation_summary.csv")
+    centerline_rows = _read_csv_rows(observation_dir / "centerline.csv")
+    lineage_rows = _read_csv_rows(observation_dir / "lineage.csv") if (observation_dir / "lineage.csv").exists() else []
+    selected = filament_id or _choose_filament(summary_rows)
+    if selected is None:
+        return [], None, {"reason": "no_selected_filament"}
+    summary_by_key = {(int(row["frame"]), row.get("filament_id", "")): row for row in summary_rows}
+    lineage_by_key = {(int(row["frame"]), row.get("filament_id", "")): row for row in lineage_rows}
+    grouped: dict[tuple[int, str], list[tuple[int, float, float]]] = {}
+    for row in centerline_rows:
+        if row.get("filament_id") != selected:
+            continue
+        try:
+            grouped.setdefault((int(row["frame"]), selected), []).append((int(row["point_id"]), float(row["x"]), float(row["y"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    manifest_path = observation_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    frame_range = (manifest.get("run") or {}).get("frame_range") or {}
+    processed_frames: list[int] = []
+    if frame_range.get("first") is not None and frame_range.get("last") is not None:
+        processed_frames = list(range(int(frame_range["first"]), int(frame_range["last"]) + 1, int(frame_range.get("stride", 1))))
+    keys = {key for key in summary_by_key if key[1] == selected}
+    keys.update(key for key in lineage_by_key if key[1] == selected)
+    for frame in processed_frames:
+        if (frame, selected) not in keys:
+            keys.add((frame, "unknown"))
+    fps = _float_or_none((manifest.get("video") or {}).get("fps")) or 1.0
+    frames: list[_Frame] = []
+    for frame_index, key_filament in sorted(keys):
+        row = summary_by_key.get((frame_index, key_filament))
+        lineage = lineage_by_key.get((frame_index, key_filament))
+        if row is None and lineage is None and key_filament == "unknown":
+            frames.append(_Frame(frame_index, frame_index / fps, None, None, None, "missing_observation", "missing_unknown", True, source="observation"))
+            continue
+        source = row or lineage or {}
+        points_rows = sorted(grouped.get((frame_index, selected), []))
+        points = np.asarray([[x, y] for _, x, y in points_rows], dtype=float) if points_rows else None
+        raw_length = _float_or_none((row or {}).get("length_px"))
+        if raw_length is None and _finite_points(points):
+            raw_length = _length(points)  # type: ignore[arg-type]
+        quality = _float_or_none((row or {}).get("quality"))
+        flags = str((row or {}).get("quality_flags", "ok") or "ok")
+        lineage_status = str((lineage or {}).get("status", "observed"))
+        censor = _bool_value((row or {}).get("censor", "0")) or _bool_value((lineage or {}).get("censor", "0"))
+        if lineage_status not in {"observed", "matched", "initial_lineage"}:
+            if lineage_status not in flags.split(";"):
+                flags = ";".join(part for part in (flags, lineage_status) if part)
+            censor = True
+        time_s = _float_or_none(source.get("time"))
+        frames.append(_Frame(frame_index, time_s, points, raw_length, quality, flags, lineage_status, censor, source="observation"))
+    return frames, selected, {"manifest": manifest, "summary_count": len(summary_rows), "lineage_count": len(lineage_rows)}
+
+
+def _model_frames(model_path: Path) -> tuple[list[_Frame], dict[str, Any]]:
+    loaded = load_model_output(model_path)
+    frames = [
+        _Frame(index, float(frame.time_s), np.asarray(frame.points, dtype=float), _length(np.asarray(frame.points, dtype=float)), source="model")
+        for index, frame in enumerate(loaded)
+    ]
+    provenance: dict[str, Any] = {
+        "logical_id": model_path.name,
+        "sha256": sha256_file(model_path),
+        "bytes": model_path.stat().st_size,
+    }
+    if model_path.suffix.lower() == ".npz":
+        try:
+            with np.load(model_path, allow_pickle=False) as archive:
+                raw = archive["metadata_json"]
+                metadata = json.loads(str(raw.item() if raw.ndim == 0 else raw.tolist()))
+            model_metadata = metadata.get("metadata") or {}
+            model_manifest = metadata.get("manifest") or {}
+            provenance.update(
+                {
+                    "run_kind": model_metadata.get("run_kind") or model_manifest.get("run_kind"),
+                    "base_fixture": model_metadata.get("base_fixture") or model_manifest.get("base_fixture"),
+                    "seed": model_metadata.get("seed"),
+                    "trial": model_metadata.get("trial"),
+                    "source_revision": model_manifest.get("git_revision") or model_manifest.get("source_revision"),
+                    "input_hash": model_manifest.get("input_hash"),
+                    "initial_state_hash": model_manifest.get("initial_state_hash"),
+                    "canonical_state_hash": model_manifest.get("canonical_state_hash"),
+                    "event_sequence_hash": model_manifest.get("event_sequence_hash"),
+                }
+            )
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            provenance["metadata_status"] = "unavailable"
+    run_kind = str(provenance.get("run_kind") or "unspecified")
+    provenance["population"] = "replicate" if "replicate" in run_kind or provenance.get("seed") is not None else "deterministic_or_unclassified"
+    return frames, provenance
+
+
+def _coverage(frames: Sequence[_Frame]) -> dict[str, Any]:
+    present = [frame for frame in frames if frame.index is not None]
+    if not present:
+        return {"first_frame": None, "last_frame": None, "count": 0, "time_first_s": None, "time_last_s": None, "time_coverage_is_physical": False}
+    times = [frame.time_s for frame in present if frame.time_s is not None]
+    return {
+        "first_frame": min(frame.index for frame in present),
+        "last_frame": max(frame.index for frame in present),
+        "count": len(present),
+        "time_first_s": min(times) if times else None,
+        "time_last_s": max(times) if times else None,
+        "time_coverage_is_physical": False,
+    }
+
+
+def _progress_reason(progress: _Progress) -> str | None:
+    return None if progress.status == "ok" else progress.status
+
+
+def _feature_row(prefix: str, features: Mapping[str, Any] | None) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    names = (
+        "normalized_endpoint_distance",
+        "normalized_radius_of_gyration",
+        "normalized_peak_deflection",
+        "curvature_rms_times_length",
+    )
+    for name in names:
+        result[f"{prefix}_{name}"] = None if features is None else features.get(name)
+    fractions = [None] * MODE_COUNT if features is None else features.get("mode_fractions", [None] * MODE_COUNT)
+    for index in range(MODE_COUNT):
+        result[f"{prefix}_mode_{index + 1}_fraction"] = fractions[index] if index < len(fractions) else None
+    return result
+
+
+def _compact_observation_provenance(observation_dir: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
+    source = manifest.get("input") or {}
+    artifacts = manifest.get("artifacts") or {}
+    return {
+        "logical_id": source.get("logical_id") or observation_dir.name,
+        "sha256": source.get("sha256"),
+        "bytes": source.get("bytes"),
+        "manifest_artifact_id": "manifest.json",
+        "artifacts": {
+            str(key): {"logical_id": value.get("path", str(key)), "sha256": value.get("sha256"), "bytes": value.get("bytes")}
+            for key, value in artifacts.items()
+            if isinstance(value, Mapping)
+        },
+    }
+
+
+def scale_free_shape_comparison(
+    observation_dir: str | Path,
+    model_path: str | Path,
+    *,
+    output_dir: str | Path | None = None,
+    filament_id: str | None = None,
+    config: ScaleFreeConfig | Mapping[str, Any] | None = None,
+    source_revision: str | None = None,
+    external_artifact_ids: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compare observation and model morphology without absolute registration.
+
+    ``observation_dir`` must be the output of :func:`run_pipeline`; ``model_path``
+    may be the existing ``trajectory.npz``, centreline CSV, or JSON trajectory
+    format.  No coordinate conversion or time conversion is performed.
+    """
+
+    cfg = config if isinstance(config, ScaleFreeConfig) else ScaleFreeConfig.from_mapping(config)
+    obs_dir = Path(observation_dir).expanduser().resolve()
+    model_file = Path(model_path).expanduser().resolve()
+    out_dir = Path(output_dir).expanduser().resolve() if output_dir is not None else obs_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    observations, selected, observation_info = _observation_frames(obs_dir, filament_id)
+    models, model_provenance = _model_frames(model_file) if model_file.is_file() else ([], {"logical_id": model_file.name, "sha256": None, "bytes": None, "population": "unknown"})
+    observation_manifest = observation_info.get("manifest") or {}
+    observation_progress = _progress(observations, cfg)
+    model_progress = _progress(models, cfg)
+    _assign_progress(observations, observation_progress, cfg)
+    _assign_progress(models, model_progress, cfg)
+    observation_features: dict[int, dict[str, Any] | None] = {}
+    for frame in observations:
+        eligible = (
+            _finite_points(frame.points)
+            and frame.quality is not None
+            and frame.quality >= cfg.min_quality
+            and not frame.censor
+            and frame.length is not None
+            and frame.length > cfg.min_length
+        )
+        observation_features[frame.index] = shape_observables(frame.points, sample_points=cfg.sample_points, min_length=cfg.min_length) if eligible else None  # type: ignore[arg-type]
+    model_features: dict[int, dict[str, Any] | None] = {
+        frame.index: shape_observables(frame.points, sample_points=cfg.sample_points, min_length=cfg.min_length) if _finite_points(frame.points) else None  # type: ignore[arg-type]
+        for frame in models
+    }
+    progress_alignment_possible = observation_progress.status == "ok" and model_progress.status == "ok"
+    model_by_observation: dict[int, tuple[_Frame, float]] = {}
+    if progress_alignment_possible:
+        usable_models = [frame for frame in models if frame.q is not None and model_features.get(frame.index) is not None]
+        for observation in observations:
+            if observation.q is None or observation_features.get(observation.index) is None or not usable_models:
+                continue
+            model = min(usable_models, key=lambda item: abs(float(item.q) - float(observation.q)))
+            error = abs(float(model.q) - float(observation.q))
+            if error <= cfg.max_progress_error:
+                model_by_observation[observation.index] = (model, error)
+    output_rows: list[dict[str, Any]] = []
+    for observation in observations:
+        model_match = model_by_observation.get(observation.index)
+        model = model_match[0] if model_match is not None else None
+        model_features_value = model_features.get(model.index) if model is not None else None
+        obs_features = observation_features.get(observation.index)
+        row: dict[str, Any] = {
+            "observation_frame": observation.index,
+            "observation_time_s": observation.time_s,
+            "filament_id": selected or "unknown",
+            "observation_length_px": observation.length,
+            "observation_q": observation.q,
+            "observation_quality": observation.quality,
+            "observation_quality_flags": observation.quality_flags,
+            "lineage_status": observation.lineage_status,
+            "observation_censor": int(observation.censor),
+            "model_frame": model.index if model is not None else None,
+            "model_time_s": model.time_s if model is not None else None,
+            "model_length": model.length if model is not None else None,
+            "model_q": model.q if model is not None else None,
+            "progress_error": model_match[1] if model_match is not None else None,
+            "progress_match_method": "nearest_growth_progress" if model_match is not None else "no_match",
+            "comparison_censor": int(observation.censor or obs_features is None or model_match is None),
+            "eligibility_status": "eligible" if obs_features is not None else "not_eligible",
+            "metric_reason": "" if obs_features is not None and model_match is not None else (
+                "observation_censored_or_quality" if obs_features is None and observation.censor else
+                "observation_centerline_unavailable" if obs_features is None else
+                "growth_progress_unavailable_or_unmatched"
+            ),
+            "normalized_shape_distance": None,
+            "shape_distance_orientation": None,
+        }
+        row.update(_feature_row("observation", obs_features))
+        row.update(_feature_row("model", model_features_value))
+        if obs_features is not None and model is not None and model_features_value is not None and progress_alignment_possible:
+            distance, orientation = normalized_shape_distance(observation.points, model.points, sample_points=cfg.sample_points, min_length=cfg.min_length)  # type: ignore[arg-type]
+            row["normalized_shape_distance"] = distance
+            row["shape_distance_orientation"] = orientation
+            if distance is None:
+                row["comparison_censor"] = 1
+                row["metric_reason"] = "shape_distance_undefined"
+        output_rows.append(row)
+
+    eligible_count = sum(row["eligibility_status"] == "eligible" for row in output_rows)
+    compared_count = sum(row["normalized_shape_distance"] is not None for row in output_rows)
+    reasons: list[str] = []
+    if selected is None:
+        reasons.append("no_selected_filament")
+    if not observations:
+        reasons.append("no_observation_frames")
+    if not models:
+        reasons.append("model_centerline_unavailable")
+    if observation_progress.status != "ok":
+        reasons.append(f"observation_{observation_progress.status}")
+    if model_progress.status != "ok":
+        reasons.append(f"model_{model_progress.status}")
+    if observations and eligible_count == 0:
+        reasons.append("no_eligible_observation_centerlines")
+    if progress_alignment_possible and eligible_count > 0 and compared_count == 0:
+        reasons.append("no_valid_growth_progress_matches")
+    status = "computed" if compared_count > 0 else "input_quality_comparison_unavailable"
+    if not observations or selected is None:
+        status = "input_quality_no_centerline"
+    elif observation_progress.status == "zero_growth_span" or model_progress.status == "zero_growth_span":
+        status = "growth_progress_undefined_zero_span"
+    elif observation_progress.status == "non_monotonic_lengths" or model_progress.status == "non_monotonic_lengths":
+        status = "growth_progress_undefined_non_monotonic"
+    elif not models:
+        status = "model_centerline_unavailable"
+    elif eligible_count == 0:
+        status = "input_quality_no_eligible_centerline"
+    elif compared_count == 0:
+        status = "no_valid_growth_progress_matches"
+
+    config_hash = sha256_text(canonical_json(cfg.to_dict()))
+    revision = source_revision or detect_git_revision(Path(__file__).resolve().parents[2])
+    input_provenance = _compact_observation_provenance(obs_dir, observation_manifest)
+    if external_artifact_ids:
+        input_provenance["external_artifact_ids"] = dict(external_artifact_ids)
+    coverage = {
+        "observation": _coverage(observations),
+        "model": _coverage(models),
+        "frame_fraction_is_not_physical_time": True,
+    }
+    compact: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "comparison_mode": "scale_free_shape",
+        "status": status,
+        "input_quality": {
+            "usable": compared_count > 0,
+            "censor": bool(reasons),
+            "reasons": sorted(set(reasons)),
+            "diagnostic": ";".join(sorted(set(reasons))) if reasons else "ok",
+        },
+        "registration": {
+            "status": "not_required_not_inferred",
+            "pixel_per_model_unit": None,
+            "time_scale": None,
+            "time_offset": None,
+            "physical_time_alignment": False,
+        },
+        "filament_id": selected,
+        "config": cfg.to_dict(),
+        "config_sha256": config_hash,
+        "source_revision": revision,
+        "observation_provenance": input_provenance,
+        "model_provenance": model_provenance,
+        "observation_progress": observation_progress.to_dict(),
+        "model_progress": model_progress.to_dict(),
+        "progress_coordinate": "q=(L-L_initial)/(L_final-L_initial); nearest matching only; no interpolation",
+        "spatial_normalization": "independent current contour length L; shape samples parameterized by s/L",
+        "coverage": coverage,
+        "rows": len(output_rows),
+        "eligible_observation_rows": eligible_count,
+        "compared_rows": compared_count,
+        "censored_rows": sum(int(row["comparison_censor"]) for row in output_rows),
+        "excluded_from_comparison_denominator": len(output_rows) - compared_count,
+        "model_population": model_provenance.get("population"),
+        "model_run_kind": model_provenance.get("run_kind"),
+        "parameter_identification": "suppressed",
+        "model_inadequacy": "not_assessed_in_scale_free_morphology_mode",
+        "quantitative_physical_fit": "suppressed",
+        "limitations": [
+            "pixel and model coordinates are normalized independently by current contour length",
+            "video/model time registration is not used; time fields are coverage metadata only",
+            "censored, missing, low-quality, new-lineage, and reconnected frames do not contribute shape distance",
+            "growth progress is not defined for zero-span or non-monotonic length records",
+        ],
+    }
+    csv_fields = [
+        "observation_frame", "observation_time_s", "filament_id", "observation_length_px", "observation_q",
+        "observation_quality", "observation_quality_flags", "lineage_status", "observation_censor",
+        "model_frame", "model_time_s", "model_length", "model_q", "progress_error", "progress_match_method",
+        "comparison_censor", "eligibility_status", "metric_reason", "normalized_shape_distance",
+        "shape_distance_orientation",
+    ]
+    for prefix in ("observation", "model"):
+        csv_fields.extend([
+            f"{prefix}_normalized_endpoint_distance",
+            f"{prefix}_normalized_radius_of_gyration",
+            f"{prefix}_normalized_peak_deflection",
+            f"{prefix}_curvature_rms_times_length",
+            *[f"{prefix}_mode_{index + 1}_fraction" for index in range(MODE_COUNT)],
+        ])
+    _write_csv(out_dir / "scale_free_comparison.csv", output_rows, csv_fields)
+    _write_json(out_dir / "scale_free_comparison.json", compact)
+    artifacts = {
+        "comparison_csv": _file_record(out_dir / "scale_free_comparison.csv"),
+        "comparison_json": _file_record(out_dir / "scale_free_comparison.json"),
+    }
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "comparison_mode": "scale_free_shape",
+        "input_logical_id": input_provenance.get("logical_id"),
+        "input_sha256": input_provenance.get("sha256"),
+        "model_logical_id": model_provenance.get("logical_id"),
+        "model_sha256": model_provenance.get("sha256"),
+        "source_revision": revision,
+        "config_sha256": config_hash,
+        "model_population": model_provenance.get("population"),
+        "status": status,
+        "eligible_observation_rows": eligible_count,
+        "compared_rows": compared_count,
+        "censored_rows": compact["censored_rows"],
+        "artifacts": artifacts,
+        "external_artifact_ids": dict(external_artifact_ids or {}),
+        "registration": compact["registration"],
+        "spatial_normalization": compact["spatial_normalization"],
+        "progress_coordinate": compact["progress_coordinate"],
+    }
+    _write_json(out_dir / "scale_free_comparison_manifest.json", manifest)
+    compact["artifacts"] = artifacts
+    compact["manifest_logical_id"] = "scale_free_comparison_manifest.json"
+    return {"summary": compact, "rows": output_rows, "manifest": manifest}
+
+
+__all__ = [
+    "MODE_COUNT",
+    "SCHEMA_VERSION",
+    "ScaleFreeConfig",
+    "normalized_shape_distance",
+    "scale_free_shape_comparison",
+    "shape_observables",
+]

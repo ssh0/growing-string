@@ -23,6 +23,10 @@ SOURCE_DIR = SCRIPT_DIR / "src"
 if str(SOURCE_DIR) not in sys.path:
     sys.path.insert(0, str(SOURCE_DIR))
 
+from growing_filament.scale_free_comparison import (  # noqa: E402
+    ScaleFreeConfig,
+    scale_free_shape_comparison,
+)
 from growing_filament.video_comparison import (  # noqa: E402
     RegistrationConfig,
     SegmentationConfig,
@@ -63,13 +67,15 @@ def _config(args: argparse.Namespace) -> SegmentationConfig:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for command in ("extract", "compare", "render", "all"):
+    for command in ("extract", "compare", "scale-free", "render", "all"):
         child = sub.add_parser(command)
         child.add_argument("--video", required=command in {"extract", "render", "all"})
         child.add_argument("--output", required=True, help="analysis/artifact directory")
         child.add_argument("--model", help="trajectory .npz, model centerline CSV, or JSON")
         child.add_argument("--config", help="segmentation JSON")
-        child.add_argument("--registration", help="registration JSON; omit to suppress metrics")
+        child.add_argument("--registration", help="registration JSON for calibrated comparison only")
+        child.add_argument("--shape-config", help="scale-free morphology comparison JSON")
+        child.add_argument("--max-progress-error", type=float, help="maximum growth-progress mismatch for scale-free matching")
         child.add_argument("--filament-id")
         child.add_argument("--max-frames", type=int)
         child.add_argument("--representative-count", type=int, default=6)
@@ -101,6 +107,21 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output)
     config = _config(args) if args.command in {"extract", "all"} else SegmentationConfig()
     registration = RegistrationConfig.from_mapping(_json_file(args.registration))
+    if args.command == "scale-free":
+        if not args.model:
+            raise SystemExit("--model is required for scale-free")
+        shape_values = _json_file(args.shape_config)
+        if args.max_progress_error is not None:
+            shape_values["max_progress_error"] = args.max_progress_error
+        result = scale_free_shape_comparison(
+            output,
+            args.model,
+            output_dir=output,
+            filament_id=args.filament_id,
+            config=ScaleFreeConfig.from_mapping(shape_values),
+        )
+        print(json.dumps({"output": str(output.resolve()), "command": args.command, "status": result["summary"]["status"]}, ensure_ascii=False))
+        return 0
     if args.command in {"extract", "all"}:
         if not args.video:
             raise SystemExit("--video is required")
