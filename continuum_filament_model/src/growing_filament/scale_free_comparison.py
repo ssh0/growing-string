@@ -614,8 +614,13 @@ def _validate_observation_consistency(
             except (KeyError, TypeError, ValueError):
                 errors.append(f"invalid lineage metadata for frame={key[0]},filament={key[1]}")
         try:
-            exported = int(summary["centerline_exported"])
+            exported_value = str(summary["centerline_exported"]).strip()
+            if exported_value not in {"0", "1"}:
+                raise ValueError("centerline_exported must be 0 or 1")
+            exported = int(exported_value)
             expected_points = int(summary["n_points"])
+            if expected_points < 0:
+                raise ValueError("n_points must be non-negative")
             actual_points = len(centerline_by_key.get(key, []))
             if exported == 1 and (key not in centerline_by_key or actual_points != expected_points):
                 errors.append(f"centerline count mismatch for frame={key[0]},filament={key[1]}")
@@ -740,6 +745,8 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         manifest_structure_errors.append("frame_range_not_mapping")
         frame_range = {}
     if isinstance(frame_range, Mapping):
+        if "decode_complete" in frame_range and frame_range.get("decode_complete") is not True:
+            manifest_structure_errors.append("decode_incomplete")
         first = frame_range.get("first")
         last = frame_range.get("last")
         stride = frame_range.get("stride", 1)
@@ -771,6 +778,13 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     if selected is not None:
         keys.update(key for key in summary_by_key if key[1] == selected)
         keys.update(key for key in lineage_by_key if key[1] == selected)
+        for row in centerline_rows:
+            if row.get("filament_id") != selected:
+                continue
+            try:
+                keys.add((int(row["frame"]), str(row.get("filament_id", ""))))
+            except (KeyError, TypeError, ValueError):
+                continue
     for frame in processed_frames:
         selected_key = (frame, selected) if selected is not None else (frame, "unknown")
         if selected_key not in keys:
@@ -979,10 +993,17 @@ def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) 
     else:
         errors.append("model_manifest_not_mapping")
     scope: dict[str, Any] = {}
-    for source in sources:
-        for key in ("benchmark", "boundary", "contact_enabled", "physical_scope"):
-            if key not in scope and key in source:
-                scope[key] = source[key]
+    for key in ("benchmark", "boundary", "contact_enabled", "physical_scope"):
+        values = [source[key] for source in sources if key in source]
+        if not values:
+            continue
+        first_value = values[0]
+        normalized_first = set(first_value) if key == "physical_scope" and isinstance(first_value, list) else first_value
+        for value in values[1:]:
+            normalized_value = set(value) if key == "physical_scope" and isinstance(value, list) else value
+            if normalized_value != normalized_first:
+                errors.append(f"model_scope_metadata_mismatch:{key}")
+        scope[key] = first_value
     if scope.get("benchmark") != "stage2_free_free_growth_relaxation_buckling":
         errors.append("unsupported_stage2_benchmark")
     if scope.get("boundary") != "free/free":
