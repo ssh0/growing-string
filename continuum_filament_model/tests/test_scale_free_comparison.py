@@ -479,8 +479,8 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             plus_artifact = self._write_model(root / "member-plus", [1.1, 2.1])
             baseline_hash = hashlib.sha256(baseline_artifact.read_bytes()).hexdigest()
             plus_hash = hashlib.sha256(plus_artifact.read_bytes()).hexdigest()
-            baseline_metrics = {"normalized_shape_distance": 0.0}
-            plus_metrics = {"normalized_shape_distance": 0.1}
+            baseline_metrics = {"normalized_endpoint_distance": 1.0}
+            plus_metrics = {"normalized_endpoint_distance": 1.0}
             metadata["metadata"].update(
                 {
                     "run_kind": "initial_condition_sensitivity",
@@ -505,8 +505,8 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
                                 "result": {"metrics": plus_metrics, "metrics_sha256": hashlib.sha256(json.dumps(plus_metrics, sort_keys=True, separators=(",", ":")).encode()).hexdigest()},
                             },
                         ],
-                        "metrics": ["normalized_shape_distance"],
-                        "aggregate_metrics": {"member_count": 2, "max_normalized_shape_distance_delta": 0.1},
+                        "metrics": ["normalized_endpoint_distance"],
+                        "aggregate_metrics": {"member_count": 2, "max_normalized_endpoint_distance_delta": 0.0},
                         "accepted": True,
                         "acceptance_criteria": {"max_metric_delta": 0.2},
                     },
@@ -515,7 +515,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             np.savez(model, positions=positions, position_offsets=offsets, rest_lengths=rest_lengths, rest_offsets=rest_offsets, times=times, steps=steps, metadata_json=np.asarray(json.dumps(metadata)))
             result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
             self.assertEqual(result["summary"]["model_population"], "initial_condition_sensitivity")
-            self.assertEqual(result["summary"]["initial_condition_sensitivity"]["metrics"], ["normalized_shape_distance"])
+            self.assertEqual(result["summary"]["initial_condition_sensitivity"]["metrics"], ["normalized_endpoint_distance"])
             self.assertTrue(result["summary"]["video_alignment"]["distinguished_from_initial_condition_sensitivity"])
 
     def test_invalid_model_contract_is_unavailable_but_retains_coverage(self):

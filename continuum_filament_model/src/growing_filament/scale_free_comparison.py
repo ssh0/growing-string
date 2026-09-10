@@ -1251,6 +1251,7 @@ def _validate_model_scope(
                         errors.append("sensitivity_member_value_invalid")
                     provenance_member = member.get("provenance")
                     result_member = member.get("result")
+                    member_metrics_from_npz: Mapping[str, Any] | None = None
                     if not isinstance(provenance_member, Mapping) or not isinstance(result_member, Mapping):
                         errors.append("sensitivity_member_provenance_result_missing")
                         continue
@@ -1288,6 +1289,11 @@ def _validate_model_scope(
                                         if not isinstance(member_initial_hash, str) or not member_initial_hash or member_initial_hash in member_initial_hashes:
                                             errors.append("sensitivity_member_initial_state_invalid")
                                         member_initial_hashes.add(member_initial_hash if isinstance(member_initial_hash, str) else "")
+                                        member_frames = load_model_output(member_file)
+                                        if not member_frames:
+                                            errors.append("sensitivity_member_trajectory_empty")
+                                        else:
+                                            member_metrics_from_npz = shape_observables(member_frames[-1].points, sample_points=80)
                                     except (OSError, KeyError, TypeError, ValueError, OverflowError, zipfile.BadZipFile):
                                         errors.append("sensitivity_member_metadata_unreadable")
                             except OSError:
@@ -1307,6 +1313,8 @@ def _validate_model_scope(
                                 errors.append("sensitivity_member_metric_missing")
                             elif not isinstance(metrics[metric_name], (int, float)) or isinstance(metrics[metric_name], bool) or not math.isfinite(float(metrics[metric_name])):
                                 errors.append("sensitivity_member_metric_invalid")
+                            elif member_metrics_from_npz is None or metric_name not in member_metrics_from_npz or abs(float(metrics[metric_name]) - float(member_metrics_from_npz[metric_name])) > 1.0e-9:
+                                errors.append("sensitivity_member_metric_recomputed_mismatch")
             if protocol.get("parameter") != "initial_condition":
                 errors.append("invalid_sensitivity_parameter")
             if not isinstance(protocol.get("metrics"), list) or not protocol.get("metrics"):
@@ -1862,7 +1870,6 @@ def scale_free_shape_comparison(
     _write_json(out_dir / "scale_free_comparison.json", compact)
     artifacts = {
         "comparison_csv": _file_record(out_dir / "scale_free_comparison.csv"),
-        "comparison_json": {"path": "scale_free_comparison.json", "bytes": None, "sha256": None},
     }
     compact["artifacts"] = artifacts
     compact["manifest_logical_id"] = "scale_free_comparison_manifest.json"
