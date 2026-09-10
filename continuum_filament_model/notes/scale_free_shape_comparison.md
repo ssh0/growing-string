@@ -4,8 +4,10 @@
 
 `growing_filament.scale_free_comparison` は、実動画の pixel/model-unit
 登録値や video/model time 登録値を必要としない形態比較モードである。対象は
-free/free・一様成長・非接触の Stage 2 出力と、`run_pipeline()` が抽出した動画中心線で
-あり、solver の式、接触物理、物性 fit は変更・実行しない。
+`stage2_free_free_growth_relaxation_buckling` の metadata が付いた free/free・一様成長・
+非接触の Stage 2 NPZ 出力と、`run_pipeline()` が抽出した動画中心線である。scope metadata
+のない CSV/JSON は対象モデルとして扱わず比較不能とする。solver の式、接触物理、物性 fit
+は変更・実行しない。
 
 観測中心線とモデル中心線は、それぞれの現在の輪郭長 `L` で独立に正規化する。時間の
 照合は行わず、各系列について
@@ -32,10 +34,9 @@ physical time とは扱わない。
 - 回転・平行移動・端点方向を除いた normalized shape distance（valid な matched 行のみ）
 
 `new_lineage`、`reconnected_after_missing`、missing、branch/loop、low quality、ROI/image
-boundary 等の既存 censor はそのまま保持し、shape distance の分母から除外する。モデル
-replicate は `run_kind=exploratory_replicate` として deterministic fixture/refinement から
-分離する。`model_inadequacy`、parameter identification、calibrated dynamics は、この
-モードの成果物に作成しない。
+boundary 等の既存 censor はそのまま保持し、shape distance の分母から除外する。モデルは
+free/free・一様成長・非接触 Stage 2 の deterministic run に限定する。`model_inadequacy`、
+parameter identification、calibrated dynamics は、このモードの成果物に作成しない。
 
 次の状態は推測で補わず、`status` と `input_quality.reasons` に明示する。manifest の `validation.valid`、中心線の厳密な frame/time/point/censor/quality contract、または lineage の整合性が invalid の場合は、中心線の行・lineage・frame coverage を保持したまま比較不能とする。成長進行度の端点と `q` は、有効・非censor・許可された lineage の中心線だけから計算し、除外されたフレームへ補間しない。曲率 RMS は固定弧長サンプリング後に計算し、入力点の細分割に依存させない。
 
@@ -71,18 +72,17 @@ python continuum_filament_model/video_compare.py scale-free \
   --model /tmp/stage2/_runs/fast_growth_low_bend/trajectory.npz
 ```
 
-実際の Stage 2 run と gray5 を一度に比較する bounded runner は次である。既定では
-`fast_growth_low_bend` と `fast_growth_high_bend` を実行する。必要なら `--case` を繰り返し、
-replicate を明示的に追加する。trajectory、raw centerline、per-case CSV は一時 artifact とし、
-root の `compact_summary.json`、`summary.csv`、`compact_manifest.json` のみをレビュー対象にする。
+実際の Stage 2 run と gray5 を一度に比較する bounded runner は次である。既定で
+`fast_growth_low_bend` と `fast_growth_high_bend` の deterministic run を実行する。
+trajectory、raw centerline、per-case CSV は一時 artifact とし、root の `compact_summary.json`、
+`summary.csv`、`compact_manifest.json` のみをレビュー対象にする。
 
 ```bash
 TMP_DIR=$(mktemp -d /tmp/growing-string-scale-free.XXXXXX)
 PYTHONPATH=continuum_filament_model/src \
 python continuum_filament_model/benchmarks/scale_free_shape_comparison.py \
   --config continuum_filament_model/benchmarks/configs/stage2_free_free.json \
-  --video img/gray5.mp4 --output "$TMP_DIR" \
-  --case fast_growth_low_bend --case fast_growth_high_bend
+  --video img/gray5.mp4 --output "$TMP_DIR"
 ```
 
 ### gray5 bounded 実行記録

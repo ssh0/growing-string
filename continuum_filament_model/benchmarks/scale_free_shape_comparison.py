@@ -75,24 +75,18 @@ def _compact_input(source: Path) -> dict[str, Any]:
     return {"logical_id": source.name, "sha256": sha256_file(source), "bytes": source.stat().st_size, "status": "available"}
 
 
-def _model_population(run_kind: str | None) -> str:
-    return "replicate" if run_kind == "exploratory_replicate" else "deterministic_or_unclassified"
-
-
 def run_bounded_comparison(
     config: Mapping[str, Any] | None,
     output: str | Path,
     *,
     video_path: str | Path = DEFAULT_VIDEO,
-    model_cases: Sequence[str] = DEFAULT_CASES,
     shape_config: ScaleFreeConfig | Mapping[str, Any] | None = None,
     max_frames: int | None = None,
 ) -> dict[str, Any]:
-    """Run selected deterministic/replicate Stage 2 cases against gray5.
+    """Run the intended deterministic Stage 2 cases against gray5.
 
-    The model cases are executed independently and remain separated by their
-    Stage 2 ``run_kind``.  A missing or unusable video still produces a compact
-    input-quality result; no substitute video or inferred registration is used.
+    A missing or unusable video still produces a compact input-quality result;
+    no substitute video or inferred registration is used.
     """
 
     effective = load_config_from_mapping(config) if config is not None else load_config(None)
@@ -102,12 +96,8 @@ def run_bounded_comparison(
     revision = detect_git_revision(Path(__file__).resolve().parents[2])
     config_hash = __import__("hashlib").sha256(canonical_json_bytes(effective)).hexdigest()
     specs = {spec.name: spec for spec in _all_specs(effective)}
-    unknown = [name for name in model_cases if name not in specs]
-    if unknown:
-        raise ValueError(f"unknown Stage 2 model case(s): {', '.join(unknown)}")
-
     model_records: list[dict[str, Any]] = []
-    for case_name in model_cases:
+    for case_name in DEFAULT_CASES:
         spec = specs[case_name]
         result = run_case(spec, effective["base"], destination, revision, save_trajectory_file=True)
         trajectory_value = result.get("trajectory_path")
@@ -118,7 +108,6 @@ def run_bounded_comparison(
             "base_fixture": result.get("base_fixture"),
             "seed": result.get("seed"),
             "trial": result.get("trial"),
-            "population": _model_population(result.get("run_kind")),
             "model_logical_id": model_path.name if model_path is not None else None,
             "model_sha256": sha256_file(model_path) if model_path is not None and model_path.is_file() else None,
             "model_path_external": True,
@@ -218,7 +207,6 @@ def run_bounded_comparison(
         comparison_rows.append({
             "run_name": record["run_name"],
             "run_kind": record["run_kind"],
-            "population": record["population"],
             "status": comparison.get("status"),
             "eligible_observation_rows": comparison.get("eligible_observation_rows", 0),
             "compared_rows": comparison.get("compared_rows", 0),
@@ -226,8 +214,6 @@ def run_bounded_comparison(
             "model_sha256": record.get("model_sha256"),
             "input_quality_reasons": ";".join((comparison.get("input_quality") or {}).get("reasons", [])),
         })
-    deterministic = [record for record in model_records if record["population"] != "replicate"]
-    replicates = [record for record in model_records if record["population"] == "replicate"]
     report: dict[str, Any] = {
         "schema_version": RUNNER_SCHEMA_VERSION,
         "comparison_schema_version": SCHEMA_VERSION,
@@ -237,8 +223,6 @@ def run_bounded_comparison(
         "shape_config_sha256": __import__("hashlib").sha256(canonical_json_bytes(shape_cfg.to_dict())).hexdigest(),
         "video": _compact_input(source),
         "extraction": extraction,
-        "deterministic_model_runs": deterministic,
-        "replicate_model_runs": replicates,
         "model_runs": model_records,
         "summary_csv": "summary.csv",
         "artifact_policy": "trajectories, raw extraction, and per-case scale-free CSV are external-style artifacts; root summaries are compact",
@@ -251,7 +235,7 @@ def run_bounded_comparison(
     _write_csv(
         destination / "summary.csv",
         comparison_rows,
-        ["run_name", "run_kind", "population", "status", "eligible_observation_rows", "compared_rows", "censored_rows", "model_sha256", "input_quality_reasons"],
+        ["run_name", "run_kind", "status", "eligible_observation_rows", "compared_rows", "censored_rows", "model_sha256", "input_quality_reasons"],
     )
     manifest = {
         "schema_version": RUNNER_SCHEMA_VERSION,
@@ -261,8 +245,6 @@ def run_bounded_comparison(
         "shape_config_sha256": report["shape_config_sha256"],
         "video": report["video"],
         "model_run_names": [record["run_name"] for record in model_records],
-        "deterministic_model_run_names": [record["run_name"] for record in deterministic],
-        "replicate_model_run_names": [record["run_name"] for record in replicates],
         "external_artifact_ids": extraction.get("external_artifact_ids", {}),
         "registration": report["registration"],
         "parameter_identification": "suppressed",
@@ -277,7 +259,6 @@ def _cli() -> argparse.Namespace:
     parser.add_argument("--config", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--video", type=Path, default=DEFAULT_VIDEO)
-    parser.add_argument("--case", dest="cases", action="append", help="Stage 2 case name; repeat to compare multiple cases")
     parser.add_argument("--max-frames", type=int)
     parser.add_argument("--max-progress-error", type=float)
     return parser.parse_args()
@@ -290,7 +271,6 @@ def main() -> int:
         load_config(args.config),
         args.output,
         video_path=args.video,
-        model_cases=tuple(args.cases or DEFAULT_CASES),
         shape_config=shape_config,
         max_frames=args.max_frames,
     )

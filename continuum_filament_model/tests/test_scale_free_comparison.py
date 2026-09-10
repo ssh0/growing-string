@@ -90,6 +90,37 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
         return root
 
     def _write_model(self, root: Path, lengths: list[float]) -> Path:
+        model = root / "model.npz"
+        positions = []
+        offsets = [0]
+        for length in lengths:
+            positions.extend([[0.0, 0.0], [length * 0.5, 0.0], [length, 0.0]])
+            offsets.append(offsets[-1] + 3)
+        metadata = {
+            "metadata": {
+                "benchmark": "stage2_free_free_growth_relaxation_buckling",
+                "boundary": "free/free",
+                "contact_enabled": False,
+                "physical_scope": [
+                    "uniform_reference_length_growth",
+                    "stretching",
+                    "discrete_bending",
+                    "isotropic_substrate_drag",
+                ],
+                "run_kind": "deterministic_fixture",
+            },
+            "manifest": {},
+        }
+        np.savez(
+            model,
+            positions=np.asarray(positions, dtype=float),
+            position_offsets=np.asarray(offsets, dtype=int),
+            times=np.asarray([1000.0 + index * 11.0 for index in range(len(lengths))], dtype=float),
+            metadata_json=np.asarray(json.dumps(metadata)),
+        )
+        return model
+
+    def _write_model_csv(self, root: Path, lengths: list[float]) -> Path:
         model = root / "model.csv"
         with model.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
@@ -110,6 +141,12 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             subdivided_features["curvature_rms_times_length"],
             places=10,
         )
+
+    def test_mode_fractions_are_invariant_to_straight_segment_subdivision(self):
+        coarse = shape_observables(np.asarray([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0]]))
+        subdivided = shape_observables(np.asarray([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [2.0, 2.0]]))
+        for first, second in zip(coarse["mode_fractions"], subdivided["mode_fractions"]):
+            self.assertAlmostEqual(first, second, places=10)
 
     def test_independent_pixel_and_model_rescaling_cancels(self):
         t = np.linspace(0.0, 1.0, 41)
@@ -231,7 +268,7 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
-            model = self._write_model(root, [1.0, 2.0, 3.0])
+            model = self._write_model_csv(root, [1.0, 2.0, 3.0])
             with model.open(newline="", encoding="utf-8") as handle:
                 rows = list(csv.DictReader(handle))
             rows[1]["point_id"] = "0"
@@ -243,6 +280,16 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
             self.assertEqual(result["summary"]["compared_rows"], 0)
             self.assertTrue(any("point_id must be ordered" in error for error in result["summary"]["model_validation"]["errors"]))
+
+    def test_model_scope_metadata_is_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            model = self._write_model_csv(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertIn("stage2_scope_metadata_required", result["summary"]["model_validation"]["errors"])
 
     def test_invalid_json_model_frame_is_not_dropped(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -268,11 +315,26 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 1)
             self.assertEqual(result["summary"]["coverage"]["model"]["count"], 3)
 
+    def test_missing_json_model_time_is_not_inferred(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0])
+            model = root / "model.json"
+            model.write_text(
+                json.dumps({"trajectory": [{"points": [[0.0, 0.0], [1.0, 0.0]]}, {"time": 1.0, "points": [[0.0, 0.0], [2.0, 0.0]]}]}),
+                encoding="utf-8",
+            )
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_model_contract")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertEqual(result["summary"]["model_validation"]["invalid_frame_count"], 1)
+            self.assertEqual(result["summary"]["coverage"]["model"]["count"], 2)
+
     def test_invalid_model_contract_is_unavailable_but_retains_coverage(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
-            model = self._write_model(root, [1.0, 2.0, 3.0])
+            model = self._write_model_csv(root, [1.0, 2.0, 3.0])
             with model.open(newline="", encoding="utf-8") as handle:
                 rows = list(csv.DictReader(handle))
             rows[4]["x"] = "nan"
@@ -360,6 +422,31 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
             self.assertEqual(result["summary"]["compared_rows"], 0)
 
+    def test_malformed_manifest_structure_is_unavailable_with_coverage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            (observation / "manifest.json").write_text(
+                json.dumps({"validation": {"valid": True}, "segmentation_config": [], "run": {"frame_range": []}, "video": {"fps": "bad"}}),
+                encoding="utf-8",
+            )
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertEqual(result["summary"]["coverage"]["observation"]["count"], 3)
+            self.assertFalse(result["summary"]["observation_validation"]["manifest"]["valid"])
+
+    def test_missing_observation_artifact_is_unavailable_with_coverage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            (observation / "centerline.csv").unlink()
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertEqual(result["summary"]["coverage"]["observation"]["count"], 3)
+            self.assertFalse(result["summary"]["observation_validation"]["artifacts"]["centerline"]["valid"])
+
     def test_malformed_manifest_is_unavailable_with_coverage(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -371,6 +458,37 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertEqual(result["summary"]["compared_rows"], 0)
             self.assertEqual(result["summary"]["coverage"]["observation"]["count"], 3)
             self.assertFalse(result["summary"]["observation_validation"]["manifest"]["valid"])
+
+    def test_observation_metadata_mismatch_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            centerline = observation / "centerline.csv"
+            with centerline.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            rows[0]["time"] = "200.0"
+            with centerline.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertFalse(result["summary"]["observation_validation"]["consistency"]["valid"])
+
+    def test_phantom_lineage_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            lineage = observation / "lineage.csv"
+            with lineage.open("a", newline="", encoding="utf-8") as handle:
+                handle.write("99,999,phantom,matched,0,\n")
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(observation, model, output_dir=root / "comparison")
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertFalse(result["summary"]["observation_validation"]["consistency"]["valid"])
 
     def test_invalid_observation_frame_key_is_unavailable(self):
         with tempfile.TemporaryDirectory() as directory:

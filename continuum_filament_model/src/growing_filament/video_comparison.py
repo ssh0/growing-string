@@ -28,6 +28,7 @@ from typing import Any, Iterable, Iterator, Mapping, Sequence
 import numpy as np
 
 SCHEMA_VERSION = "continuum-filament-observation-0.1"
+ALLOWED_LINEAGE_STATUSES = frozenset({"observed", "matched", "initial_lineage"})
 
 
 # ---------------------------------------------------------------------------
@@ -1541,7 +1542,7 @@ def compare_with_model(
         model_frame = model_match.frame if model_match is not None else None
         time_error_s = model_match.time_error_s if model_match is not None else None
         flags = [flag for flag in str((row or {}).get("quality_flags", "")).split(";") if flag and flag != "ok"]
-        if lineage_status not in {"observed", "matched", "initial_lineage"} and lineage_status not in flags:
+        if lineage_status not in ALLOWED_LINEAGE_STATUSES and lineage_status not in flags:
             flags.append(lineage_status)
         censored = bool(int((row or {}).get("censor", "0"))) or bool(int((lineage or {}).get("censor", "0"))) or not observed_present
         result: dict[str, Any] = {
@@ -1848,6 +1849,7 @@ def render_comparison(
 
 __all__ = [
     "SCHEMA_VERSION",
+    "ALLOWED_LINEAGE_STATUSES",
     "SegmentationConfig",
     "RegistrationConfig",
     "VideoMetadata",

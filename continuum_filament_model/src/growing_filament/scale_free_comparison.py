@@ -23,6 +23,7 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 from .video_comparison import (
+    ALLOWED_LINEAGE_STATUSES,
     _choose_filament,
     _file_record,
     _read_csv_rows,
@@ -100,9 +101,6 @@ class _Progress:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
-
-_ALLOWED_LINEAGE_STATUSES = frozenset({"observed", "matched", "initial_lineage"})
 
 
 def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]], fields: Sequence[str]) -> None:
@@ -228,7 +226,7 @@ def _curvature_rms_times_length(points: np.ndarray, total_length: float) -> floa
     return float(math.sqrt(np.mean(np.square(values))) * total_length) if values else 0.0
 
 
-def _mode_fractions(points: np.ndarray, total_length: float) -> np.ndarray:
+def _mode_fractions(points: np.ndarray, total_length: float, sample_points: int) -> np.ndarray:
     if total_length <= 0.0:
         return np.zeros(MODE_COUNT, dtype=float)
     chord = points[-1] - points[0]
@@ -237,7 +235,7 @@ def _mode_fractions(points: np.ndarray, total_length: float) -> np.ndarray:
         return np.zeros(MODE_COUNT, dtype=float)
     tangent = chord / chord_length
     normal = np.asarray([-tangent[1], tangent[0]])
-    sampled = _resample(points, max(128, min(512, len(points) * 4)))
+    sampled = _resample(points, max(8, int(sample_points)))
     u = np.linspace(0.0, 1.0, len(sampled))
     transverse = (sampled - points[0]) @ normal / total_length
     integrate = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
@@ -260,7 +258,7 @@ def shape_observables(points: np.ndarray, *, sample_points: int = 80, min_length
     if not math.isfinite(total_length) or total_length <= min_length:
         return None
     endpoint = float(np.linalg.norm(values[-1] - values[0]))
-    fractions = _mode_fractions(values, total_length)
+    fractions = _mode_fractions(values, total_length, sample_points)
     return {
         "normalized_endpoint_distance": endpoint / total_length,
         "normalized_radius_of_gyration": _arc_length_radius_of_gyration(values, total_length) / total_length,
@@ -333,7 +331,7 @@ def _progress_eligible(frame: _Frame, config: ScaleFreeConfig) -> bool:
         return (
             frame.quality is not None
             and config.min_quality <= frame.quality <= 1.0
-            and frame.lineage_status in _ALLOWED_LINEAGE_STATUSES
+            and frame.lineage_status in ALLOWED_LINEAGE_STATUSES
         )
     return True
 
@@ -436,6 +434,16 @@ def _index_frame_rows(rows: Sequence[Mapping[str, Any]]) -> dict[tuple[int, str]
     return indexed
 
 
+def _read_observation_csv(path: Path, artifact: str) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    if not path.is_file():
+        return [], {"valid": False, "errors": [f"missing_{artifact}_artifact"], "present": False, "row_count": 0}
+    try:
+        rows = _read_csv_rows(path)
+    except (OSError, UnicodeError, csv.Error) as exc:
+        return [], {"valid": False, "errors": [f"{artifact}_read_failed:{type(exc).__name__}"], "present": True, "row_count": 0}
+    return rows, {"valid": True, "errors": [], "present": True, "row_count": len(rows)}
+
+
 def _validate_lineage_rows(
     rows: Sequence[Mapping[str, Any]],
     summary_rows: Sequence[Mapping[str, Any]],
@@ -478,12 +486,68 @@ def _validate_lineage_rows(
     }
 
 
+def _validate_observation_consistency(
+    summary_rows: Sequence[Mapping[str, Any]],
+    centerline_rows: Sequence[Mapping[str, Any]],
+    lineage_rows: Sequence[Mapping[str, Any]],
+    processed_frames: Sequence[int],
+) -> dict[str, Any]:
+    errors: list[str] = []
+    summary_by_key = _index_frame_rows(summary_rows)
+    lineage_by_key = _index_frame_rows(lineage_rows)
+    centerline_by_key: dict[tuple[int, str], list[Mapping[str, Any]]] = {}
+    for row in centerline_rows:
+        try:
+            key = (int(row["frame"]), str(row.get("filament_id", "")))
+        except (KeyError, TypeError, ValueError):
+            continue
+        centerline_by_key.setdefault(key, []).append(row)
+    summary_keys = set(summary_by_key)
+    centerline_keys = set(centerline_by_key)
+    for key in sorted(centerline_keys - summary_keys):
+        errors.append(f"centerline key missing from summary: frame={key[0]},filament={key[1]}")
+    allowed_lineage_keys = summary_keys | centerline_keys
+    known_filaments = {filament for _, filament in allowed_lineage_keys}
+    processed_set = set(processed_frames)
+    for frame, filament in sorted(set(lineage_by_key) - allowed_lineage_keys):
+        if frame not in processed_set or (known_filaments and filament not in known_filaments and filament != "unknown"):
+            errors.append(f"phantom lineage key: frame={frame},filament={filament}")
+    for key in sorted(summary_keys & centerline_keys):
+        summary = summary_by_key[key]
+        lineage = lineage_by_key.get(key)
+        try:
+            summary_time = float(summary["time"])
+            summary_quality = float(summary["quality"])
+            summary_censor = _bool_value(summary["censor"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        for row in centerline_by_key[key]:
+            try:
+                if abs(float(row["time"]) - summary_time) > 1.0e-12:
+                    errors.append(f"time mismatch for frame={key[0]},filament={key[1]}")
+                if abs(float(row["quality"]) - summary_quality) > 1.0e-12:
+                    errors.append(f"quality mismatch for frame={key[0]},filament={key[1]}")
+                if _bool_value(row["censor"]) != summary_censor:
+                    errors.append(f"censor mismatch for frame={key[0]},filament={key[1]}")
+            except (KeyError, TypeError, ValueError):
+                continue
+        if lineage is not None:
+            try:
+                if abs(float(lineage["time"]) - summary_time) > 1.0e-12:
+                    errors.append(f"lineage time mismatch for frame={key[0]},filament={key[1]}")
+                if _bool_value(lineage["censor"]) != summary_censor:
+                    errors.append(f"lineage censor mismatch for frame={key[0]},filament={key[1]}")
+            except (KeyError, TypeError, ValueError):
+                continue
+    return {"valid": not errors, "errors": errors, "warnings": []}
+
+
 def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple[list[_Frame], str | None, dict[str, Any]]:
-    summary_rows = _read_csv_rows(observation_dir / "observation_summary.csv")
-    centerline_rows = _read_csv_rows(observation_dir / "centerline.csv")
+    summary_rows, summary_artifact = _read_observation_csv(observation_dir / "observation_summary.csv", "summary")
+    centerline_rows, centerline_artifact = _read_observation_csv(observation_dir / "centerline.csv", "centerline")
     lineage_path = observation_dir / "lineage.csv"
     lineage_artifact_present = lineage_path.is_file()
-    lineage_rows = _read_csv_rows(lineage_path) if lineage_artifact_present else []
+    lineage_rows, lineage_artifact = _read_observation_csv(lineage_path, "lineage")
     manifest_path = observation_dir / "manifest.json"
     manifest_load_errors: list[str] = []
     if manifest_path.exists():
@@ -503,21 +567,37 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
     }
     frame_keys_valid = all(item["valid"] for item in frame_key_validation.values())
     lineage_validation = _validate_lineage_rows(lineage_rows, summary_rows, centerline_rows, lineage_artifact_present)
-    segmentation_config = manifest.get("segmentation_config") or {}
-    centerline_validation = validate_centerline_rows(
-        centerline_rows,
-        max_jump_px=float(segmentation_config.get("max_jump_px", 80.0)),
-    )
+    manifest_structure_errors: list[str] = []
+    segmentation_config = manifest.get("segmentation_config", {})
+    if not isinstance(segmentation_config, Mapping):
+        manifest_structure_errors.append("segmentation_config_not_mapping")
+        segmentation_config = {}
+    run_section = manifest.get("run", {})
+    if not isinstance(run_section, Mapping):
+        manifest_structure_errors.append("run_not_mapping")
+        run_section = {}
+    video_section = manifest.get("video", {})
+    if not isinstance(video_section, Mapping):
+        manifest_structure_errors.append("video_not_mapping")
+        video_section = {}
+    try:
+        max_jump_px = float(segmentation_config.get("max_jump_px", 80.0))
+        if not math.isfinite(max_jump_px) or max_jump_px <= 0.0:
+            raise ValueError("max_jump_px must be positive and finite")
+    except (TypeError, ValueError):
+        manifest_structure_errors.append("invalid_max_jump_px")
+        max_jump_px = 80.0
+    centerline_validation = validate_centerline_rows(centerline_rows, max_jump_px=max_jump_px)
     manifest_validation = manifest.get("validation")
     if not isinstance(manifest_validation, Mapping):
         manifest_validation = {"valid": False, "errors": ["missing_manifest_validation"]}
-    if manifest_load_errors:
+    manifest_errors = manifest_load_errors + manifest_structure_errors
+    if manifest_errors:
         manifest_validation = {
             "valid": False,
-            "errors": manifest_load_errors + list(manifest_validation.get("errors", [])),
+            "errors": manifest_errors + list(manifest_validation.get("errors", [])),
         }
     manifest_validation_valid = manifest_validation.get("valid") is True
-    contract_valid = manifest_validation_valid and bool(centerline_validation.get("valid")) and frame_keys_valid and bool(lineage_validation.get("valid"))
     selected = filament_id or _choose_filament(summary_rows) or _choose_filament(lineage_rows)
     summary_by_key = _index_frame_rows(summary_rows)
     lineage_by_key = _index_frame_rows(lineage_rows)
@@ -529,10 +609,34 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
             grouped.setdefault((int(row["frame"]), selected), []).append((int(row["point_id"]), float(row["x"]), float(row["y"])))
         except (KeyError, TypeError, ValueError):
             continue
-    frame_range = (manifest.get("run") or {}).get("frame_range") or {}
+    frame_range = run_section.get("frame_range", {})
     processed_frames: list[int] = []
-    if frame_range.get("first") is not None and frame_range.get("last") is not None:
-        processed_frames = list(range(int(frame_range["first"]), int(frame_range["last"]) + 1, int(frame_range.get("stride", 1))))
+    if frame_range is not None and not isinstance(frame_range, Mapping):
+        manifest_structure_errors.append("frame_range_not_mapping")
+        frame_range = {}
+    if isinstance(frame_range, Mapping):
+        first = frame_range.get("first")
+        last = frame_range.get("last")
+        stride = frame_range.get("stride", 1)
+        if (first is None) != (last is None):
+            manifest_structure_errors.append("incomplete_frame_range")
+        elif first is not None:
+            try:
+                first_int = int(first)
+                last_int = int(last)
+                stride_int = int(stride)
+                if stride_int < 1 or last_int < first_int:
+                    raise ValueError("invalid frame range")
+                processed_frames = list(range(first_int, last_int + 1, stride_int))
+            except (TypeError, ValueError):
+                manifest_structure_errors.append("invalid_frame_range")
+    consistency_validation = _validate_observation_consistency(summary_rows, centerline_rows, lineage_rows, processed_frames)
+    if manifest_structure_errors:
+        manifest_validation = {
+            "valid": False,
+            "errors": manifest_structure_errors + list(manifest_validation.get("errors", [])),
+        }
+        manifest_validation_valid = False
     keys: set[tuple[int, str]] = set()
     if selected is not None:
         keys.update(key for key in summary_by_key if key[1] == selected)
@@ -541,7 +645,24 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         selected_key = (frame, selected) if selected is not None else (frame, "unknown")
         if selected_key not in keys:
             keys.add((frame, "unknown"))
-    fps = _float_or_none((manifest.get("video") or {}).get("fps")) or 1.0
+    fps_value = video_section.get("fps", 1.0)
+    fps = _float_or_none(fps_value)
+    if fps is None or fps <= 0.0:
+        manifest_structure_errors.append("invalid_fps")
+        fps = 1.0
+        manifest_validation = {
+            "valid": False,
+            "errors": ["invalid_fps"] + list(manifest_validation.get("errors", [])),
+        }
+        manifest_validation_valid = False
+    contract_valid = (
+        manifest_validation_valid
+        and bool(centerline_validation.get("valid"))
+        and frame_keys_valid
+        and bool(lineage_validation.get("valid"))
+        and all(item.get("valid", False) for item in (summary_artifact, centerline_artifact, lineage_artifact))
+        and bool(consistency_validation.get("valid"))
+    )
     frames: list[_Frame] = []
     for frame_index, key_filament in sorted(keys):
         row = summary_by_key.get((frame_index, key_filament))
@@ -564,7 +685,7 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
             censor = True
         if lineage is None:
             censor = True
-        if lineage_status not in _ALLOWED_LINEAGE_STATUSES:
+        if lineage_status not in ALLOWED_LINEAGE_STATUSES:
             if lineage_status not in flags.split(";"):
                 flags = ";".join(part for part in (flags, lineage_status) if part)
             censor = True
@@ -577,6 +698,10 @@ def _observation_frames(observation_dir: Path, filament_id: str | None) -> tuple
         "centerline_validation": centerline_validation,
         "frame_key_validation": frame_key_validation,
         "lineage_validation": lineage_validation,
+        "consistency_validation": consistency_validation,
+        "summary_artifact": summary_artifact,
+        "centerline_artifact": centerline_artifact,
+        "lineage_artifact": lineage_artifact,
         "frame_keys_valid": frame_keys_valid,
         "contract_valid": contract_valid,
         "summary_count": len(summary_rows),
@@ -636,12 +761,18 @@ def _read_json_model_frames(path: Path) -> tuple[list[_Frame], dict[str, Any]]:
         if not isinstance(source_frame, Mapping):
             frames.append(_Frame(index, None, None, None, source="model"))
             continue
-        raw_time = source_frame.get("time", source_frame.get("time_s", 0.0))
-        try:
-            time_s = float(raw_time)
-        except (TypeError, ValueError):
+        if "time" not in source_frame and "time_s" not in source_frame:
             time_s = None
-        raw_points = source_frame.get("points", source_frame.get("positions", []))
+        else:
+            raw_time = source_frame.get("time", source_frame.get("time_s"))
+            try:
+                time_s = float(raw_time)
+            except (TypeError, ValueError):
+                time_s = None
+        if time_s is None:
+            raw_points = source_frame.get("points", source_frame.get("positions", []))
+        else:
+            raw_points = source_frame.get("points", source_frame.get("positions", []))
         try:
             points = np.asarray(raw_points, dtype=float)
         except (TypeError, ValueError):
@@ -696,6 +827,40 @@ def _validate_model_csv_source(path: Path) -> dict[str, Any]:
     }
 
 
+def _validate_model_scope(model_path: Path, metadata: Mapping[str, Any] | None) -> dict[str, Any]:
+    if model_path.suffix.lower() != ".npz" or metadata is None:
+        return {"valid": False, "errors": ["stage2_scope_metadata_required"], "warnings": []}
+    raw_metadata = metadata.get("metadata")
+    raw_manifest = metadata.get("manifest")
+    sources: list[Mapping[str, Any]] = []
+    if isinstance(raw_metadata, Mapping):
+        sources.append(raw_metadata)
+    if isinstance(raw_manifest, Mapping) and isinstance(raw_manifest.get("metadata"), Mapping):
+        sources.append(raw_manifest["metadata"])
+    scope: dict[str, Any] = {}
+    for source in sources:
+        for key in ("benchmark", "boundary", "contact_enabled", "physical_scope"):
+            if key not in scope and key in source:
+                scope[key] = source[key]
+    errors: list[str] = []
+    if scope.get("benchmark") != "stage2_free_free_growth_relaxation_buckling":
+        errors.append("unsupported_stage2_benchmark")
+    if scope.get("boundary") != "free/free":
+        errors.append("model_boundary_is_not_free_free")
+    if scope.get("contact_enabled") is not False:
+        errors.append("model_contact_scope_not_disabled")
+    required_scope = {
+        "uniform_reference_length_growth",
+        "stretching",
+        "discrete_bending",
+        "isotropic_substrate_drag",
+    }
+    physical_scope = scope.get("physical_scope")
+    if not isinstance(physical_scope, list) or not required_scope.issubset(set(physical_scope)):
+        errors.append("model_physical_scope_is_not_stage2_uniform_growth")
+    return {"valid": not errors, "errors": errors, "warnings": [], "scope": scope}
+
+
 def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Frame], dict[str, Any]]:
     provenance: dict[str, Any] = {
         "logical_id": model_path.name,
@@ -703,6 +868,7 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
         "bytes": model_path.stat().st_size,
     }
     source_validation: dict[str, Any] = {"valid": True, "errors": [], "warnings": [], "source_row_count": None}
+    scope_validation: dict[str, Any] = {"valid": False, "errors": ["stage2_scope_metadata_required"], "warnings": []}
     try:
         if model_path.suffix.lower() == ".json":
             frames, source_validation = _read_json_model_frames(model_path)
@@ -733,6 +899,7 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
             "invalid_frame_count": 0,
             "source_row_count": source_validation.get("source_row_count"),
             "source_frame_count": source_validation.get("source_frame_count"),
+            "scope": scope_validation,
         }
         provenance["population"] = "deterministic_or_unclassified"
         return [], provenance
@@ -750,6 +917,9 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
             with np.load(model_path, allow_pickle=False) as archive:
                 raw = archive["metadata_json"]
                 metadata = json.loads(str(raw.item() if raw.ndim == 0 else raw.tolist()))
+            scope_validation = _validate_model_scope(model_path, metadata if isinstance(metadata, Mapping) else None)
+            if not isinstance(metadata, Mapping):
+                raise TypeError("model metadata must be an object")
             model_metadata = metadata.get("metadata") or {}
             model_manifest = metadata.get("manifest") or {}
             provenance.update(
@@ -767,8 +937,12 @@ def _model_frames(model_path: Path, config: ScaleFreeConfig) -> tuple[list[_Fram
             )
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
             provenance["metadata_status"] = "unavailable"
-    run_kind = str(provenance.get("run_kind") or "unspecified")
-    provenance["population"] = "replicate" if "replicate" in run_kind or provenance.get("seed") is not None else "deterministic_or_unclassified"
+    provenance["scope_validation"] = scope_validation
+    validation_errors.extend(scope_validation.get("errors", []))
+    provenance["validation"]["scope"] = scope_validation
+    provenance["validation"]["valid"] = not validation_errors
+    provenance["validation"]["errors"] = validation_errors
+    provenance["population"] = "stage2_deterministic" if scope_validation.get("valid") else "unclassified"
     return frames, provenance
 
 
@@ -942,6 +1116,13 @@ def scale_free_shape_comparison(
         reasons.append("observation_frame_key_invalid")
     if not (observation_info.get("lineage_validation") or {}).get("valid", False):
         reasons.append("observation_lineage_invalid")
+    if not (observation_info.get("consistency_validation") or {}).get("valid", False):
+        reasons.append("observation_artifact_inconsistent")
+    if not all(
+        (observation_info.get(name) or {}).get("valid", False)
+        for name in ("summary_artifact", "centerline_artifact", "lineage_artifact")
+    ):
+        reasons.append("observation_artifact_unavailable")
     if not observations:
         reasons.append("no_observation_frames")
     if not models:
@@ -1015,6 +1196,12 @@ def scale_free_shape_comparison(
             "centerline": observation_info.get("centerline_validation"),
             "frame_keys": observation_info.get("frame_key_validation"),
             "lineage": observation_info.get("lineage_validation"),
+            "consistency": observation_info.get("consistency_validation"),
+            "artifacts": {
+                "summary": observation_info.get("summary_artifact"),
+                "centerline": observation_info.get("centerline_artifact"),
+                "lineage": observation_info.get("lineage_artifact"),
+            },
             "contract_valid": observation_contract_valid,
         },
         "progress_coordinate": "q=(L-L_initial)/(L_final-L_initial); nearest matching only; no interpolation",
