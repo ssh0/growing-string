@@ -34,15 +34,22 @@ physical time とは扱わない。
 - 回転・平行移動・端点方向を除いた normalized shape distance（valid な matched 行のみ）
 
 `new_lineage`、`reconnected_after_missing`、missing、branch/loop、low quality、ROI/image
-boundary 等の既存 censor はそのまま保持し、shape distance の分母から除外する。モデルは free/free・一様成長・非接触 Stage 2 の deterministic baseline、または
-明示的な `initial_condition_sensitivity` protocol（perturbation range、metrics、acceptance
-criteria、および内部 run ID と artifact SHA-256 による検証済み outer linkage 付き）に限定する。
-`exploratory_replicate` は deterministic として受理しない。
+boundary 等の既存 censor は常にそのまま保持する。通常の validated-centerline モードでは
+shape distance の分母から除外する。bounded follow-up は `allow_censored_candidates=true`
+を明示した `candidate_input_exploratory` モードで、有限な中心線が出力された行に限って
+censor 済み候補も探索的に比較する。このモードでも品質フラグ、censor、lineage の不確実性、
+coverage を結果へ残し、candidate を validated centerline へ再分類しない。missing centerline
+の補間や lineage の推測は行わない。モデルは free/free・一様成長・非接触 Stage 2 の
+`deterministic_fixture`、または perturbation range、metrics、acceptance criteria、内部 run
+ID、artifact SHA-256、outer linkage を検証した明示的な `initial_condition_sensitivity`
+protocol に限定する。`exploratory_replicate`、mesh refinement、parameter contrast は受理しない。
 video alignment は translation/rotation/endpoint orientation の shape alignment として記録し、
-initial-condition sensitivity や物性 fitとは分離する。`model_inadequacy`、parameter
-identification、calibrated dynamics は、このモードの成果物に作成しない。
+initial-condition sensitivity や物性 fitとは分離する。`model_inadequacy` の判定、parameter identification、物性 fit、calibrated dynamics、
+絶対時間・絶対長さの主張は、このモードの成果物で作成・解釈しない。root diagnostics では
+`comparison_suppressed`、`model_inadequacy_assessment=suppressed`、`physical_conclusions=suppressed`
+を明記する。
 
-次の状態は推測で補わず、`status` と `input_quality.reasons` に明示する。manifest の `validation.valid`、中心線の厳密な frame/time/point/censor/quality contract、または lineage の整合性が invalid の場合は、中心線の行・lineage・frame coverage を保持したまま比較不能とする。成長進行度の端点と `q` は、有効・非censor・許可された lineage の中心線だけから計算し、除外されたフレームへ補間しない。曲率 RMS は固定弧長サンプリング後に計算し、入力点の細分割に依存させない。
+次の状態は推測で補わず、`status` と `input_quality.reasons` に明示する。manifest の `validation.valid`、中心線の厳密な frame/time/point/censor/quality contract、または lineage の整合性が invalid の場合は、中心線の行・lineage・frame coverage を保持したまま比較不能とする。validated モードの成長進行度の端点と `q` は、有効・非censor・許可された lineage の中心線だけから計算する。candidate モードでは、有限な中心線が実際に出力された候補行を使うが、censor と lineage の不確実性を保持し、除外・欠落フレームへ補間しない。candidate の非単調な長さは診断として残し、正の成長 span がある場合に限って探索的 q を計算する。曲率 RMS は固定弧長サンプリング後に計算し、入力点の細分割に依存させない。
 
 - manifest、観測中心線 contract、または観測 frame key が invalid：`input_quality_invalid_observation_contract`
 - provenance-bearing Stage 2 NPZ が invalid、または unsupported model format：`input_quality_invalid_model_contract`（フレームがない場合は `model_centerline_unavailable`）
@@ -50,11 +57,13 @@ identification、calibrated dynamics は、このモードの成果物に作成�
 - 有効な長さが2点未満：`insufficient_length_observations`
 - 初期・終端長の差がほぼ0：`zero_growth_span`
 - 長さが減少する系列：`non_monotonic_lengths`
-- valid centerline が0件、または censor で全件除外：`input_quality_no_eligible_centerline`
+- valid centerline が0件、または validated モードで censor により全件除外：`input_quality_no_eligible_centerline`
+- candidate モードの結果には `input_status=candidate_input_exploratory` と `candidate_input` の警告・件数を付ける。比較行が0件の場合は `comparison_suppressed=true` とする
 - model centerline がない：`model_centerline_unavailable`
 
-zero-span / non-monotonic の場合は `q` 対応と shape distance を抑制する。入力品質で比較
-不能でも、missing/censor/lineage、frame coverage、入力・モデル・設定・revision hash と
+zero-span は `q` 対応と shape distance を抑制する。validated モードの non-monotonic は
+同様に抑制する。candidate モードで正の span がある non-monotonic は抑制せず、探索的結果で
+あることと診断を残す。入力品質で比較不能でも、missing/censor/lineage、frame coverage、入力・モデル・設定・revision hash と
 外部 artifact identifier を compact diagnostic に残す。
 
 ## 成果物と再実行
@@ -73,7 +82,8 @@ python continuum_filament_model/video_compare.py extract \
 PYTHONPATH=continuum_filament_model/src \
 python continuum_filament_model/video_compare.py scale-free \
   --output /tmp/growing-string-gray5-scale-free \
-  --model /tmp/stage2/_runs/fast_growth_low_bend/trajectory.npz
+  --model /tmp/stage2/_runs/fast_growth_low_bend/trajectory.npz \
+  --allow-censored-candidates
 ```
 
 実際の Stage 2 run と gray5 を一度に比較する bounded runner は次である。既定で
@@ -91,14 +101,15 @@ python continuum_filament_model/benchmarks/scale_free_shape_comparison.py \
 
 ### gray5 bounded 実行記録
 
-コミット済み `gray5.mp4` を使い、source revision
-`b4d38ded1819fcab7d1e8066a2e08729d3636800` で上記の2 deterministic fixtureを
-比較した。入力は `extracted`、24 sampled frames、20 candidates が censor となった。
-両ケースとも有効中心線0件と観測長の `insufficient_length_observations` により
-`input_quality_no_eligible_centerline`、`compared_rows=0` となった。これは scale-free
-agreement の証拠ではなく、中心線品質による比較不能を明示した結果である。動画の
-SHA-256、設定・shape設定 SHA-256、model runのSHA-256、external artifact IDは
-`results/scale_free_shape_comparison/compact_summary.json` と `compact_manifest.json` に保存した。
+コミット済み `gray5.mp4` を使った初回の validated-centerline 実行では、24 sampled frames、
+20 candidates が censor となり、両ケースとも `input_quality_no_eligible_centerline`、
+`compared_rows=0` となった。follow-up の bounded 実行では、同じ候補線を `candidate_input_exploratory` として
+再分類せずに探索的比較へ渡す。実行時点の source revision、詳細な compared row 数、非単調長さの診断は
+compact JSON/CSVを参照する。得られた scale-free shape row は candidate の感度分析であり、
+検証済み中心線・実験的確定値・model inadequacy の根拠ではない。動画の SHA-256、設定・shape設定
+SHA-256、model runのSHA-256、external artifact ID、candidate status、品質・censor・lineage
+diagnostics は `results/scale_free_shape_comparison/compact_summary.json` と
+`compact_manifest.json` に保存する。
 
 成果物の schema version は `continuum-filament-scale-free-shape-0.1`、runner は
 `continuum-filament-scale-free-runner-0.1`。manifest の `registration.status` は常に

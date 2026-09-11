@@ -114,7 +114,11 @@ def run_bounded_comparison(
         case_names = [name for name in DEFAULT_CASES if name in specs]
         if not case_names:
             case_names = [spec.name for spec in all_specs if spec.kind == "deterministic_fixture"][:2]
-    unsupported_cases = [name for name in case_names if specs[name].kind not in {"deterministic_fixture", "numerical_refinement", "parameter_contrast"}]
+    # The bounded follow-up is intentionally narrower than the general Stage 2
+    # harness: only deterministic baseline fixtures and verified sensitivity
+    # artifacts are eligible.  Refinements, contrasts, and exploratory
+    # replicates must not be presented as this population.
+    unsupported_cases = [name for name in case_names if specs[name].kind not in {"deterministic_fixture"}]
     if unsupported_cases:
         configuration_errors.append("unsupported_scale_free_cases:" + ",".join(unsupported_cases))
     case_names = [name for name in case_names if name not in unsupported_cases]
@@ -196,7 +200,16 @@ def run_bounded_comparison(
         extraction["status"] = "input_quality_invalid_configuration"
         extraction["configuration_errors"] = configuration_errors
         extraction["comparison_suppressed"] = True
-    shape_cfg = shape_config if isinstance(shape_config, ScaleFreeConfig) else ScaleFreeConfig.from_mapping(shape_config)
+    if isinstance(shape_config, ScaleFreeConfig):
+        shape_cfg = shape_config
+    else:
+        shape_values = dict(shape_config or {})
+        # This bounded follow-up is the explicitly exploratory candidate-input
+        # comparison.  Direct library callers retain strict validated-centerline
+        # defaults unless they opt in through ScaleFreeConfig.
+        shape_values.setdefault("allow_censored_candidates", True)
+        shape_cfg = ScaleFreeConfig.from_mapping(shape_values)
+    input_status = "candidate_input_exploratory" if shape_cfg.allow_censored_candidates else "validated_centerline"
     if extraction["status"] == "extracted":
         for record in model_records:
             model_path = destination / "_runs" / record["run_name"] / "trajectory.npz" if record.get("model_logical_id") else None
@@ -237,8 +250,12 @@ def run_bounded_comparison(
         comparison_rows.append({
             "run_name": record["run_name"],
             "run_kind": record["run_kind"],
+            "model_population": comparison.get("model_population"),
+            "input_status": comparison.get("input_status", input_status),
             "status": comparison.get("status"),
+            "comparison_suppressed": comparison.get("comparison_suppressed", comparison.get("compared_rows", 0) == 0),
             "eligible_observation_rows": comparison.get("eligible_observation_rows", 0),
+            "candidate_computed_rows": (comparison.get("candidate_input") or {}).get("candidate_computed_rows", 0),
             "compared_rows": comparison.get("compared_rows", 0),
             "censored_rows": comparison.get("censored_rows", 0),
             "model_sha256": record.get("model_sha256"),
@@ -251,31 +268,48 @@ def run_bounded_comparison(
         "source_revision": revision,
         "config_sha256": config_hash,
         "shape_config_sha256": __import__("hashlib").sha256(canonical_json_bytes(shape_cfg.to_dict())).hexdigest(),
+        "input_status": input_status,
+        "comparison_suppressed": any(
+            (record.get("comparison") or {}).get("compared_rows", 0) == 0
+            for record in model_records
+        ) or bool(configuration_errors) or extraction.get("status") != "extracted",
         "video": _compact_input(source),
         "extraction": extraction,
         "configuration_errors": configuration_errors,
         "model_runs": model_records,
+        "model_populations": {
+            "stage2_deterministic": [record["run_name"] for record in model_records if record.get("run_kind") == "deterministic_fixture"],
+            "initial_condition_sensitivity": [record["run_name"] for record in model_records if record.get("run_kind") == "initial_condition_sensitivity"],
+        },
         "summary_csv": "summary.csv",
         "artifact_policy": "trajectories, raw extraction, and per-case scale-free CSV are external-style artifacts; root summaries are compact",
         "registration": {"status": "not_required_not_inferred", "pixel_per_model_unit": None, "time_scale": None, "time_offset": None},
         "parameter_identification": "suppressed",
         "model_inadequacy": "not_assessed_in_scale_free_morphology_mode",
+        "model_inadequacy_assessment": "suppressed",
+        "physical_conclusions": "suppressed",
         "physical_time_alignment": False,
     }
     _write_json(destination / "compact_summary.json", report)
     _write_csv(
         destination / "summary.csv",
         comparison_rows,
-        ["run_name", "run_kind", "status", "eligible_observation_rows", "compared_rows", "censored_rows", "model_sha256", "input_quality_reasons"],
+        [
+            "run_name", "run_kind", "model_population", "input_status", "status", "comparison_suppressed",
+            "eligible_observation_rows", "candidate_computed_rows", "compared_rows", "censored_rows",
+            "model_sha256", "input_quality_reasons",
+        ],
     )
     manifest = {
         "schema_version": RUNNER_SCHEMA_VERSION,
         "comparison_mode": "scale_free_shape",
+        "input_status": input_status,
         "source_revision": revision,
         "config_sha256": config_hash,
         "shape_config_sha256": report["shape_config_sha256"],
         "video": report["video"],
         "model_run_names": [record["run_name"] for record in model_records],
+        "model_populations": report["model_populations"],
         "configuration_errors": configuration_errors,
         "comparison_suppressed": bool(configuration_errors) or extraction.get("status") != "extracted" or any(
             (record.get("comparison") or {}).get("status", "").startswith("input_quality_")
@@ -292,7 +326,8 @@ def run_bounded_comparison(
         "external_artifact_ids": extraction.get("external_artifact_ids", {}),
         "registration": report["registration"],
         "parameter_identification": "suppressed",
-        "model_inadequacy": "not_assessed_in_scale_free_morphology_mode",
+        "model_inadequacy": "suppressed",
+        "physical_conclusions": "suppressed",
     }
     _write_json(destination / "compact_manifest.json", manifest)
     return report
