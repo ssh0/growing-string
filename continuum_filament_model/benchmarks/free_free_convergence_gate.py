@@ -939,10 +939,10 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         morph_reasons.add("remesh_occurred")
         mech_reasons.add("remesh_occurred")
     if axis == "temporal":
-        accepted_dt_min = [run.get("accepted_dt_min") for run in runs]
-        if any(value is None for value in accepted_dt_min) or len(set(accepted_dt_min)) != len(accepted_dt_min):
-            morph_reasons.add("accepted_dt_not_distinct")
-            mech_reasons.add("accepted_dt_not_distinct")
+        requested_dt = [run.get("effective_values", {}).get("dt") for run in runs]
+        if any(value is None for value in requested_dt) or len(set(requested_dt)) != len(requested_dt):
+            morph_reasons.add("requested_dt_not_distinct")
+            mech_reasons.add("requested_dt_not_distinct")
     labels = [str(run.get("classification", {}).get("label")) for run in runs]
     if len(set(labels)) != 1 or labels[0] == "numerically-unresolved":
         morph_reasons.add("classification_disagreement")
