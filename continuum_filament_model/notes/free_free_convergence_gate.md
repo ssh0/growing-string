@@ -104,6 +104,6 @@ temporal と spatial を別々に比較し、それぞれに次の3つの status
 
 ## 実行済み compact 結果
 
-`results/free_free_convergence_gate/` は commit `b341d99194ab1cfe16b6edebb93b8a6765d57d9e1db694fe4301eab4ee10196` 上で既定 config を実行した compact 結果である。deterministic fixture/refinement 18 run、control 1 run、parameter contrast 5 run、初期条件 sensitivity 9 runを含む。時間 refinement は straight、boundary-near、buckled-candidate の3代表点すべてで morphology と mechanics が `resolved` になった。一方、空間 refinement は3代表点すべてで少なくとも morphology または mechanics の不一致があり、`numerically-unresolved` のまま保持した。したがって、この結果は時間方向の bounded consistency と空間方向の未解決を示す監査記録であり、座屈境界・臨界値・物性 fit の根拠ではない。
+`results/free_free_convergence_gate/` は commit `b341d99194ab1cfe16b6edebbfd7ffd39a2c1f85` 上で既定 config を実行した compact 結果である。deterministic fixture/refinement 18 run、control 1 run、parameter contrast 5 run、初期条件 sensitivity 9 runを含む。時間 refinement は straight、boundary-near、buckled-candidate の3代表点すべてで morphology と mechanics が `resolved` になった。一方、空間 refinement は3代表点すべてで少なくとも morphology または mechanics の不一致があり、`numerically-unresolved` のまま保持した。したがって、この結果は時間方向の bounded consistency と空間方向の未解決を示す監査記録であり、座屈境界・臨界値・物性 fit の根拠ではない。
 
 per-run の `metrics.csv`・`events.json`・`manifest.json` は実行時の一時ディレクトリに残し、`results/` には compact provenance-bearing summary だけを保存する。

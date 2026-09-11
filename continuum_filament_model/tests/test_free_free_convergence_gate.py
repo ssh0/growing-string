@@ -3,13 +3,20 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import numpy as np
 
 from continuum_filament_model.benchmarks.free_free_convergence_gate import (
+    CaseSpec,
     GateError,
+    _mode_observables,
+    _run_case,
     load_config,
     load_config_from_mapping,
     run_gate,
 )
+from growing_filament.model import FilamentState
 
 
 class FreeFreeConvergenceGateTests(unittest.TestCase):
@@ -99,15 +106,43 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertTrue(straight["failure_reason_codes"])
             self.assertTrue(any(item["status"] == "numerically-unresolved" for item in report["convergence"]))
 
+    def test_mode_observables_are_rigid_rotation_invariant(self):
+        positions = np.array([[0.0, 0.0], [0.5, 0.1], [1.0, 0.3], [1.5, 0.1], [2.0, 0.0]])
+        rest_lengths = np.linalg.norm(np.diff(positions, axis=0), axis=1)
+        state = FilamentState(positions, rest_lengths)
+        angle = 0.37
+        rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+        rotated = FilamentState(positions @ rotation.T, rest_lengths)
+
+        reference = _mode_observables(state)
+        actual = _mode_observables(rotated)
+        self.assertAlmostEqual(reference[0], actual[0])
+        np.testing.assert_allclose(reference[1], actual[1], atol=1.0e-15)
+        np.testing.assert_allclose(reference[2], actual[2], atol=1.0e-15)
+
     def test_contact_or_fixed_boundary_settings_are_rejected(self):
-        config = self._config()
-        config["base"]["contact_stiffness"] = 1.0
-        with self.assertRaises(GateError):
-            load_config_from_mapping(config)
-        config = self._config()
-        config["base"]["fixed_left"] = True
-        with self.assertRaises(GateError):
-            load_config_from_mapping(config)
+        for key, value in (("contact_stiffness", 1.0), ("diameter", 0.1), ("fixed_left", True), ("fixed_right", True)):
+            config = self._config()
+            config["representatives"][0]["overrides"][key] = value
+            with self.assertRaises(GateError):
+                load_config_from_mapping(config)
+
+    def test_initial_geometry_failure_is_retained_in_events_and_manifest(self):
+        positions = np.array([[0.0, 0.0], [1.0, 1.0], [0.0, 1.0], [1.0, 0.0]])
+        state = FilamentState(positions, np.linalg.norm(np.diff(positions, axis=0), axis=1))
+        config = load_config_from_mapping(self._config())
+        spec = CaseSpec("invalid_initial_geometry", "test", {})
+        with tempfile.TemporaryDirectory() as directory:
+            with patch(
+                "continuum_filament_model.benchmarks.free_free_convergence_gate._initial_state",
+                return_value=(state, {"mode": "test"}),
+            ):
+                _run_case(spec, config["base"], Path(directory), None)
+            events = json.loads((Path(directory) / "_runs" / spec.name / "events.json").read_text(encoding="utf-8"))
+            manifest = json.loads((Path(directory) / "_runs" / spec.name / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(events["event_count"], 1)
+            self.assertEqual(events["failure_event"]["reason"], "initial_crossing")
+            self.assertEqual(manifest["events"][0]["reason"], "initial_crossing")
 
     def test_missing_parameter_contrast_is_rejected(self):
         config = self._config()

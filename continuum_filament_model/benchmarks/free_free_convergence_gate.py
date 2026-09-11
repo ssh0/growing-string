@@ -247,8 +247,22 @@ def _merged_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
     return result
 
 
+def _validate_scope(settings: Mapping[str, Any], context: str) -> None:
+    for key in ("contact_stiffness", "diameter"):
+        try:
+            value = float(settings.get(key, 0.0))
+        except (TypeError, ValueError) as exc:
+            raise GateError(f"{context}.{key} must be zero for the free/free gate") from exc
+        if not math.isfinite(value) or value != 0.0:
+            raise GateError(f"{context}.{key} must be zero for the free/free gate")
+    for key in ("fixed_left", "fixed_right"):
+        if bool(settings.get(key, False)):
+            raise GateError(f"{context}.{key} must be false for the free/free gate")
+
+
 def _validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
     base = dict(config.get("base", {}))
+    _validate_scope(base, "base")
     for key in ("length", "axial_stiffness", "bending_stiffness", "drag_density", "dt", "t_end", "a_max_factor"):
         _finite_positive(base.get(key), f"base.{key}")
     _integer_at_least(base.get("n_nodes"), 3, "base.n_nodes")
@@ -260,13 +274,6 @@ def _validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
         raise GateError("base.growth_rate must be finite and non-negative")
     _integer_at_least(base.get("max_retries"), 0, "base.max_retries")
     _finite_positive(base.get("dt_min"), "base.dt_min")
-    # The gate is intentionally free/free and non-contact.  Reject, rather
-    # than silently normalise, settings that would change that scope.
-    if float(base.get("contact_stiffness", 0.0)) != 0.0 or float(base.get("diameter", 0.0)) != 0.0:
-        raise GateError("free/free convergence gate rejects contact_stiffness and diameter")
-    if bool(base.get("fixed_left", False)) or bool(base.get("fixed_right", False)):
-        raise GateError("free/free convergence gate requires both endpoints free")
-
     representatives = config.get("representatives")
     if not isinstance(representatives, list) or len(representatives) < 3:
         raise GateError("at least three deterministic representatives are required")
@@ -280,6 +287,7 @@ def _validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
         names.add(name)
         if not isinstance(item.get("overrides", {}), Mapping):
             raise GateError(f"representatives[{index}].overrides must be an object")
+        _validate_scope(item.get("overrides", {}), f"representatives[{index}].overrides")
     controls = config.get("controls", [])
     if not isinstance(controls, list):
         raise GateError("controls must be a list")
@@ -289,6 +297,7 @@ def _validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
         _safe_name(str(item["name"]), "control")
         if not isinstance(item.get("overrides", {}), Mapping):
             raise GateError(f"controls[{index}].overrides must be an object")
+        _validate_scope(item.get("overrides", {}), f"controls[{index}].overrides")
 
     temporal = dict(config.get("temporal_refinement", {}))
     spatial = dict(config.get("spatial_refinement", {}))
@@ -382,6 +391,7 @@ def _effective(base: Mapping[str, Any], spec: CaseSpec, *, n_nodes: int | None =
     value["refinement_axis"] = spec.refinement_axis
     value["contrast_factor"] = spec.contrast_factor
     value["contrast_value"] = spec.contrast_value
+    _validate_scope(value, f"case {spec.name}")
     value["contact_stiffness"] = 0.0
     value["diameter"] = 0.0
     value["fixed_left"] = False
@@ -420,8 +430,14 @@ def _initial_state(config: Mapping[str, Any], *, seed: int | None = None, amplit
     return state, metadata
 
 
-def _mode_observables(state: FilamentState, normal: np.ndarray, max_mode: int = 6) -> tuple[float, np.ndarray, np.ndarray]:
+def _mode_observables(state: FilamentState, max_mode: int = 6) -> tuple[float, np.ndarray, np.ndarray]:
     points = state.positions
+    chord = points[-1] - points[0]
+    chord_length = float(np.linalg.norm(chord))
+    if not math.isfinite(chord_length) or chord_length <= 1.0e-12:
+        raise GateError("zero endpoint chord in mode observable")
+    tangent = chord / chord_length
+    normal = np.asarray([-tangent[1], tangent[0]], dtype=float)
     transverse = (points - points[0]) @ normal
     lengths = np.linalg.norm(np.diff(points, axis=0), axis=1)
     total = float(np.sum(lengths))
@@ -443,8 +459,8 @@ def _mode_observables(state: FilamentState, normal: np.ndarray, max_mode: int = 
     return float(np.max(np.abs(transverse))), coefficients, fractions
 
 
-def _metric(model: OverdampedGrowingFilament, state: FilamentState, normal: np.ndarray, initial_amplitude: float, perturbation: Mapping[str, Any], *, requested_dt: float | None = None, accepted_dt: float | None = None) -> dict[str, Any]:
-    maximum, spectrum, fractions = _mode_observables(state, normal)
+def _metric(model: OverdampedGrowingFilament, state: FilamentState, initial_amplitude: float, perturbation: Mapping[str, Any], *, requested_dt: float | None = None, accepted_dt: float | None = None) -> dict[str, Any]:
+    maximum, spectrum, fractions = _mode_observables(state)
     curvature = discrete_curvature(state)
     components = model.energy_components(state.positions, state.rest_lengths)
     diagnostics = model.endpoint_diagnostics(state.positions, state.rest_lengths)
@@ -540,9 +556,7 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
     amplitude_factor = float(perturbation.get("amplitude_factor", 1.0))
     noise_fraction = float(perturbation.get("noise_fraction", 0.0))
     state, initial_metadata = _initial_state(effective, seed=seed, amplitude_factor=amplitude_factor, noise_fraction=noise_fraction)
-    initial_chord = state.positions[-1] - state.positions[0]
-    normal = np.asarray([-initial_chord[1], initial_chord[0]], dtype=float) / max(float(np.linalg.norm(initial_chord)), 1.0e-15)
-    initial_amplitude = float(np.max(np.abs((state.positions - state.positions[0]) @ normal)));
+    initial_amplitude = _mode_observables(state)[0]
     parameters = ModelParameters(
         axial_stiffness=float(effective["axial_stiffness"]),
         bending_stiffness=float(effective["bending_stiffness"]),
@@ -566,6 +580,7 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
     rows: list[dict[str, Any]] = []
     failure_reason: str | None = None
     failure_codes: list[str] = []
+    failure_event: dict[str, Any] | None = None
     simulator: OverdampedGrowingFilament | None = None
     growth_cumulative = 0.0
     dissipation_cumulative = 0.0
@@ -573,7 +588,7 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
     balance_cumulative = 0.0
     try:
         simulator = OverdampedGrowingFilament(state, parameters)
-        rows.append(_metric(simulator, state, normal, initial_amplitude, initial_metadata))
+        rows.append(_metric(simulator, state, initial_amplitude, initial_metadata))
         end_tolerance = max(1.0e-15, 1.0e-12 * max(1.0, abs(parameters.t_end)))
         while simulator.state.time < parameters.t_end - end_tolerance or (simulator.accepted_steps == 0 and simulator.state.time < parameters.t_end):
             before = simulator.state.copy()
@@ -607,7 +622,6 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
             row = _metric(
                 simulator,
                 after,
-                normal,
                 initial_amplitude,
                 initial_metadata,
                 requested_dt=requested,
@@ -636,8 +650,21 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
     except (ModelError, RuntimeError, ValueError, FloatingPointError) as exc:
         failure_reason = f"{type(exc).__name__}: {exc}"
         failure_codes = _failure_codes(str(exc))
+        event = getattr(exc, "event", None)
+        if isinstance(event, Mapping):
+            failure_event = dict(event)
     if simulator is None:
-        compact_events = {"event_sequence_hash": None, "event_count": 0, "accepted_steps": 0, "rejected_trials": 0, "rejection_reason_counts": {}, "contact_enabled": False}
+        failure_events = [failure_event] if failure_event is not None else []
+        compact_events = {
+            "event_sequence_hash": event_sequence_hash(failure_events) if failure_events else None,
+            "event_count": len(failure_events),
+            "accepted_steps": 0,
+            "rejected_trials": 0,
+            "rejection_reason_counts": {},
+            "contact_enabled": False,
+            "contact_event_count": 0,
+            "failure_event": failure_event,
+        }
         final_state = state
     else:
         rejection_counts = Counter(str(value) for value in simulator.rejection_reasons)
@@ -668,7 +695,7 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
         "failure_reason": failure_reason,
         "failure_reason_codes": failure_codes,
     }
-    manifest = build_manifest(parameters, state, final_state=final_state, events=(simulator.event_log if simulator else []), metadata=metadata, input_data=effective, git_revision=revision)
+    manifest = build_manifest(parameters, state, final_state=final_state, events=(simulator.event_log if simulator else failure_events), metadata=metadata, input_data=effective, git_revision=revision)
     manifest.update({"run_name": spec.name, "run_kind": spec.kind, "seed": seed, "perturbation": initial_metadata, "refinement_axis": spec.refinement_axis})
     run_dir = output / "_runs" / spec.name
     run_dir.mkdir(parents=True, exist_ok=True)
