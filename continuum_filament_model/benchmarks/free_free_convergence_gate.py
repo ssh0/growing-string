@@ -1075,7 +1075,6 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "dissipation_estimate_cumulative": item.get("mechanical", {}).get("dissipation_estimate_cumulative"),
             "endpoint_force_residual_final": item.get("mechanical", {}).get("endpoint_force_residual_final"),
             "endpoint_moment_residual_final": item.get("mechanical", {}).get("endpoint_moment_residual_final"),
-            "total_length_final": item.get("mechanical", {}).get("total_length_final"),
             "failure_reason": item.get("failure_reason"),
             "failure_reason_codes": item.get("failure_reason_codes"),
             "numerical_status": item.get("numerical_status"),
