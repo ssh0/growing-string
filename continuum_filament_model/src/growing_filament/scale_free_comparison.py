@@ -18,6 +18,7 @@ import hashlib
 import json
 import math
 import zipfile
+from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -59,6 +60,7 @@ class ScaleFreeConfig:
     max_progress_error: float = 0.05
     monotonic_tolerance: float = 1.0e-8
     min_growth_span_relative: float = 1.0e-8
+    allow_censored_candidates: bool = False
 
     def __post_init__(self) -> None:
         if isinstance(self.sample_points, bool) or not isinstance(self.sample_points, int) or self.sample_points < 8:
@@ -75,10 +77,16 @@ class ScaleFreeConfig:
             raise ValueError("monotonic_tolerance must be finite and non-negative")
         if self.min_growth_span_relative <= 0.0 or not math.isfinite(self.min_growth_span_relative):
             raise ValueError("min_growth_span_relative must be positive and finite")
+        if not isinstance(self.allow_censored_candidates, bool):
+            raise ValueError("allow_censored_candidates must be a boolean")
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any] | None) -> "ScaleFreeConfig":
-        return cls(**dict(value or {}))
+        values = dict(value or {})
+        unknown = set(values) - set(cls.__dataclass_fields__)
+        if unknown:
+            raise ValueError(f"unknown scale-free config fields: {sorted(unknown)}")
+        return cls(**values)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -363,18 +371,26 @@ def _progress_eligible(frame: _Frame, config: ScaleFreeConfig) -> bool:
         or frame.length is None
         or not math.isfinite(frame.length)
         or frame.length <= config.min_length
-        or frame.censor
     ):
         return False
     if frame.source == "observation":
+        # Candidate mode is deliberately narrower than contract validation but
+        # deliberately broader than validated-centerline eligibility.  The
+        # observation contract, lineage artifact, and finite geometry must
+        # still be valid; only the existing QC censor/quality flags are not a
+        # reason to discard an exported candidate.  No missing frame is filled
+        # in and the flags remain attached to the result row.
+        if config.allow_censored_candidates:
+            return frame.quality is not None and 0.0 <= frame.quality <= 1.0
         flags = {flag.strip() for flag in frame.quality_flags.split(";") if flag.strip()}
         return (
-            frame.quality is not None
+            not frame.censor
+            and frame.quality is not None
             and config.min_quality <= frame.quality <= 1.0
             and frame.lineage_status in ALLOWED_LINEAGE_STATUSES
             and not _CENSOR_FLAGS.intersection(flags)
         )
-    return True
+    return not frame.censor
 
 
 def _progress(frames: Sequence[_Frame], config: ScaleFreeConfig) -> _Progress:
@@ -390,17 +406,19 @@ def _progress(frames: Sequence[_Frame], config: ScaleFreeConfig) -> _Progress:
         return _Progress("non_monotonic_lengths", initial, final, span, len(lengths), max(1, decreases))
     if abs(span) <= relative_floor:
         return _Progress("zero_growth_span", initial, final, span, len(lengths), decreases)
-    if decreases:
+    if decreases and not config.allow_censored_candidates:
         return _Progress("non_monotonic_lengths", initial, final, span, len(lengths), decreases)
     progress_values = [(length - initial) / span for length in lengths]
-    if any(value < -1.0e-12 or value > 1.0 + 1.0e-12 for value in progress_values):
+    if any(value < -1.0e-12 or value > 1.0 + 1.0e-12 for value in progress_values) and not config.allow_censored_candidates:
         return _Progress("non_monotonic_lengths", initial, final, span, len(lengths), max(1, decreases))
+    if decreases:
+        return _Progress("ok_candidate_nonmonotonic", initial, final, span, len(lengths), decreases)
     return _Progress("ok", initial, final, span, len(lengths), decreases)
 
 
 def _assign_progress(frames: Sequence[_Frame], progress: _Progress, config: ScaleFreeConfig) -> None:
     relative_floor = config.min_growth_span_relative * max(abs(progress.initial_length or 0.0), config.min_length)
-    if progress.status != "ok" or progress.growth_span is None or abs(progress.growth_span) <= relative_floor:
+    if progress.status not in {"ok", "ok_candidate_nonmonotonic"} or progress.growth_span is None or abs(progress.growth_span) <= relative_floor:
         return
     for frame in frames:
         if _progress_eligible(frame, config):
@@ -1258,7 +1276,11 @@ def _validate_model_scope(
     if scope.get("benchmark") != "stage2_free_free_growth_relaxation_buckling":
         errors.append("unsupported_stage2_benchmark")
     run_kind = scope.get("run_kind")
-    baseline_kinds = {"deterministic_fixture", "numerical_refinement", "parameter_contrast"}
+    # This follow-up compares only the verified deterministic baseline or an
+    # explicitly validated initial-condition sensitivity population.  Mesh
+    # refinements, parameter contrasts, and exploratory replicates are not a
+    # substitute population for this comparison.
+    baseline_kinds = {"deterministic_fixture"}
     population = "stage2_deterministic"
     if run_kind not in baseline_kinds and run_kind != "initial_condition_sensitivity":
         errors.append("unsupported_model_run_kind")
@@ -1660,6 +1682,17 @@ def _coverage(frames: Sequence[_Frame]) -> dict[str, Any]:
     }
 
 
+def _observation_censor_reasons(frame: _Frame) -> list[str]:
+    """Return QC/lineage reasons without normalizing or dropping them."""
+
+    reasons = [flag.strip() for flag in frame.quality_flags.split(";") if flag.strip() and flag.strip() != "ok"]
+    if frame.lineage_status not in ALLOWED_LINEAGE_STATUSES and frame.lineage_status not in reasons:
+        reasons.append(frame.lineage_status)
+    if frame.censor and not reasons:
+        reasons.append("censor_unspecified")
+    return sorted(set(reasons))
+
+
 def _feature_row(prefix: str, features: Mapping[str, Any] | None) -> dict[str, Any]:
     result: dict[str, Any] = {}
     names = (
@@ -1691,6 +1724,41 @@ def _compact_observation_provenance(observation_dir: Path, manifest: Mapping[str
             for key, value in artifacts.items()
             if isinstance(value, Mapping)
         },
+    }
+
+
+def _initial_alignment(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Summarize only the q≈0 morphology alignment, without absolute registration."""
+
+    candidates = [
+        row for row in rows
+        if row.get("normalized_shape_distance") is not None
+        and row.get("observation_q") is not None
+        and row.get("model_q") is not None
+    ]
+    if not candidates:
+        return {
+            "status": "not_defined",
+            "reason": "no_computed_scale_free_shape_row",
+            "absolute_position_used": False,
+            "absolute_orientation_used": False,
+        }
+    initial = min(candidates, key=lambda row: (abs(float(row["observation_q"])), int(row["observation_frame"])))
+    orientation = str(initial.get("shape_distance_orientation") or "")
+    return {
+        "status": "computed_scale_free_initial_shape_alignment",
+        "observation_frame": initial.get("observation_frame"),
+        "model_frame": initial.get("model_frame"),
+        "observation_q": initial.get("observation_q"),
+        "model_q": initial.get("model_q"),
+        "normalized_shape_distance": initial.get("normalized_shape_distance"),
+        "orientation": orientation,
+        "reflection_used": orientation.endswith("_reflected"),
+        "translation_removed": True,
+        "rotation_removed": True,
+        "endpoint_orientation_removed": orientation.startswith("reverse"),
+        "absolute_position_used": False,
+        "absolute_orientation_used": False,
     }
 
 
@@ -1791,8 +1859,8 @@ def scale_free_shape_comparison(
         observation_contract_valid
         and not observation_info.get("selection_error", False)
         and model_contract_valid
-        and observation_progress.status == "ok"
-        and model_progress.status == "ok"
+        and observation_progress.status in {"ok", "ok_candidate_nonmonotonic"}
+        and model_progress.status in {"ok", "ok_candidate_nonmonotonic"}
     )
     model_by_observation: dict[int, tuple[_Frame, float]] = {}
     if progress_alignment_possible:
@@ -1818,8 +1886,14 @@ def scale_free_shape_comparison(
             "observation_q": observation.q,
             "observation_quality": observation.quality,
             "observation_quality_flags": observation.quality_flags,
+            "observation_censor_reasons": _observation_censor_reasons(observation),
             "lineage_status": observation.lineage_status,
+            "lineage_uncertainty": bool(observation.lineage_status not in ALLOWED_LINEAGE_STATUSES or observation.censor),
             "observation_censor": int(observation.censor),
+            "observation_candidate": bool(cfg.allow_censored_candidates),
+            "observation_input_status": (
+                "candidate_input_exploratory" if cfg.allow_censored_candidates else "validated_centerline"
+            ),
             "model_frame": model.index if model is not None else None,
             "model_time_s": model.time_s if model is not None else None,
             "model_length": model.length if model is not None else None,
@@ -1828,7 +1902,9 @@ def scale_free_shape_comparison(
             "progress_match_method": "nearest_growth_progress" if model_match is not None else "no_match",
             "comparison_censor": int(observation.censor or obs_features is None or model_match is None),
             "eligibility_status": "eligible" if obs_features is not None else "not_eligible",
-            "metric_reason": "" if obs_features is not None and model_match is not None else (
+            "metric_reason": (
+                "candidate_censored_exploratory" if obs_features is not None and model_match is not None and observation.censor else
+                "" if obs_features is not None and model_match is not None else
                 "observation_censored_or_quality" if obs_features is None and observation.censor else
                 "observation_centerline_unavailable" if obs_features is None else
                 "growth_progress_unavailable_or_unmatched"
@@ -1878,7 +1954,11 @@ def scale_free_shape_comparison(
     if not model_contract_valid and "model_file_missing" not in model_validation.get("errors", []):
         reasons.append("model_centerline_contract_invalid")
     if observation_progress.status != "ok":
-        reasons.append(f"observation_{observation_progress.status}")
+        reasons.append(
+            "observation_candidate_non_monotonic_lengths"
+            if observation_progress.status == "ok_candidate_nonmonotonic"
+            else f"observation_{observation_progress.status}"
+        )
     if model_progress.status != "ok":
         reasons.append(f"model_{model_progress.status}")
     if observations and eligible_count == 0:
@@ -1914,19 +1994,55 @@ def scale_free_shape_comparison(
     input_provenance = _compact_observation_provenance(obs_dir, observation_manifest)
     if external_artifact_ids:
         input_provenance["external_artifact_ids"] = dict(external_artifact_ids)
-    coverage = {
-        "observation": _coverage(observations),
-        "model": _coverage(models),
-        "frame_fraction_is_not_physical_time": True,
-    }
     censored_count = sum(int(row["comparison_censor"]) for row in output_rows)
     reflection_selected_count = sum(
         1 for row in output_rows if str(row.get("shape_distance_orientation", "")).endswith("_reflected")
     )
+    initial_alignment = _initial_alignment(output_rows)
+    candidate_rows = sum(
+        1 for frame in observations
+        if cfg.allow_censored_candidates and _finite_points(frame.points)
+    )
+    candidate_computed_rows = sum(
+        1 for row in output_rows
+        if row.get("observation_input_status") == "candidate_input_exploratory"
+        and row.get("normalized_shape_distance") is not None
+    )
+    quality_flag_counts = Counter(
+        flag.strip()
+        for frame in observations
+        for flag in frame.quality_flags.split(";")
+        if flag.strip()
+    )
+    censor_reason_counts = Counter(
+        reason
+        for frame in observations
+        for reason in _observation_censor_reasons(frame)
+    )
+    lineage_status_counts = Counter(frame.lineage_status for frame in observations)
+    coverage = {
+        "observation": _coverage(observations),
+        "model": _coverage(models),
+        "observation_rows_with_exported_centerline": sum(
+            1 for frame in observations if _finite_points(frame.points)
+        ),
+        "observation_rows_with_computed_features": sum(
+            1 for features in observation_features.values() if features is not None
+        ),
+        "candidate_input_rows": len(output_rows) if cfg.allow_censored_candidates else 0,
+        "candidate_rows": candidate_rows,
+        "candidate_computed_rows": candidate_computed_rows,
+        "frame_fraction_is_not_physical_time": True,
+    }
     compact: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "comparison_mode": "scale_free_shape",
         "status": status,
+        "input_status": (
+            "candidate_input_exploratory" if cfg.allow_censored_candidates
+            else "validated_centerline"
+        ),
+        "comparison_suppressed": compared_count == 0,
         "input_quality": {
             "usable": compared_count > 0,
             "censor": bool(reasons) or censored_count > 0,
@@ -1955,8 +2071,25 @@ def scale_free_shape_comparison(
             "fit_components": ["translation", "rotation", "endpoint_orientation", "reflection"],
             "reflection_allowed": True,
             "reflection_selected_rows": reflection_selected_count,
+            "reflection_used": reflection_selected_count > 0,
             "absolute_registration_used": False,
             "distinguished_from_initial_condition_sensitivity": True,
+        },
+        "initial_alignment": initial_alignment,
+        "candidate_input": {
+            "status": "candidate_input_exploratory" if cfg.allow_censored_candidates else "not_used",
+            "candidate_input_rows": len(output_rows) if cfg.allow_censored_candidates else 0,
+            "candidate_rows": candidate_rows,
+            "candidate_computed_rows": candidate_computed_rows,
+            "validated_centerline_output": False if cfg.allow_censored_candidates else True,
+            "censor_override": bool(cfg.allow_censored_candidates),
+            "quality_flag_counts": dict(sorted(quality_flag_counts.items())),
+            "censor_reason_counts": dict(sorted(censor_reason_counts.items())),
+            "lineage_status_counts": dict(sorted(lineage_status_counts.items())),
+            "warning": (
+                "candidate centerlines are exploratory and remain censored; they are not validated centerlines"
+                if cfg.allow_censored_candidates else None
+            ),
         },
         "initial_condition_sensitivity": {
             "population": model_provenance.get("population"),
@@ -2003,18 +2136,28 @@ def scale_free_shape_comparison(
         "model_population": model_provenance.get("population"),
         "model_run_kind": model_provenance.get("run_kind"),
         "parameter_identification": "suppressed",
-        "model_inadequacy": "not_assessed_in_scale_free_morphology_mode",
+        "model_inadequacy": (
+            "suppressed" if cfg.allow_censored_candidates
+            else "not_assessed_in_scale_free_morphology_mode"
+        ),
         "quantitative_physical_fit": "suppressed",
+        "physical_conclusions": "suppressed",
         "limitations": [
             "pixel and model coordinates are normalized independently by current contour length",
             "video/model time registration is not used; time fields are coverage metadata only",
-            "censored, missing, low-quality, new-lineage, and reconnected frames do not contribute shape distance",
+            (
+                "censored candidate centerlines may contribute exploratory shape distance, but remain flagged and are not validated"
+                if cfg.allow_censored_candidates else
+                "censored, missing, low-quality, new-lineage, and reconnected frames do not contribute shape distance"
+            ),
+            "missing centerlines are not interpolated; lineage uncertainty remains explicit",
             "growth progress is not defined for zero-span or non-monotonic length records",
         ],
     }
     csv_fields = [
         "observation_frame", "observation_time_s", "filament_id", "observation_length_px", "observation_q",
-        "observation_quality", "observation_quality_flags", "lineage_status", "observation_censor",
+        "observation_quality", "observation_quality_flags", "observation_censor_reasons", "lineage_status",
+        "lineage_uncertainty", "observation_censor", "observation_candidate", "observation_input_status",
         "model_frame", "model_time_s", "model_length", "model_q", "progress_error", "progress_match_method",
         "comparison_censor", "eligibility_status", "metric_reason", "normalized_shape_distance",
         "shape_distance_orientation",
@@ -2040,6 +2183,10 @@ def scale_free_shape_comparison(
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "comparison_mode": "scale_free_shape",
+        "input_status": compact["input_status"],
+        "comparison_suppressed": compact["comparison_suppressed"],
+        "candidate_input": compact["candidate_input"],
+        "initial_alignment": compact["initial_alignment"],
         "input_logical_id": input_provenance.get("logical_id"),
         "input_sha256": input_provenance.get("sha256"),
         "model_logical_id": model_provenance.get("logical_id"),
@@ -2058,6 +2205,9 @@ def scale_free_shape_comparison(
         "registration": compact["registration"],
         "spatial_normalization": compact["spatial_normalization"],
         "progress_coordinate": compact["progress_coordinate"],
+        "parameter_identification": "suppressed",
+        "model_inadequacy": compact["model_inadequacy"],
+        "physical_conclusions": "suppressed",
     }
     _write_json(out_dir / "scale_free_comparison_manifest.json", manifest)
     return {"summary": compact, "rows": output_rows, "manifest": manifest}

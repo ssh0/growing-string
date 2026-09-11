@@ -166,7 +166,11 @@ pixel/model scaleとtime registrationを明示した場合だけ定量比較へ�
 独立モード `growing_filament.scale_free_comparison` は、Stage 2 の free/free 軌跡と
 `img/gray5.mp4` から `run_pipeline()` が抽出した中心線を、絶対 pixel/model-unit 登録および
 video/model-time 登録なしで比較する。これは形態専用で、品質・censor・lineageを保持し、
-補間や物性fit、`model_inadequacy` 判定を行わない。
+補間や物性fit、`model_inadequacy` 判定を行わない。通常の
+validated-centerline モードでは zero-growth、non-monotonic、中心線不適格時に比較不能の診断を残し、
+bounded runner の candidate-input モードでは有限な censor 済み中心線を再分類せず探索的に比較する。
+詳細なモード別契約と、deterministic fixture と分離した初期値感度 population の扱いは
+`notes/scale_free_shape_comparison.md` を参照する。
 
 入力契約、進行度 `q`、出力schema、bounded runner、実行済み gray5 結果は
 `notes/scale_free_shape_comparison.md` を正本とする。

@@ -86,6 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
         else:
             child.add_argument("--shape-config", help="scale-free morphology comparison JSON")
             child.add_argument("--max-progress-error", type=float, help="maximum growth-progress mismatch for scale-free matching")
+            child.add_argument(
+                "--allow-censored-candidates",
+                action="store_true",
+                help="use exported censored centerlines as exploratory candidates; preserves their QC status",
+            )
         child.add_argument("--filament-id")
         if command != "scale-free":
             child.add_argument("--max-frames", type=int)
@@ -124,6 +129,8 @@ def main(argv: list[str] | None = None) -> int:
         shape_values = _json_file(args.shape_config)
         if args.max_progress_error is not None:
             shape_values["max_progress_error"] = args.max_progress_error
+        if args.allow_censored_candidates:
+            shape_values["allow_censored_candidates"] = True
         result = scale_free_shape_comparison(
             output,
             args.model,

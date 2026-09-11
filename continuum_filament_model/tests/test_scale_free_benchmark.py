@@ -34,11 +34,27 @@ class ScaleFreeBenchmarkTests(unittest.TestCase):
                 video_path=Path(directory) / "missing-gray5.mp4",
             )
             self.assertEqual(report["extraction"]["status"], "input_quality_missing_video")
-            self.assertEqual([row["run_name"] for row in report["model_runs"]], ["fast_growth_low_bend", "fast_growth_high_bend"])
+            self.assertEqual(
+                [row["run_name"] for row in report["model_runs"]],
+                [
+                    "fast_growth_low_bend",
+                    "fast_growth_high_bend",
+                    "fast_growth_low_bend_initial_condition_sensitivity",
+                ],
+            )
+            self.assertEqual(report["model_populations"]["stage2_deterministic"], ["fast_growth_low_bend", "fast_growth_high_bend"])
+            sensitivity_names = report["model_populations"]["initial_condition_sensitivity"]
+            self.assertEqual(sensitivity_names, ["fast_growth_low_bend_initial_condition_sensitivity"])
+            sensitivity = next(row for row in report["model_runs"] if row["run_name"] == sensitivity_names[0])
+            self.assertEqual(sensitivity["run_kind"], "initial_condition_sensitivity")
+            self.assertEqual(len(sensitivity["sensitivity_protocol"]["members"]), 3)
+            for member in sensitivity["sensitivity_protocol"]["members"]:
+                self.assertTrue((output / "_runs" / sensitivity_names[0] / member["artifact_path"]).is_file())
             self.assertEqual(report["registration"]["status"], "not_required_not_inferred")
             self.assertEqual(report["model_inadequacy"], "not_assessed_in_scale_free_morphology_mode")
             persisted = json.loads((output / "compact_summary.json").read_text(encoding="utf-8"))
             self.assertEqual(persisted["model_runs"][0]["run_kind"], "deterministic_fixture")
+            self.assertEqual(persisted["model_populations"]["initial_condition_sensitivity"], sensitivity_names)
             self.assertTrue((output / "compact_manifest.json").is_file())
             self.assertTrue((output / "summary.csv").is_file())
 

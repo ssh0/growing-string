@@ -13,6 +13,7 @@ from continuum_filament_model.video_compare import build_parser
 from growing_filament.model import FilamentState
 from growing_filament.reproducibility import canonical_state_hash, event_sequence_hash
 from growing_filament.scale_free_comparison import (
+    ScaleFreeConfig,
     _trajectory_sha256,
     normalized_shape_distance,
     scale_free_shape_comparison,
@@ -21,6 +22,13 @@ from growing_filament.scale_free_comparison import (
 
 
 class ScaleFreeShapeComparisonTests(unittest.TestCase):
+    def test_scale_free_config_requires_canonical_candidate_setting(self):
+        for alias in ("candidate_centerlines", "use_candidate_centerlines", "candidate_mode"):
+            with self.assertRaises(ValueError):
+                ScaleFreeConfig.from_mapping({alias: True})
+        config = ScaleFreeConfig.from_mapping({"allow_censored_candidates": True})
+        self.assertTrue(config.allow_censored_candidates)
+
     def _write_observation(self, root: Path, lengths: list[float], *, censored: set[int] | None = None, flags: dict[int, str] | None = None) -> Path:
         root.mkdir(parents=True, exist_ok=True)
         censored = censored or set()
@@ -283,6 +291,76 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             self.assertIsNone(censored["observation_normalized_endpoint_distance"])
             self.assertIsNone(censored["normalized_shape_distance"])
             self.assertEqual(censored["lineage_status"], "matched")
+
+    def test_censored_candidate_mode_is_exploratory_and_computes_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(
+                root / "observation",
+                [10.0, 15.0, 20.0],
+                censored={0, 1, 2},
+                flags={0: "branched_component", 1: "large_jump", 2: "loop_component"},
+            )
+            model = self._write_model(root, [1.0, 1.5, 2.0])
+            result = scale_free_shape_comparison(
+                observation,
+                model,
+                output_dir=root / "comparison",
+                config={"allow_censored_candidates": True},
+            )
+            summary = result["summary"]
+            self.assertEqual(summary["status"], "computed")
+            self.assertEqual(summary["input_status"], "candidate_input_exploratory")
+            self.assertFalse(summary["candidate_input"]["validated_centerline_output"])
+            self.assertEqual(summary["compared_rows"], 3)
+            self.assertTrue(all(row["observation_candidate"] for row in result["rows"]))
+            self.assertTrue(all(row["observation_censor"] == 1 for row in result["rows"]))
+            self.assertTrue(all(row["metric_reason"] == "candidate_censored_exploratory" for row in result["rows"]))
+            self.assertEqual(result["manifest"]["candidate_input"]["status"], "candidate_input_exploratory")
+            self.assertEqual(summary["model_inadequacy"], "suppressed")
+            self.assertFalse(summary["registration"]["physical_time_alignment"])
+
+    def test_candidate_mode_does_not_bypass_invalid_lineage_contract(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0], censored={0, 1, 2})
+            (observation / "lineage.csv").unlink()
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(
+                observation,
+                model,
+                output_dir=root / "comparison",
+                config={"allow_censored_candidates": True},
+            )
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertEqual(result["summary"]["input_status"], "candidate_input_exploratory")
+            self.assertTrue(result["summary"]["comparison_suppressed"])
+            self.assertEqual(result["summary"]["compared_rows"], 0)
+            self.assertIn("observation_lineage_invalid", result["summary"]["input_quality"]["reasons"])
+
+    def test_candidate_mode_reports_no_eligible_centerline_without_fabrication(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            observation = self._write_observation(root / "observation", [10.0, 20.0, 30.0])
+            centerline = observation / "centerline.csv"
+            with centerline.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            for row in rows:
+                row["x"] = "nan"
+            with centerline.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            model = self._write_model(root, [1.0, 2.0, 3.0])
+            result = scale_free_shape_comparison(
+                observation,
+                model,
+                output_dir=root / "comparison",
+                config={"allow_censored_candidates": True},
+            )
+            self.assertEqual(result["summary"]["status"], "input_quality_invalid_observation_contract")
+            self.assertTrue(result["summary"]["comparison_suppressed"])
+            self.assertEqual(result["summary"]["compared_rows"], 0)
 
     def test_invalid_observation_contract_is_unavailable_but_retains_rows(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -566,9 +644,11 @@ class ScaleFreeShapeComparisonTests(unittest.TestCase):
             "--model", "model.csv",
             "--shape-config", "shape.json",
             "--max-progress-error", "0.1",
+            "--allow-censored-candidates",
         ])
         self.assertEqual(args.shape_config, "shape.json")
         self.assertEqual(args.max_progress_error, 0.1)
+        self.assertTrue(args.allow_censored_candidates)
         self.assertFalse(hasattr(args, "video"))
         self.assertFalse(hasattr(args, "config"))
         self.assertFalse(hasattr(args, "registration"))
