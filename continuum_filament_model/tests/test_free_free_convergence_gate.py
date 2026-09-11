@@ -179,6 +179,56 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
         self.assertEqual(result["mechanics_status"], "numerically-unresolved")
         self.assertIn("mechanical_balance_residual_cumulative_out_of_tolerance", result["mechanics_reason_codes"])
 
+    def test_temporal_refinement_rejects_collapsed_accepted_dt(self):
+        tolerances = load_config_from_mapping(self._config())["tolerances"]
+
+        def run(name, requested_dt):
+            return {
+                "run_name": name,
+                "failure_reason": None,
+                "classification": {"label": "sub-threshold-or-relaxing", "onset_time": None, "peak_amplitude": 1.0, "peak_curvature_rms": 1.0},
+                "morphology": {"peak_mode_fractions": {"1": 1.0}},
+                "mechanical": {
+                    "energy_initial": 1.0,
+                    "energy_final": 1.0,
+                    "energy_span": 0.0,
+                    "energy_stretch_initial": 1.0,
+                    "energy_stretch_final": 1.0,
+                    "energy_stretch_span": 0.0,
+                    "energy_bend_initial": 1.0,
+                    "energy_bend_final": 1.0,
+                    "energy_bend_span": 0.0,
+                    "mechanical_energy_change_cumulative": 0.0,
+                    "growth_work_cumulative": 1.0,
+                    "dissipation_estimate_cumulative": 1.0,
+                    "endpoint_force_residual_final": 1.0,
+                    "endpoint_moment_residual_final": 1.0,
+                    "endpoint_shear_residual_final": 1.0,
+                    "total_length_final": 1.0,
+                    "mechanical_balance_residual_cumulative": 0.0,
+                    "mechanical_balance_residual_max_abs": 0.0,
+                    "remesh_occurred": False,
+                },
+                "effective_values": {"dt": requested_dt},
+                "accepted_dt_min": 0.001,
+                "accepted_dt_max": 0.001,
+                "accepted_dt_mean": 0.001,
+                "accepted_dt_values": [0.001],
+                "rejected_trials": 1,
+                "event_count": 1,
+                "events": {"rejection_reason_counts": {"displacement_exceeded": 1}},
+                "provenance": {},
+            }
+
+        result = _compare_refinement(
+            [run("coarse", 0.004), run("middle", 0.002), run("fine", 0.001)],
+            tolerances,
+            "temporal",
+            "fine",
+        )
+        self.assertIn("accepted_dt_not_distinct", result["mechanics_reason_codes"])
+        self.assertEqual(result["status"], "numerically-unresolved")
+
     def test_temporal_refinement_requires_sufficient_t_end(self):
         config = self._config()
         config["base"]["t_end"] = 0.0001
