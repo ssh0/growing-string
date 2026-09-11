@@ -59,8 +59,7 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 ### 力学・仕事
 
 - total/stretch/bend energy と初期・最終・span
-- `growth_reference_energy_change`: 同じ幾何で参照長だけを更新した離散 energy change
-- `growth_work`: 上記を成長仕事の診断値として累積したもの。完全な連続体 growth-work 導出とは主張しない
+- `growth_work`: 同じ幾何で参照長だけを更新した離散 energy change を、成長仕事の診断値として `growth_work_step` / `growth_work_cumulative` に記録する。完全な連続体 growth-work 導出とは主張しない
 - `dissipation_estimate`: accepted Euler 区間の `dt * sum_i Gamma_i |v_i|^2`
 - remesh energy jump、mechanical energy change、mechanical balance residual
 - endpoint force residual、bending moment residual、shear-equivalent residual

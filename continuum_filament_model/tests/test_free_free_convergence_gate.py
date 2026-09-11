@@ -64,6 +64,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = run_gate(config, Path(directory))
             self.assertEqual(report["boundary"], "free/free")
+            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-2")
             self.assertFalse(report["contact_enabled"])
             self.assertEqual(report["deterministic_fixture_population"]["temporal_count"], 9)
             self.assertEqual(report["deterministic_fixture_population"]["spatial_count"], 9)
@@ -79,8 +80,8 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
                 "requested_dt", "accepted_dt_min", "rejected_trials", "event_count",
                 "G_b", "G_s", "chi", "onset_time", "peak_transverse_amplitude",
                 "peak_curvature_rms", "mode_spectrum", "mode_fractions", "energy_final",
-                "reference_length_final", "growth_reference_energy_change_cumulative",
-                "growth_work_cumulative", "dissipation_estimate_cumulative",
+                "reference_length_final", "growth_work_cumulative",
+                "dissipation_estimate_cumulative",
                 "endpoint_force_residual_final", "endpoint_moment_residual_final",
                 "total_length_final", "failure_reason_codes",
             ):
@@ -89,7 +90,8 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertTrue((Path(directory) / "_runs").exists())
             with (Path(directory) / "temporal_runs.csv").open(newline="", encoding="utf-8") as stream:
                 fields = next(csv.reader(stream))
-            self.assertIn("growth_reference_energy_change_cumulative", fields)
+            self.assertIn("growth_work_cumulative", fields)
+            self.assertNotIn("growth_reference_energy_change_cumulative", fields)
             self.assertIn("mode_spectrum", fields)
             metrics = Path(directory) / "_runs" / "straight__temporal_dt0.001" / "metrics.csv"
             self.assertLessEqual(len(metrics.read_text(encoding="utf-8").splitlines()) - 1, 3)

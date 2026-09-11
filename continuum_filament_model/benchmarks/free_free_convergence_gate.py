@@ -62,7 +62,7 @@ from growing_filament.reproducibility import (  # noqa: E402
     event_sequence_hash,
 )
 
-SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-1"
+SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-2"
 _SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -492,8 +492,6 @@ def _metric(model: OverdampedGrowingFilament, state: FilamentState, initial_ampl
         "endpoint_moment_residual_left": float(diagnostics["left"]["bending_moment"]),
         "endpoint_moment_residual_right": float(diagnostics["right"]["bending_moment"]),
         "endpoint_shear_residual_norm_max": float(max(abs(float(diagnostics["left"]["shear_equivalent_residual"])), abs(float(diagnostics["right"]["shear_equivalent_residual"])))),
-        "growth_reference_energy_change_step": 0.0,
-        "growth_reference_energy_change_cumulative": 0.0,
         "growth_work_step": 0.0,
         "growth_work_cumulative": 0.0,
         "dissipation_estimate_step": 0.0,
@@ -626,8 +624,6 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
                 accepted_dt=accepted,
             )
             row.update({
-                "growth_reference_energy_change_step": growth_change,
-                "growth_reference_energy_change_cumulative": growth_cumulative,
                 "growth_work_step": growth_change,
                 "growth_work_cumulative": growth_cumulative,
                 "dissipation_estimate_step": dissipation,
@@ -766,7 +762,6 @@ def _mechanical_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "reference_length_final": float(final["reference_length"]),
         "total_length_initial": float(rows[0]["total_length"]),
         "total_length_final": float(final["total_length"]),
-        "growth_reference_energy_change_cumulative": float(final["growth_reference_energy_change_cumulative"]),
         "growth_work_cumulative": float(final["growth_work_cumulative"]),
         "dissipation_estimate_cumulative": float(final["dissipation_estimate_cumulative"]),
         "remesh_energy_jump_cumulative": float(final["remesh_energy_jump_cumulative"]),
@@ -1054,7 +1049,6 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "energy_final": item.get("mechanical", {}).get("energy_final"),
             "reference_length_final": item.get("mechanical", {}).get("reference_length_final"),
             "total_length_final": item.get("mechanical", {}).get("total_length_final"),
-            "growth_reference_energy_change_cumulative": item.get("mechanical", {}).get("growth_reference_energy_change_cumulative"),
             "growth_work_cumulative": item.get("mechanical", {}).get("growth_work_cumulative"),
             "dissipation_estimate_cumulative": item.get("mechanical", {}).get("dissipation_estimate_cumulative"),
             "endpoint_force_residual_final": item.get("mechanical", {}).get("endpoint_force_residual_final"),

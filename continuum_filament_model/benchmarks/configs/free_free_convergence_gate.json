@@ -1,5 +1,5 @@
 {
-  "schema_version": "continuum-filament-free-free-convergence-gate-1",
+  "schema_version": "continuum-filament-free-free-convergence-gate-2",
   "base": {
     "length": 2.0,
     "n_nodes": 9,
