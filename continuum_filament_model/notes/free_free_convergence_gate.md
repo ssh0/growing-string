@@ -1,0 +1,103 @@
+# free/free 非接触 力学収束ゲート
+
+## 目的と範囲
+
+`benchmarks/free_free_convergence_gate.py` は、自由端・一様な参照長成長・伸長・離散曲げ・等方基板 drag の競合を、**形態ラベルだけでなく力学的な収束**として監査する bounded runner である。solver のエネルギー式や時間積分を複製せず、既存の `OverdampedGrowingFilament` を呼び出す。
+
+このゲートの境界条件は常に `free/free` で、次を有効化・追加しない。
+
+- `contact_stiffness=0`, `diameter=0`
+- 接触、摩擦、接着、折りたたみ、局所成長
+- gray5 の物性 fit、parameter identification、形態差からの physics claim
+
+contact または fixed boundary を設定した config は、runner が無視して進めず、設定エラーとして拒否する。legacy の `growing_natural_length_model/`、`constant_length_model/`、`triangular_lattice/` は変更しない。
+
+## 実行
+
+軌跡・metrics・event・manifest は指定した一時ディレクトリの `_runs/` にだけ保存する。Gitへ追加するのは、必要に応じて compact summary と provenance のみとする。
+
+```bash
+TMP_DIR=$(mktemp -d /tmp/growing-string-free-free-gate.XXXXXX)
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
+  --config continuum_filament_model/benchmarks/configs/free_free_convergence_gate.json \
+  --output "$TMP_DIR"
+```
+
+出力の主な契約は次のとおり。
+
+- `convergence_summary.json/csv`: 代表点ごとの temporal/spatial 判定
+- `temporal_runs.csv`, `spatial_runs.csv`: 決定論的 fixture の compact 行
+- `controls.csv`: 成長なし等の control。fixture の収束統計へ混ぜない
+- `contrasts.csv`: growth rate、`EA`、`EI`、drag density、initial imperfection の明示 contrast
+- `sensitivity_replicates.csv`: seed と perturbation を持つ初期条件感度 population
+- `compact_summary.json`: suite-level の境界、除外範囲、population、観測量、判定
+- `compact_manifest.json`: config hash、revision、件数、compact artifact hash
+- `_runs/<run>/metrics.csv`, `events.json`, `manifest.json`: 大きい一時成果物
+
+既定設定は straight、boundary-near、buckled-candidate の3 deterministic representative を持つ。各 representative は temporal `dt=[dt, dt/2, dt/4]` の3水準と spatial `n_nodes=[5,9,13]` の3水準を実行する。buckled candidate の `t_end` は onset と post-onset の両方を含めるように設定している。設定を短縮した smoke run は、物理的な onset や収束結論ではなく、schema・分類・失敗保持の確認に限る。
+
+## 観測量と診断
+
+各 run の compact summary と per-step metrics は、次を分離して保存する。
+
+### 数値監査
+
+- requested `dt`、accepted `dt` の min/max/mean/値集合
+- rejected trials、理由別件数、event count、event sequence hash
+- remesh 発生と remesh energy jump
+- source/config/initial state/final state/event hash、Python/NumPy、seed、perturbation
+
+### 形態・mode
+
+- morphology label、onset time、peak transverse amplitude
+- curvature RMS
+- mode spectrum（1--6 の係数）と mode fractions、dominant mode
+- initial-condition amplitude、seed、noise fraction、perturbation mode
+- total contour length と reference length
+
+### 力学・仕事
+
+- total/stretch/bend energy と初期・最終・span
+- `growth_reference_energy_change`: 同じ幾何で参照長だけを更新した離散 energy change
+- `growth_work`: 上記を成長仕事の診断値として累積したもの。完全な連続体 growth-work 導出とは主張しない
+- `dissipation_estimate`: accepted Euler 区間の `dt * sum_i Gamma_i |v_i|^2`
+- remesh energy jump、mechanical energy change、mechanical balance residual
+- endpoint force residual、bending moment residual、shear-equivalent residual
+
+端点残差は過渡状態の自然境界診断であり、過渡 run の各時刻でゼロであることを要求しない。`free/free` の符号規約は `notes/free_end_dynamics.md` に従う。
+
+## 判定規則
+
+temporal と spatial を別々に比較し、それぞれに次の3つの status を持つ。
+
+- `morphology_status`: onset、peak transverse、curvature RMS、mode fractions、形態 label の比較だけ
+- `mechanics_status`: energy、growth work、dissipation、endpoint residual、total length、balance residual の比較
+- `status`: 上記の両方が通った場合だけ `resolved`
+
+いずれかの run が失敗・未解決、remesh が発生、形態 label が不一致、または設定した許容値を外れた場合は、対応する reason code を保存し、`status=numerically-unresolved` とする。`morphology-converged` だけから `mechanics-converged` や `resolved` へ再分類しない。これは「座屈がない」という意味ではなく、指定した時間・空間解像度と力学監査で結果を確定できないという意味である。
+
+時間刻みの reject や accepted/requested の差は、必ず audit として残す。reject があることだけで形態を都合よく resolved にせず、run failure、remesh、収束指標の不一致を unresolved reason として保持する。
+
+## 無次元量
+
+`G_b`、`G_s`、`chi` は `benchmarks/buckling_benchmark.py:dimensionless_groups` を唯一の定義元として import する。
+
+```text
+ tau_b = zeta * L**4 / (EI * pi**4)
+ tau_s = zeta * L**2 / EA
+ G_b   = growth_rate * tau_b
+ G_s   = growth_rate * tau_s
+ chi   = EI / (EA * L**2)
+```
+
+各 run の effective `growth_rate`, `EA`, `EI`, `zeta`, `L`, `G_b`, `G_s`, `chi` を保存する。異なる入力値の単純な見た目比較や、gray5 の未確定観測をこの無次元量へ逆同定することは行わない。
+
+## deterministic と sensitivity の契約
+
+- deterministic fixture/refinement: `seed=null`, deterministic sine imperfection。temporal/spatial convergence の母集団。
+- control: 成長なし等。deterministic refinement の判定とは別。
+- parameter contrast: 基準 representative から一因子だけを変更し、growth rate、EA、EI、drag density、amplitude を明示する。contrast の形態差は限定的な入力対照である。
+- sensitivity replicate: seed と amplitude factor/noise fraction を記録する。確率的な力学則・実験ノイズモデルではなく、初期条件感度の母集団である。
+
+`gray5` は入力品質と観測契約が未確定のため、このゲートでは読み込まず、物性 fit や physics claim を行わない。将来比較する場合に必要な契約は、pixel-to-length、撮影間隔/time registration、centerline quality/censor、filament lineage、calibration/holdout 分離、入力 hash と provenance である。
