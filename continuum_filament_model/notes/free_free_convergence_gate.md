@@ -94,15 +94,15 @@ temporal と spatial を別々に比較し、それぞれに次の3つの status
 
 ## deterministic と sensitivity の契約
 
-- deterministic fixture/refinement: `seed=null`, deterministic sine imperfection。temporal/spatial convergence の母集団。
+- deterministic fixture/refinement: `seed=null`, deterministic sine imperfection。temporal/spatial convergence の母集団。初期参照長は常に configured `L/(n_nodes-1)` の一様値とし、摂動振幅で総参照長・物質量を変えない。
 - control: 成長なし等。deterministic refinement の判定とは別。
-- parameter contrast: 基準 representative から一因子だけを変更し、growth rate、EA、EI、drag density、amplitude を明示する。contrast は temporal/spatial refinement を実施しない単一解像度の探索的入力対照であり、各 run を `numerical_status=numerically-unresolved`、`numerical_reason_codes=[not_refined_across_time_or_space]` として保持する。
-- sensitivity replicate: seed と amplitude factor/noise fraction を記録する。確率的な力学則・実験ノイズモデルではなく、初期条件感度の母集団である。各 member も同じ理由で `numerically-unresolved` とし、形態差を物理的な差として解釈しない。
+- parameter contrast: 基準 representative から一因子だけを変更し、growth rate、EA、EI、drag density、amplitude を明示する。初期参照長は固定し、変更因子以外の物質量条件を保つ。contrast は temporal/spatial refinement を実施しない単一解像度の探索的入力対照であり、各 run を `numerical_status=numerically-unresolved`、`numerical_reason_codes=[not_refined_across_time_or_space]` として保持する。
+- sensitivity replicate: seed と amplitude factor/noise fraction を記録する。初期参照長は固定し、摂動振幅・seed noiseによる初期形状だけを変える。確率的な力学則・実験ノイズモデルではなく、初期条件感度の母集団である。各 member も同じ理由で `numerically-unresolved` とし、形態差を物理的な差として解釈しない。
 
 `gray5` は入力品質と観測契約が未確定のため、このゲートでは読み込まず、物性 fit や physics claim を行わない。将来比較する場合に必要な契約は、pixel-to-length、撮影間隔/time registration、centerline quality/censor、filament lineage、calibration/holdout 分離、入力 hash と provenance である。
 
 ## 実行済み compact 結果
 
-`results/free_free_convergence_gate/` は schema version 3、commit `bb9afd100c464ceeb06bd6e7f1334042a8d347f2` 上で既定 config を実行した compact 結果である。deterministic fixture/refinement 18 run、control 1 run、parameter contrast 5 run、初期条件 sensitivity 9 runを含む。時間 refinement は straight、boundary-near、buckled-candidate の3代表点すべてで morphology と mechanics が `resolved` になった。一方、空間 refinement は3代表点すべてで少なくとも morphology または mechanics の不一致があり、`numerically-unresolved` のまま保持した。parameter contrast と sensitivity replicate は各 run/member に `not_refined_across_time_or_space` を付与し、探索的な形態差を数値収束済みの物理差と解釈しない。したがって、この結果は時間方向の bounded consistency と空間方向・探索 population の未解決を示す監査記録であり、座屈境界・臨界値・物性 fit の根拠ではない。
+`results/free_free_convergence_gate/` は schema version 4、commit `38f786465682f5d6f0cbdf9eaadbf9e1b2330a61` 上で既定 config を実行した compact 結果である。deterministic fixture/refinement 18 run、control 1 run、parameter contrast 5 run、初期条件 sensitivity 9 runを含む。時間 refinement は straight、boundary-near、buckled-candidate の3代表点すべてで morphology と mechanics が `resolved` になった。一方、空間 refinement は3代表点すべてで少なくとも morphology または mechanics の不一致があり、`numerically-unresolved` のまま保持した。parameter contrast と sensitivity replicate は各 run/member に `not_refined_across_time_or_space` を付与し、探索的な形態差を数値収束済みの物理差と解釈しない。したがって、この結果は時間方向の bounded consistency と空間方向・探索 population の未解決を示す監査記録であり、座屈境界・臨界値・物性 fit の根拠ではない。
 
 per-run の `metrics.csv`・`events.json`・`manifest.json` は実行時の一時ディレクトリに残し、`results/` には compact provenance-bearing summary だけを保存する。

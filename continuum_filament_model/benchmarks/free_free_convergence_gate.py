@@ -62,7 +62,7 @@ from growing_filament.reproducibility import (  # noqa: E402
     event_sequence_hash,
 )
 
-SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-3"
+SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-4"
 _SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -418,7 +418,8 @@ def _initial_state(config: Mapping[str, Any], *, seed: int | None = None, amplit
             y[1:-1] += amplitude * noise_fraction * noise / scale
         perturbation_mode = "sine_plus_seeded_node_noise"
     positions = np.column_stack((x, y))
-    rest_lengths = np.linalg.norm(np.diff(positions, axis=0), axis=1)
+    reference_segment_length = length / (n_nodes - 1)
+    rest_lengths = np.full(n_nodes - 1, reference_segment_length, dtype=float)
     state = FilamentState(positions, rest_lengths)
     metadata = {
         "mode": perturbation_mode,
@@ -427,6 +428,8 @@ def _initial_state(config: Mapping[str, Any], *, seed: int | None = None, amplit
         "amplitude_factor": float(amplitude_factor),
         "amplitude_effective": amplitude,
         "noise_fraction": float(noise_fraction),
+        "reference_length_initial": length,
+        "reference_length_per_segment": reference_segment_length,
         "initial_condition_is_perturbation_only": True,
     }
     return state, metadata

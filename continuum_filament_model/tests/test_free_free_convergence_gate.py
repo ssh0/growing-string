@@ -10,6 +10,7 @@ import numpy as np
 from continuum_filament_model.benchmarks.free_free_convergence_gate import (
     CaseSpec,
     GateError,
+    _initial_state,
     _mode_observables,
     _run_case,
     load_config,
@@ -64,7 +65,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = run_gate(config, Path(directory))
             self.assertEqual(report["boundary"], "free/free")
-            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-3")
+            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-4")
             self.assertFalse(report["contact_enabled"])
             self.assertEqual(report["deterministic_fixture_population"]["temporal_count"], 9)
             self.assertEqual(report["deterministic_fixture_population"]["spatial_count"], 9)
@@ -129,6 +130,15 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertEqual(straight["label"], "numerically-unresolved")
             self.assertTrue(straight["failure_reason_codes"])
             self.assertTrue(any(item["status"] == "numerically-unresolved" for item in report["convergence"]))
+
+    def test_initial_reference_lengths_are_independent_of_perturbation(self):
+        config = load_config_from_mapping(self._config())["base"]
+        small, _ = _initial_state(config, amplitude_factor=0.5)
+        large, _ = _initial_state(config, amplitude_factor=2.0)
+        expected = config["length"] / (config["n_nodes"] - 1)
+        np.testing.assert_allclose(small.rest_lengths, expected)
+        np.testing.assert_allclose(large.rest_lengths, expected)
+        self.assertFalse(np.allclose(small.positions, large.positions))
 
     def test_mode_observables_are_rigid_rotation_invariant(self):
         positions = np.array([[0.0, 0.0], [0.5, 0.1], [1.0, 0.3], [1.5, 0.1], [2.0, 0.0]])
