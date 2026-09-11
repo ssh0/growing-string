@@ -35,7 +35,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             ],
             "controls": [],
             "temporal_refinement": {"n_nodes": 5, "dt_values": [0.001, 0.0005, 0.00025]},
-            "spatial_refinement": {"n_nodes": [3, 5, 7], "dt": 0.001},
+            "spatial_refinement": {"n_nodes": [3, 5, 7], "dt": 0.00025},
             "contrasts": [
                 {"name": "growth", "base": "buckled", "factor": "growth_rate", "value": 0.03},
                 {"name": "axial", "base": "buckled", "factor": "axial_stiffness", "value": 2.0},
@@ -64,7 +64,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = run_gate(config, Path(directory))
             self.assertEqual(report["boundary"], "free/free")
-            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-2")
+            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-3")
             self.assertFalse(report["contact_enabled"])
             self.assertEqual(report["deterministic_fixture_population"]["temporal_count"], 9)
             self.assertEqual(report["deterministic_fixture_population"]["spatial_count"], 9)
@@ -79,6 +79,8 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertEqual(len(report["convergence"]), 6)
             self.assertTrue(all("morphology_status" in item and "mechanics_status" in item for item in report["convergence"]))
             self.assertTrue(all(item["status"] in {"resolved", "numerically-unresolved"} for item in report["convergence"]))
+            self.assertIn("endpoint_shear_residual_final", report["convergence"][0]["audit"])
+            self.assertIn("mechanical_balance_residual_cumulative", report["convergence"][0]["audit"])
 
             temporal = json.loads((Path(directory) / "compact_summary.json").read_text(encoding="utf-8"))["deterministic_fixture_population"]["runs"]
             row = next(item for item in temporal if item["run_kind"] == "deterministic_fixture")
@@ -89,6 +91,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
                 "reference_length_final", "growth_work_cumulative",
                 "dissipation_estimate_cumulative",
                 "endpoint_force_residual_final", "endpoint_moment_residual_final",
+                "endpoint_shear_residual_final", "mechanical_balance_residual_cumulative",
                 "total_length_final", "failure_reason_codes", "numerical_status", "numerical_reason_codes",
             ):
                 self.assertIn(key, row)
@@ -97,10 +100,23 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             with (Path(directory) / "temporal_runs.csv").open(newline="", encoding="utf-8") as stream:
                 fields = next(csv.reader(stream))
             self.assertIn("growth_work_cumulative", fields)
+            self.assertIn("mechanical_balance_residual_cumulative", fields)
+            self.assertIn("endpoint_shear_residual_final", fields)
             self.assertNotIn("growth_reference_energy_change_cumulative", fields)
             self.assertIn("mode_spectrum", fields)
+            contrast_run = next(iter(report["parameter_contrast_population"]["runs"]))
+            for artifact_name in ("summary.json", "manifest.json"):
+                artifact = json.loads((Path(directory) / "_runs" / contrast_run["run_name"] / artifact_name).read_text(encoding="utf-8"))
+                self.assertEqual(artifact["numerical_status"], "numerically-unresolved")
+                self.assertEqual(artifact["numerical_reason_codes"], ["not_refined_across_time_or_space"])
             metrics = Path(directory) / "_runs" / "straight__temporal_dt0.001" / "metrics.csv"
             self.assertLessEqual(len(metrics.read_text(encoding="utf-8").splitlines()) - 1, 3)
+
+    def test_spatial_refinement_requires_finest_temporal_dt(self):
+        config = self._config()
+        config["spatial_refinement"]["dt"] = 0.001
+        with self.assertRaises(GateError):
+            load_config_from_mapping(config)
 
     def test_unstable_case_is_preserved_as_numerically_unresolved(self):
         config = self._config()

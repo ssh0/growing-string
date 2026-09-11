@@ -35,7 +35,7 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 - `compact_manifest.json`: config hash、revision、件数、compact artifact hash
 - `_runs/<run>/metrics.csv`, `events.json`, `manifest.json`: 大きい一時成果物
 
-既定設定は straight、boundary-near、buckled-candidate の3 deterministic representative を持つ。各 representative は temporal `dt=[dt, dt/2, dt/4]` の3水準と spatial `n_nodes=[5,9,13]` の3水準を実行する。buckled candidate の `t_end` は onset と post-onset の両方を含めるように設定している。設定を短縮した smoke run は、物理的な onset や収束結論ではなく、schema・分類・失敗保持の確認に限る。
+既定設定は straight、boundary-near、buckled-candidate の3 deterministic representative を持つ。各 representative は temporal `dt=[dt, dt/2, dt/4]` の3水準と spatial `n_nodes=[5,9,13]` の3水準を実行する。spatial run は temporal finest `dt` を使い、`spatial_refinement.dt` が一致しない config は拒否する。buckled candidate の `t_end` は onset と post-onset の両方を含めるように設定している。設定を短縮した smoke run は、物理的な onset や収束結論ではなく、schema・分類・失敗保持の確認に限る。
 
 ## 観測量と診断
 
@@ -45,7 +45,7 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 
 - requested `dt`、accepted `dt` の min/max/mean/値集合
 - rejected trials、理由別件数、event count、event sequence hash
-- remesh 発生と remesh energy jump
+- `mechanical_balance_residual_cumulative` と remesh 発生・remesh energy jump
 - source/config/initial state/final state/event hash、Python/NumPy、seed、perturbation
 
 ### 形態・mode
@@ -62,7 +62,7 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 - `growth_work`: 同じ幾何で参照長だけを更新した離散 energy change を、成長仕事の診断値として `growth_work_step` / `growth_work_cumulative` に記録する。完全な連続体 growth-work 導出とは主張しない
 - `dissipation_estimate`: accepted Euler 区間の `dt * sum_i Gamma_i |v_i|^2`
 - remesh energy jump、mechanical energy change、mechanical balance residual
-- endpoint force residual、bending moment residual、shear-equivalent residual
+- endpoint force residual、bending moment residual、shear-equivalent residual。compact row と refinement audit にも `endpoint_shear_residual_final` を保存する
 
 端点残差は過渡状態の自然境界診断であり、過渡 run の各時刻でゼロであることを要求しない。`free/free` の符号規約は `notes/free_end_dynamics.md` に従う。
 
@@ -71,7 +71,7 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 temporal と spatial を別々に比較し、それぞれに次の3つの status を持つ。
 
 - `morphology_status`: onset、peak transverse、curvature RMS、mode fractions、形態 label の比較だけ
-- `mechanics_status`: energy、growth work、dissipation、endpoint residual、total length、balance residual の比較
+- `mechanics_status`: energy、growth work、dissipation、endpoint force/moment/shear residual、total length、balance residual の比較
 - `status`: 上記の両方が通った場合だけ `resolved`
 
 いずれかの run が失敗・未解決、remesh が発生、形態 label が不一致、または設定した許容値を外れた場合は、対応する reason code を保存し、`status=numerically-unresolved` とする。`morphology-converged` だけから `mechanics-converged` や `resolved` へ再分類しない。これは「座屈がない」という意味ではなく、指定した時間・空間解像度と力学監査で結果を確定できないという意味である。
@@ -103,6 +103,6 @@ temporal と spatial を別々に比較し、それぞれに次の3つの status
 
 ## 実行済み compact 結果
 
-`results/free_free_convergence_gate/` は schema version 2、commit `c4047b972f55cacd7f952476814a1c79de3fe3ce` 上で既定 config を実行した compact 結果である。deterministic fixture/refinement 18 run、control 1 run、parameter contrast 5 run、初期条件 sensitivity 9 runを含む。時間 refinement は straight、boundary-near、buckled-candidate の3代表点すべてで morphology と mechanics が `resolved` になった。一方、空間 refinement は3代表点すべてで少なくとも morphology または mechanics の不一致があり、`numerically-unresolved` のまま保持した。parameter contrast と sensitivity replicate は各 run/member に `not_refined_across_time_or_space` を付与し、探索的な形態差を数値収束済みの物理差と解釈しない。したがって、この結果は時間方向の bounded consistency と空間方向・探索 population の未解決を示す監査記録であり、座屈境界・臨界値・物性 fit の根拠ではない。
+`results/free_free_convergence_gate/` は schema version 3、commit `bb9afd100c464ceeb06bd6e7f1334042a8d347f2` 上で既定 config を実行した compact 結果である。deterministic fixture/refinement 18 run、control 1 run、parameter contrast 5 run、初期条件 sensitivity 9 runを含む。時間 refinement は straight、boundary-near、buckled-candidate の3代表点すべてで morphology と mechanics が `resolved` になった。一方、空間 refinement は3代表点すべてで少なくとも morphology または mechanics の不一致があり、`numerically-unresolved` のまま保持した。parameter contrast と sensitivity replicate は各 run/member に `not_refined_across_time_or_space` を付与し、探索的な形態差を数値収束済みの物理差と解釈しない。したがって、この結果は時間方向の bounded consistency と空間方向・探索 population の未解決を示す監査記録であり、座屈境界・臨界値・物性 fit の根拠ではない。
 
 per-run の `metrics.csv`・`events.json`・`manifest.json` は実行時の一時ディレクトリに残し、`results/` には compact provenance-bearing summary だけを保存する。

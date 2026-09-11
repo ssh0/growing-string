@@ -62,7 +62,7 @@ from growing_filament.reproducibility import (  # noqa: E402
     event_sequence_hash,
 )
 
-SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-2"
+SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-3"
 _SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -96,7 +96,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "spatial_refinement": {
         "n_nodes": [5, 9, 13],
-        "dt": 0.004,
+        "dt": 0.001,
     },
     "contrasts": [
         {"name": "lower_growth", "base": "buckled", "factor": "growth_rate", "value": 0.3},
@@ -121,6 +121,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "dissipation_relative": 0.25,
         "endpoint_force_relative": 0.35,
         "endpoint_moment_relative": 0.35,
+        "endpoint_shear_relative": 0.35,
         "total_length_relative": 0.10,
         "mechanical_balance_relative": 0.35,
         "absolute_floor_fraction_of_length": 0.002,
@@ -307,7 +308,9 @@ def _validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
     spatial_nodes = [_integer_at_least(value, 3, "spatial_refinement.n_nodes") for value in spatial.get("n_nodes", [])]
     if len(spatial_nodes) < 3 or len(set(spatial_nodes)) < 3:
         raise GateError("spatial_refinement.n_nodes requires three distinct resolutions")
-    _finite_positive(spatial.get("dt"), "spatial_refinement.dt")
+    spatial_dt = _finite_positive(spatial.get("dt"), "spatial_refinement.dt")
+    if not math.isclose(spatial_dt, min(temporal_dts), rel_tol=0.0, abs_tol=1.0e-15):
+        raise GateError("spatial_refinement.dt must equal the finest temporal refinement dt")
 
     factors = {"growth_rate", "axial_stiffness", "bending_stiffness", "drag_density", "amplitude"}
     contrasts = config.get("contrasts", [])
@@ -545,13 +548,14 @@ def _failure_codes(message: str) -> list[str]:
     return codes or ["run_failure"]
 
 
-def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: str | None, *, n_nodes: int | None = None, dt: float | None = None, sensitivity: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: str | None, *, n_nodes: int | None = None, dt: float | None = None, sensitivity: Mapping[str, Any] | None = None, numerical_status: str | None = None, numerical_reason_codes: Sequence[str] | None = None) -> dict[str, Any]:
     _safe_name(spec.name)
     effective = _effective(base, spec, n_nodes=n_nodes, dt=dt)
     perturbation = dict(sensitivity or {"mode": "deterministic_sine", "seed": spec.seed, "amplitude_factor": 1.0, "noise_fraction": 0.0})
     seed = spec.seed
     amplitude_factor = float(perturbation.get("amplitude_factor", 1.0))
     noise_fraction = float(perturbation.get("noise_fraction", 0.0))
+    numerical_reason_codes = list(numerical_reason_codes or [])
     state, initial_metadata = _initial_state(effective, seed=seed, amplitude_factor=amplitude_factor, noise_fraction=noise_fraction)
     initial_amplitude = _mode_observables(state)[0]
     parameters = ModelParameters(
@@ -687,9 +691,11 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
         "dimensionless_groups": groups,
         "failure_reason": failure_reason,
         "failure_reason_codes": failure_codes,
+        "numerical_status": numerical_status,
+        "numerical_reason_codes": numerical_reason_codes,
     }
     manifest = build_manifest(parameters, state, final_state=final_state, events=(simulator.event_log if simulator else failure_events), metadata=metadata, input_data=effective, git_revision=revision)
-    manifest.update({"run_name": spec.name, "run_kind": spec.kind, "seed": seed, "perturbation": initial_metadata, "refinement_axis": spec.refinement_axis})
+    manifest.update({"run_name": spec.name, "run_kind": spec.kind, "seed": seed, "perturbation": initial_metadata, "refinement_axis": spec.refinement_axis, "numerical_status": numerical_status, "numerical_reason_codes": numerical_reason_codes})
     run_dir = output / "_runs" / spec.name
     run_dir.mkdir(parents=True, exist_ok=True)
     _write_json(run_dir / "manifest.json", manifest)
@@ -698,10 +704,10 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
     if rows:
         _write_csv(run_dir / "metrics.csv", metrics_rows_to_write)
     if simulator is not None:
-        _write_json(run_dir / "summary.json", _compact_run_summary(spec, effective, groups, classification, morphology, mechanical, compact_events, failure_reason, failure_codes, initial_metadata, manifest, rows))
+        _write_json(run_dir / "summary.json", _compact_run_summary(spec, effective, groups, classification, morphology, mechanical, compact_events, failure_reason, failure_codes, initial_metadata, manifest, rows, numerical_status=numerical_status, numerical_reason_codes=numerical_reason_codes))
     else:
-        _write_json(run_dir / "summary.json", {"run_name": spec.name, "failure_reason": failure_reason, "failure_reason_codes": failure_codes, "classification": classification})
-    result = _compact_run_summary(spec, effective, groups, classification, morphology, mechanical, compact_events, failure_reason, failure_codes, initial_metadata, manifest, rows)
+        _write_json(run_dir / "summary.json", {"run_name": spec.name, "failure_reason": failure_reason, "failure_reason_codes": failure_codes, "classification": classification, "numerical_status": numerical_status, "numerical_reason_codes": numerical_reason_codes})
+    result = _compact_run_summary(spec, effective, groups, classification, morphology, mechanical, compact_events, failure_reason, failure_codes, initial_metadata, manifest, rows, numerical_status=numerical_status, numerical_reason_codes=numerical_reason_codes)
     result["metrics_rows_total"] = len(rows)
     result["metrics_rows_saved"] = len(metrics_rows_to_write)
     result["metrics_path"] = str((run_dir / "metrics.csv").relative_to(output)) if rows else None
@@ -778,7 +784,7 @@ def _mechanical_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _compact_run_summary(spec: CaseSpec, effective: Mapping[str, Any], groups: Mapping[str, Any], classification: Mapping[str, Any], morphology: Mapping[str, Any], mechanical: Mapping[str, Any], events: Mapping[str, Any], failure_reason: str | None, failure_codes: Sequence[str], initial_condition: Mapping[str, Any], manifest: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def _compact_run_summary(spec: CaseSpec, effective: Mapping[str, Any], groups: Mapping[str, Any], classification: Mapping[str, Any], morphology: Mapping[str, Any], mechanical: Mapping[str, Any], events: Mapping[str, Any], failure_reason: str | None, failure_codes: Sequence[str], initial_condition: Mapping[str, Any], manifest: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], *, numerical_status: str | None = None, numerical_reason_codes: Sequence[str] = ()) -> dict[str, Any]:
     accepted_values = [float(row["accepted_dt"]) for row in rows if row.get("accepted_dt") is not None]
     requested_values = [float(row["requested_dt"]) for row in rows if row.get("requested_dt") is not None]
     return {
@@ -811,6 +817,8 @@ def _compact_run_summary(spec: CaseSpec, effective: Mapping[str, Any], groups: M
         "perturbation": dict(initial_condition),
         "failure_reason": failure_reason,
         "failure_reason_codes": list(failure_codes),
+        "numerical_status": numerical_status,
+        "numerical_reason_codes": list(numerical_reason_codes),
         "provenance": {
             "git_revision": manifest.get("git_revision"),
             "input_hash": manifest.get("input_hash"),
@@ -882,6 +890,7 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         ("dissipation_estimate_cumulative", "dissipation_relative"),
         ("endpoint_force_residual_final", "endpoint_force_relative"),
         ("endpoint_moment_residual_final", "endpoint_moment_relative"),
+        ("endpoint_shear_residual_final", "endpoint_shear_relative"),
         ("total_length_final", "total_length_relative"),
         ("mechanical_balance_residual_cumulative", "mechanical_balance_relative"),
     )
@@ -892,6 +901,7 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         "dissipation_estimate_cumulative": 1.0e-12,
         "endpoint_force_residual_final": 1.0e-12,
         "endpoint_moment_residual_final": 1.0e-12,
+        "endpoint_shear_residual_final": 1.0e-12,
         "total_length_final": 1.0,
         # The balance residual is an absolute diagnostic with energy-scale
         # units; normalise it against an O(1) scale rather than treating a
@@ -916,8 +926,10 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         "energy_final": [run.get("mechanical", {}).get("energy_final") for run in runs],
         "growth_work_cumulative": [run.get("mechanical", {}).get("growth_work_cumulative") for run in runs],
         "dissipation_estimate_cumulative": [run.get("mechanical", {}).get("dissipation_estimate_cumulative") for run in runs],
+        "mechanical_balance_residual_cumulative": [run.get("mechanical", {}).get("mechanical_balance_residual_cumulative") for run in runs],
         "endpoint_force_residual_final": [run.get("mechanical", {}).get("endpoint_force_residual_final") for run in runs],
         "endpoint_moment_residual_final": [run.get("mechanical", {}).get("endpoint_moment_residual_final") for run in runs],
+        "endpoint_shear_residual_final": [run.get("mechanical", {}).get("endpoint_shear_residual_final") for run in runs],
         "total_length_final": [run.get("mechanical", {}).get("total_length_final") for run in runs],
     }
     base["morphology_reason_codes"] = sorted(morph_reasons)
@@ -941,6 +953,7 @@ def _run_deterministic(config: Mapping[str, Any], output: Path, revision: str | 
     convergence: list[dict[str, Any]] = []
     temporal_cfg = config["temporal_refinement"]
     spatial_cfg = config["spatial_refinement"]
+    spatial_dt = min(float(value) for value in temporal_cfg["dt_values"])
     for item in representatives:
         name = str(item["name"])
         temporal_runs: list[dict[str, Any]] = []
@@ -958,7 +971,7 @@ def _run_deterministic(config: Mapping[str, Any], output: Path, revision: str | 
             n_nodes = int(raw_n)
             spec = _specs_for_representative(config, item, "spatial")
             spec = CaseSpec(f"{name}__spatial_n{n_nodes}", spec.kind, spec.overrides, spec.role, spec.representative, "spatial")
-            run = _run_case(spec, base, output, revision, n_nodes=n_nodes, dt=float(spatial_cfg["dt"]))
+            run = _run_case(spec, base, output, revision, n_nodes=n_nodes, dt=spatial_dt)
             spatial_runs.append(run)
             spatial_all.append(run)
         spatial_reference = max(spatial_runs, key=lambda run: int(run["effective_values"]["n_nodes"]))
@@ -978,17 +991,6 @@ def _run_controls(config: Mapping[str, Any], output: Path, revision: str | None)
 
 
 EXPLORATORY_UNRESOLVED_REASON = "not_refined_across_time_or_space"
-
-
-def _mark_exploratory_unresolved(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    return [
-        {
-            **dict(record),
-            "numerical_status": "numerically-unresolved",
-            "numerical_reason_codes": [EXPLORATORY_UNRESOLVED_REASON],
-        }
-        for record in records
-    ]
 
 
 def _exploratory_numerical_contract() -> dict[str, Any]:
@@ -1014,7 +1016,7 @@ def _run_contrasts(config: Mapping[str, Any], output: Path, revision: str | None
             role=f"contrast:{factor}", representative=str(item["base"]), refinement_axis="contrast",
             contrast_factor=factor, contrast_value=float(item["value"]),
         )
-        records.append(_run_case(spec, config["base"], output, revision, n_nodes=n_nodes, dt=dt))
+        records.append(_run_case(spec, config["base"], output, revision, n_nodes=n_nodes, dt=dt, numerical_status="numerically-unresolved", numerical_reason_codes=[EXPLORATORY_UNRESOLVED_REASON]))
     return records
 
 
@@ -1033,7 +1035,7 @@ def _run_sensitivity(config: Mapping[str, Any], output: Path, revision: str | No
                 role="initial-condition-sensitivity", representative=str(item["name"]), refinement_axis="sensitivity", seed=int(seed),
                 perturbation={"amplitude_factor": float(amplitude_factor), "noise_fraction": float(sensitivity["noise_fraction"])},
             )
-            records.append(_run_case(spec, config["base"], output, revision, n_nodes=n_nodes, dt=dt, sensitivity=spec.perturbation))
+            records.append(_run_case(spec, config["base"], output, revision, n_nodes=n_nodes, dt=dt, sensitivity=spec.perturbation, numerical_status="numerically-unresolved", numerical_reason_codes=[EXPLORATORY_UNRESOLVED_REASON]))
     return records
 
 
@@ -1073,8 +1075,10 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "total_length_final": item.get("mechanical", {}).get("total_length_final"),
             "growth_work_cumulative": item.get("mechanical", {}).get("growth_work_cumulative"),
             "dissipation_estimate_cumulative": item.get("mechanical", {}).get("dissipation_estimate_cumulative"),
+            "mechanical_balance_residual_cumulative": item.get("mechanical", {}).get("mechanical_balance_residual_cumulative"),
             "endpoint_force_residual_final": item.get("mechanical", {}).get("endpoint_force_residual_final"),
             "endpoint_moment_residual_final": item.get("mechanical", {}).get("endpoint_moment_residual_final"),
+            "endpoint_shear_residual_final": item.get("mechanical", {}).get("endpoint_shear_residual_final"),
             "failure_reason": item.get("failure_reason"),
             "failure_reason_codes": item.get("failure_reason_codes"),
             "numerical_status": item.get("numerical_status"),
@@ -1092,8 +1096,8 @@ def run_gate(config: Mapping[str, Any] | None, output: Path) -> dict[str, Any]:
     revision = detect_git_revision(Path(__file__).resolve().parents[2])
     temporal, spatial, convergence = _run_deterministic(effective, output, revision)
     controls = _run_controls(effective, output, revision)
-    contrasts = _mark_exploratory_unresolved(_run_contrasts(effective, output, revision))
-    sensitivity = _mark_exploratory_unresolved(_run_sensitivity(effective, output, revision))
+    contrasts = _run_contrasts(effective, output, revision)
+    sensitivity = _run_sensitivity(effective, output, revision)
     all_runs = [*temporal, *spatial, *controls, *contrasts, *sensitivity]
     temporal_rows = _compact_rows(temporal)
     spatial_rows = _compact_rows(spatial)

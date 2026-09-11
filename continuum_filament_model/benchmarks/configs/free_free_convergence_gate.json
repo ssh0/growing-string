@@ -1,5 +1,5 @@
 {
-  "schema_version": "continuum-filament-free-free-convergence-gate-2",
+  "schema_version": "continuum-filament-free-free-convergence-gate-3",
   "base": {
     "length": 2.0,
     "n_nodes": 9,
@@ -29,7 +29,7 @@
   },
   "spatial_refinement": {
     "n_nodes": [5, 9, 13],
-    "dt": 0.004
+    "dt": 0.001
   },
   "contrasts": [
     {"name": "lower_growth", "base": "buckled", "factor": "growth_rate", "value": 0.3},
@@ -54,6 +54,7 @@
     "dissipation_relative": 0.25,
     "endpoint_force_relative": 0.35,
     "endpoint_moment_relative": 0.35,
+    "endpoint_shear_relative": 0.35,
     "total_length_relative": 0.1,
     "mechanical_balance_relative": 0.35,
     "absolute_floor_fraction_of_length": 0.002
