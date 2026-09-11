@@ -177,9 +177,12 @@ censoredな場合の定量overlay・parameter fittingは抑制します。動画
 video/model-time 登録なしで比較します。輪郭長で各系列を独立に正規化し、
 `q=(L-L_initial)/(L_final-L_initial)` と `s/L` を使って形態遷移を対応付けます。
 quality、censor、lineage、frame/time coverage、入力・モデル・設定・revision hashを保存し、
-物性fit・parameter identification・`model_inadequacy`判定は抑制します。zero-growth、
-non-monotonic、中心線不適格時は比較不能のdiagnosticを残し、補間や絶対登録の推測をしません。
-詳細は `notes/scale_free_shape_comparison.md` を参照してください。
+物性fit・parameter identification・`model_inadequacy`判定は抑制します。通常の
+validated-centerline モードでは zero-growth、non-monotonic、中心線不適格時に比較不能の
+診断を残します。bounded runner は、有限な censor 済み中心線を再分類せず探索的に比較する
+candidate-input モードと、deterministic fixture とは分離した検証済み初期値感度 population を
+使用します。補間や絶対登録の推測はしません。モード別の契約と解釈は
+`notes/scale_free_shape_comparison.md` を参照してください。
 
 ## P0-B：線形mode・時間／空間数値ゲート
 

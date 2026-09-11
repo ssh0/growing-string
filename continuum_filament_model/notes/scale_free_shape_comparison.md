@@ -23,19 +23,19 @@ physical time とは扱わない。
 ## 保存する量と入力品質
 
 各行は、観測の frame/time、長さ、`q`、quality、quality flags、lineage status、censor と、
-対応モデル frame/time、`q`、progress error を保存する。valid な中心線について次を観測・
-モデルの双方で保存する。
+対応モデル frame/time、`q`、progress error を保存する。
 
 - normalized endpoint distance (`endpoint_distance/L`)
 - normalized radius of gyration (`R_g/L`, 輪郭長重み)
 - normalized peak deflection（端点 chord からの最大偏位 `/L`）
 - curvature RMS times length
 - 1--6 mode fractions
-- 回転・平行移動・端点方向を除いた normalized shape distance（valid な matched 行のみ）
+- 回転・平行移動・端点方向を除いた normalized shape distance（計算可能な matched 行のみ）
 
 `new_lineage`、`reconnected_after_missing`、missing、branch/loop、low quality、ROI/image
-boundary 等の既存 censor は常にそのまま保持する。通常の validated-centerline モードでは
-shape distance の分母から除外する。bounded follow-up は `allow_censored_candidates=true`
+boundary 等の既存 censor は常にそのまま保持する。有限な中心線について、次の量を観測・
+モデルの双方で保存する。通常の validated-centerline モードでは shape distance の分母から除外する。
+bounded follow-up は `allow_censored_candidates=true`
 を明示した `candidate_input_exploratory` モードで、有限な中心線が出力された行に限って
 censor 済み候補も探索的に比較する。このモードでも品質フラグ、censor、lineage の不確実性、
 coverage を結果へ残し、candidate を validated centerline へ再分類しない。bounded runner は
@@ -60,7 +60,7 @@ initial-condition sensitivity や物性 fitとは分離する。`model_inadequac
 - lineage artifact が欠落または summary/centerline と整合しない：`input_quality_invalid_observation_contract`
 - 有効な長さが2点未満：`insufficient_length_observations`
 - 初期・終端長の差がほぼ0：`zero_growth_span`
-- 長さが減少する系列：`non_monotonic_lengths`
+- 長さが減少する系列：validated モードでは `non_monotonic_lengths`、candidate モードでは `observation_candidate_non_monotonic_lengths`
 - valid centerline が0件、または validated モードで censor により全件除外：`input_quality_no_eligible_centerline`
 - candidate モードの結果には `input_status=candidate_input_exploratory` と `candidate_input` の警告・件数を付ける。比較行が0件の場合は `comparison_suppressed=true` とする
 - model centerline がない：`model_centerline_unavailable`
@@ -124,5 +124,6 @@ diagnostics は `results/scale_free_shape_comparison/compact_summary.json` と
 
 scale-free の shape agreement は、成長進行度に沿った無次元形態の一致を示し得るが、
 calibrated dynamics、成長速度、物性値、時刻同期、pixel/model scale、parameter
-identification の証拠ではない。censor が比較を妨げる場合は「比較不能」という入力品質結果
-のみを報告する。形状差を `model_inadequacy` や接触の必要性へ変換しない。
+identification の証拠ではない。validated モードで censor が比較を妨げる場合は「比較不能」という
+入力品質結果のみを報告する。candidate モードの比較行も探索的な感度分析に限り、検証済み中心線や
+実験的確定値として扱わない。形状差を `model_inadequacy` や接触の必要性へ変換しない。
