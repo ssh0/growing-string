@@ -10,6 +10,7 @@ import numpy as np
 from continuum_filament_model.benchmarks.free_free_convergence_gate import (
     CaseSpec,
     GateError,
+    _compare_refinement,
     _initial_state,
     _mode_observables,
     _run_case,
@@ -65,7 +66,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = run_gate(config, Path(directory))
             self.assertEqual(report["boundary"], "free/free")
-            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-4")
+            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-5")
             self.assertFalse(report["contact_enabled"])
             self.assertEqual(report["deterministic_fixture_population"]["temporal_count"], 9)
             self.assertEqual(report["deterministic_fixture_population"]["spatial_count"], 9)
@@ -82,17 +83,22 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertTrue(all(item["status"] in {"resolved", "numerically-unresolved"} for item in report["convergence"]))
             self.assertIn("endpoint_shear_residual_final", report["convergence"][0]["audit"])
             self.assertIn("mechanical_balance_residual_cumulative", report["convergence"][0]["audit"])
+            self.assertIn("accepted_dt_values", report["convergence"][0]["audit"])
+            self.assertIn("remesh_energy_jump_cumulative", report["convergence"][0]["audit"])
+            self.assertIn("event_sequence_hash", report["convergence"][0]["audit"])
 
             temporal = json.loads((Path(directory) / "compact_summary.json").read_text(encoding="utf-8"))["deterministic_fixture_population"]["runs"]
             row = next(item for item in temporal if item["run_kind"] == "deterministic_fixture")
             for key in (
-                "requested_dt", "accepted_dt_min", "rejected_trials", "event_count",
+                "requested_dt", "accepted_dt_min", "accepted_dt_mean", "accepted_dt_values", "rejected_trials", "event_count",
                 "G_b", "G_s", "chi", "onset_time", "peak_transverse_amplitude",
                 "peak_curvature_rms", "mode_spectrum", "mode_fractions", "energy_final",
                 "reference_length_final", "growth_work_cumulative",
                 "dissipation_estimate_cumulative",
                 "endpoint_force_residual_final", "endpoint_moment_residual_final",
                 "endpoint_shear_residual_final", "mechanical_balance_residual_cumulative",
+                "remesh_energy_jump_cumulative", "remesh_occurred", "event_sequence_hash",
+                "initial_state_hash", "canonical_state_hash", "input_hash", "git_revision",
                 "total_length_final", "failure_reason_codes", "numerical_status", "numerical_reason_codes",
             ):
                 self.assertIn(key, row)
@@ -101,7 +107,11 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             with (Path(directory) / "temporal_runs.csv").open(newline="", encoding="utf-8") as stream:
                 fields = next(csv.reader(stream))
             self.assertIn("growth_work_cumulative", fields)
+            self.assertIn("accepted_dt_mean", fields)
+            self.assertIn("accepted_dt_values", fields)
             self.assertIn("mechanical_balance_residual_cumulative", fields)
+            self.assertIn("remesh_energy_jump_cumulative", fields)
+            self.assertIn("event_sequence_hash", fields)
             self.assertIn("endpoint_shear_residual_final", fields)
             self.assertNotIn("growth_reference_energy_change_cumulative", fields)
             self.assertIn("mode_spectrum", fields)
@@ -118,6 +128,45 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
         config["spatial_refinement"]["dt"] = 0.001
         with self.assertRaises(GateError):
             load_config_from_mapping(config)
+
+    def test_balance_residual_refinement_uses_residual_scale(self):
+        tolerances = load_config_from_mapping(self._config())["tolerances"]
+
+        def run(name, dt, balance):
+            return {
+                "run_name": name,
+                "failure_reason": None,
+                "classification": {"label": "sub-threshold-or-relaxing", "onset_time": None, "peak_amplitude": 1.0, "peak_curvature_rms": 1.0},
+                "morphology": {"peak_mode_fractions": {"1": 1.0}},
+                "mechanical": {
+                    "energy_final": 1.0,
+                    "growth_work_cumulative": 1.0,
+                    "dissipation_estimate_cumulative": 1.0,
+                    "endpoint_force_residual_final": 1.0,
+                    "endpoint_moment_residual_final": 1.0,
+                    "endpoint_shear_residual_final": 1.0,
+                    "total_length_final": 1.0,
+                    "mechanical_balance_residual_cumulative": balance,
+                    "remesh_occurred": False,
+                },
+                "effective_values": {"dt": dt},
+                "accepted_dt_min": dt,
+                "accepted_dt_max": dt,
+                "accepted_dt_mean": dt,
+                "accepted_dt_values": [dt],
+                "rejected_trials": 0,
+                "event_count": 0,
+                "provenance": {},
+            }
+
+        result = _compare_refinement(
+            [run("coarse", 0.004, 0.0073), run("middle", 0.002, 0.00365), run("fine", 0.001, 0.00182)],
+            tolerances,
+            "temporal",
+            "fine",
+        )
+        self.assertEqual(result["mechanics_status"], "numerically-unresolved")
+        self.assertIn("mechanical_balance_residual_cumulative_out_of_tolerance", result["mechanics_reason_codes"])
 
     def test_unstable_case_is_preserved_as_numerically_unresolved(self):
         config = self._config()

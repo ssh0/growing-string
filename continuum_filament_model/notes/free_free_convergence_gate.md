@@ -45,8 +45,8 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 
 - requested `dt`、accepted `dt` の min/max/mean/値集合
 - rejected trials、理由別件数、event count、event sequence hash
-- `mechanical_balance_residual_cumulative` と remesh 発生・remesh energy jump
-- source/config/initial state/final state/event hash、Python/NumPy、seed、perturbation
+- accepted `dt` の集合・mean、`mechanical_balance_residual_cumulative`、remesh 発生・remesh energy jump
+- source/config/initial state/final state/event hash、Python/NumPy、seed、perturbation。compact row と refinement audit に同じ値・hashを保持する
 
 ### 形態・mode
 
@@ -74,7 +74,7 @@ temporal と spatial を別々に比較し、それぞれに次の3つの status
 - `mechanics_status`: energy、growth work、dissipation、endpoint force/moment/shear residual、total length、balance residual の比較
 - `status`: 上記の両方が通った場合だけ `resolved`
 
-いずれかの run が失敗・未解決、remesh が発生、形態 label が不一致、または設定した許容値を外れた場合は、対応する reason code を保存し、`status=numerically-unresolved` とする。`morphology-converged` だけから `mechanics-converged` や `resolved` へ再分類しない。これは「座屈がない」という意味ではなく、指定した時間・空間解像度と力学監査で結果を確定できないという意味である。
+いずれかの run が失敗・未解決、remesh が発生、形態 label が不一致、または設定した許容値を外れた場合は、対応する reason code を保存し、`status=numerically-unresolved` とする。mechanical balance residual は `1e-12` の絶対 floor を除き、残差自身を分母とするため、時間刻み依存の残差減少を O(1) floor で隠さない。`morphology-converged` だけから `mechanics-converged` や `resolved` へ再分類しない。これは「座屈がない」という意味ではなく、指定した時間・空間解像度と力学監査で結果を確定できないという意味である。
 
 時間刻みの reject や accepted/requested の差は、必ず audit として残す。reject があることだけで形態を都合よく resolved にせず、run failure、remesh、収束指標の不一致を unresolved reason として保持する。
 
@@ -103,6 +103,6 @@ temporal と spatial を別々に比較し、それぞれに次の3つの status
 
 ## 実行済み compact 結果
 
-`results/free_free_convergence_gate/` は schema version 4、commit `38f786465682f5d6f0cbdf9eaadbf9e1b2330a61` 上で既定 config を実行した compact 結果である。deterministic fixture/refinement 18 run、control 1 run、parameter contrast 5 run、初期条件 sensitivity 9 runを含む。時間 refinement は straight、boundary-near、buckled-candidate の3代表点すべてで morphology と mechanics が `resolved` になった。一方、空間 refinement は3代表点すべてで少なくとも morphology または mechanics の不一致があり、`numerically-unresolved` のまま保持した。parameter contrast と sensitivity replicate は各 run/member に `not_refined_across_time_or_space` を付与し、探索的な形態差を数値収束済みの物理差と解釈しない。したがって、この結果は時間方向の bounded consistency と空間方向・探索 population の未解決を示す監査記録であり、座屈境界・臨界値・物性 fit の根拠ではない。
+`results/free_free_convergence_gate/` は schema version 5、commit `d7f64c678ff9a156a6f622ef70046a736c0d5ccf` 上で既定 config を実行した compact 結果である。deterministic fixture/refinement 18 run、control 1 run、parameter contrast 5 run、初期条件 sensitivity 9 runを含む。時間 refinement は straight、boundary-near、buckled-candidate の3代表点すべてで morphology と mechanics が `resolved` になった。一方、空間 refinement は3代表点すべてで少なくとも morphology または mechanics の不一致があり、`numerically-unresolved` のまま保持した。parameter contrast と sensitivity replicate は各 run/member に `not_refined_across_time_or_space` を付与し、探索的な形態差を数値収束済みの物理差と解釈しない。したがって、この結果は時間方向の bounded consistency と空間方向・探索 population の未解決を示す監査記録であり、座屈境界・臨界値・物性 fit の根拠ではない。
 
 per-run の `metrics.csv`・`events.json`・`manifest.json` は実行時の一時ディレクトリに残し、`results/` には compact provenance-bearing summary だけを保存する。

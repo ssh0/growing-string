@@ -62,7 +62,7 @@ from growing_filament.reproducibility import (  # noqa: E402
     event_sequence_hash,
 )
 
-SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-4"
+SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-5"
 _SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -906,10 +906,7 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         "endpoint_moment_residual_final": 1.0e-12,
         "endpoint_shear_residual_final": 1.0e-12,
         "total_length_final": 1.0,
-        # The balance residual is an absolute diagnostic with energy-scale
-        # units; normalise it against an O(1) scale rather than treating a
-        # near-zero residual as a relative quantity with a tiny denominator.
-        "mechanical_balance_residual_cumulative": 1.0,
+        "mechanical_balance_residual_cumulative": 1.0e-12,
     }
     for run in runs:
         current = run.get("mechanical", {})
@@ -924,6 +921,7 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         "accepted_dt_min": accepted,
         "accepted_dt_max": [run.get("accepted_dt_max") for run in runs],
         "accepted_dt_mean": [run.get("accepted_dt_mean") for run in runs],
+        "accepted_dt_values": [run.get("accepted_dt_values", []) for run in runs],
         "rejected_trials": rejected,
         "event_counts": [int(run.get("event_count", 0)) for run in runs],
         "energy_final": [run.get("mechanical", {}).get("energy_final") for run in runs],
@@ -934,6 +932,13 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         "endpoint_moment_residual_final": [run.get("mechanical", {}).get("endpoint_moment_residual_final") for run in runs],
         "endpoint_shear_residual_final": [run.get("mechanical", {}).get("endpoint_shear_residual_final") for run in runs],
         "total_length_final": [run.get("mechanical", {}).get("total_length_final") for run in runs],
+        "remesh_energy_jump_cumulative": [run.get("mechanical", {}).get("remesh_energy_jump_cumulative") for run in runs],
+        "remesh_occurred": [bool(run.get("mechanical", {}).get("remesh_occurred")) for run in runs],
+        "event_sequence_hash": [run.get("provenance", {}).get("event_sequence_hash") for run in runs],
+        "initial_state_hash": [run.get("provenance", {}).get("initial_state_hash") for run in runs],
+        "canonical_state_hash": [run.get("provenance", {}).get("canonical_state_hash") for run in runs],
+        "input_hash": [run.get("provenance", {}).get("input_hash") for run in runs],
+        "git_revision": [run.get("provenance", {}).get("git_revision") for run in runs],
     }
     base["morphology_reason_codes"] = sorted(morph_reasons)
     base["mechanics_reason_codes"] = sorted(mech_reasons)
@@ -1061,6 +1066,8 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "requested_dt": item.get("effective_values", {}).get("dt"),
             "accepted_dt_min": item.get("accepted_dt_min"),
             "accepted_dt_max": item.get("accepted_dt_max"),
+            "accepted_dt_mean": item.get("accepted_dt_mean"),
+            "accepted_dt_values": item.get("accepted_dt_values"),
             "rejected_trials": item.get("rejected_trials"),
             "event_count": item.get("event_count"),
             "G_b": item.get("dimensionless_groups", {}).get("G_b"),
@@ -1082,6 +1089,13 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "endpoint_force_residual_final": item.get("mechanical", {}).get("endpoint_force_residual_final"),
             "endpoint_moment_residual_final": item.get("mechanical", {}).get("endpoint_moment_residual_final"),
             "endpoint_shear_residual_final": item.get("mechanical", {}).get("endpoint_shear_residual_final"),
+            "remesh_energy_jump_cumulative": item.get("mechanical", {}).get("remesh_energy_jump_cumulative"),
+            "remesh_occurred": item.get("mechanical", {}).get("remesh_occurred"),
+            "event_sequence_hash": item.get("provenance", {}).get("event_sequence_hash"),
+            "initial_state_hash": item.get("provenance", {}).get("initial_state_hash"),
+            "canonical_state_hash": item.get("provenance", {}).get("canonical_state_hash"),
+            "input_hash": item.get("provenance", {}).get("input_hash"),
+            "git_revision": item.get("provenance", {}).get("git_revision"),
             "failure_reason": item.get("failure_reason"),
             "failure_reason_codes": item.get("failure_reason_codes"),
             "numerical_status": item.get("numerical_status"),
