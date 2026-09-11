@@ -335,7 +335,7 @@ def _validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
         if factor not in factors:
             raise GateError(f"contrast factor must be one of {sorted(factors)}")
         contrast_factors.add(factor)
-        if not item.get("base") in names:
+        if item.get("base") not in names:
             raise GateError(f"contrast {item['name']} references unknown representative")
         value = float(item.get("value"))
         if not math.isfinite(value) or value <= 0.0 or (factor == "growth_rate" and value < 0.0):
