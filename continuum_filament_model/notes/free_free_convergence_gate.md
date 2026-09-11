@@ -35,7 +35,7 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 - `compact_manifest.json`: config hash、revision、件数、compact artifact hash
 - `_runs/<run>/metrics.csv`, `events.json`, `manifest.json`: 大きい一時成果物
 
-既定設定は straight、boundary-near、buckled-candidate の3 deterministic representative を持つ。各 representative は temporal `dt=[dt, dt/2, dt/4]` の3水準と spatial `n_nodes=[5,9,13]` の3水準を実行する。temporal の各水準は少なくとも最大 `dt` まで走り、accepted `dt` が重複する設定は未解決または設定エラーとして扱う。spatial run は temporal finest `dt` を使い、`spatial_refinement.dt` が一致しない config は拒否する。buckled candidate の `t_end` は onset と post-onset の両方を含めるように設定している。設定を短縮した smoke run は、物理的な onset や収束結論ではなく、schema・分類・失敗保持の確認に限る。
+既定設定は straight、boundary-near、buckled-candidate の3 deterministic representative を持つ。各 representative は temporal `dt=[dt, dt/2, dt/4]` の3水準と spatial `n_nodes=[5,9,13]` の3水準を実行する。temporal の各水準は少なくとも最大 `dt` まで走り、accepted `dt` が重複する設定は未解決または設定エラーとして扱う。spatial run は temporal finest `dt` を使い、`spatial_refinement.dt` が一致しない config は拒否する。control、contrast、sensitivity も同じ temporal finest `dt` で実行する。buckled candidate の `t_end` は onset と post-onset の両方を含めるように設定している。設定を短縮した smoke run は、物理的な onset や収束結論ではなく、schema・分類・失敗保持の確認に限る。
 
 ## 観測量と診断
 
@@ -44,7 +44,7 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 ### 数値監査
 
 - requested `dt`、accepted `dt` の min/max/mean/値集合
-- rejected trials、理由別件数、event count、event sequence hash
+- rejected trials、理由別件数、event count、event sequence hashをcompact row と refinement audit に保持する
 - accepted `dt` の集合・mean、`mechanical_balance_residual_cumulative`、remesh 発生・remesh energy jump
 - source/config/initial state/final state/event hash、Python/NumPy、seed、perturbation。compact row と refinement audit に同じ値・hashを保持する
 
@@ -58,7 +58,7 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 
 ### 力学・仕事
 
-- total/stretch/bend energy と初期・最終・span
+- total/stretch/bend energy の初期・最終・span と mechanical energy change
 - `growth_work`: 同じ幾何で参照長だけを更新した離散 energy change を、成長仕事の診断値として `growth_work_step` / `growth_work_cumulative` に記録する。完全な連続体 growth-work 導出とは主張しない
 - `dissipation_estimate`: accepted Euler 区間の `dt * sum_i Gamma_i |v_i|^2`
 - remesh energy jump、mechanical energy change、mechanical balance residual
@@ -103,6 +103,6 @@ temporal と spatial を別々に比較し、それぞれに次の3つの status
 
 ## 実行済み compact 結果
 
-`results/free_free_convergence_gate/` は schema version 6、commit `dec712850cd6da2cd3110e7918896ab72423d214` 上で既定 config を実行した compact 結果である。deterministic fixture/refinement 18 run、control 1 run、parameter contrast 5 run、初期条件 sensitivity 9 runを含む。時間 refinement は3代表点すべてで morphology は `morphology-converged` だが、mechanics は `mechanical_balance_residual_cumulative_out_of_tolerance` により `numerically-unresolved` である。一方、空間 refinement は3代表点すべてで少なくとも morphology または mechanics の不一致があり、`numerically-unresolved` のまま保持した。parameter contrast と sensitivity replicate は各 run/member に `not_refined_across_time_or_space` を付与し、探索的な形態差を数値収束済みの物理差と解釈しない。したがって、この結果は形態の bounded consistency と力学・空間方向・探索 population の未解決を示す監査記録であり、座屈境界・臨界値・物性 fit の根拠ではない。
+`results/free_free_convergence_gate/` は schema version 7、commit `33116482a694032b305e63f1a766265dad40c8c8` 上で既定 config を実行した compact 結果である。deterministic fixture/refinement 18 run、control 1 run、parameter contrast 5 run、初期条件 sensitivity 9 runを含む。時間 refinement は3代表点すべてで morphology は `morphology-converged` だが、mechanics は `mechanical_balance_residual_cumulative_out_of_tolerance` により `numerically-unresolved` である。一方、空間 refinement は3代表点すべてで少なくとも morphology または mechanics の不一致があり、`numerically-unresolved` のまま保持した。parameter contrast と sensitivity replicate は各 run/member に `not_refined_across_time_or_space` を付与し、探索的な形態差を数値収束済みの物理差と解釈しない。したがって、この結果は形態の bounded consistency と力学・空間方向・探索 population の未解決を示す監査記録であり、座屈境界・臨界値・物性 fit の根拠ではない。
 
 per-run の `metrics.csv`・`events.json`・`manifest.json` は実行時の一時ディレクトリに残し、`results/` には compact provenance-bearing summary だけを保存する。

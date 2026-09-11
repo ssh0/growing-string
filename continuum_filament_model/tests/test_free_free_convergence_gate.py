@@ -66,12 +66,15 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = run_gate(config, Path(directory))
             self.assertEqual(report["boundary"], "free/free")
-            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-6")
+            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-7")
             self.assertFalse(report["contact_enabled"])
             self.assertEqual(report["deterministic_fixture_population"]["temporal_count"], 9)
             self.assertEqual(report["deterministic_fixture_population"]["spatial_count"], 9)
             self.assertEqual(report["parameter_contrast_population"]["run_count"], 5)
             self.assertEqual(report["sensitivity_replicate_population"]["run_count"], 1)
+            finest_dt = min(config["temporal_refinement"]["dt_values"])
+            self.assertTrue(all(run["requested_dt"] == finest_dt for run in report["parameter_contrast_population"]["runs"]))
+            self.assertTrue(all(run["requested_dt"] == finest_dt for run in report["sensitivity_replicate_population"]["runs"]))
             for population_name in ("parameter_contrast_population", "sensitivity_replicate_population"):
                 population = report[population_name]
                 self.assertEqual(population["numerical_contract"]["status"], "numerically-unresolved")
@@ -89,14 +92,17 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertIn("event_sequence_hash", report["convergence"][0]["audit"])
             self.assertIn("python_version", report["convergence"][0]["audit"])
             self.assertIn("numpy_version", report["convergence"][0]["audit"])
+            self.assertIn("rejection_reason_counts", report["convergence"][0]["audit"])
 
             temporal = json.loads((Path(directory) / "compact_summary.json").read_text(encoding="utf-8"))["deterministic_fixture_population"]["runs"]
             row = next(item for item in temporal if item["run_kind"] == "deterministic_fixture")
             for key in (
-                "requested_dt", "accepted_dt_min", "accepted_dt_mean", "accepted_dt_values", "rejected_trials", "event_count",
+                "requested_dt", "accepted_dt_min", "accepted_dt_mean", "accepted_dt_values", "rejected_trials", "rejection_reason_counts", "event_count",
                 "G_b", "G_s", "chi", "onset_time", "peak_transverse_amplitude",
-                "peak_curvature_rms", "mode_spectrum", "mode_fractions", "energy_final",
-                "reference_length_final", "growth_work_cumulative",
+                "peak_curvature_rms", "mode_spectrum", "mode_fractions", "energy_initial", "energy_final", "energy_span",
+                "energy_stretch_initial", "energy_stretch_final", "energy_stretch_span",
+                "energy_bend_initial", "energy_bend_final", "energy_bend_span",
+                "mechanical_energy_change_cumulative", "reference_length_final", "growth_work_cumulative",
                 "dissipation_estimate_cumulative",
                 "endpoint_force_residual_final", "endpoint_moment_residual_final",
                 "endpoint_shear_residual_final", "mechanical_balance_residual_cumulative", "mechanical_balance_residual_max_abs",

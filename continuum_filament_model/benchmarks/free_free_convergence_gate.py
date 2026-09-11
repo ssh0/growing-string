@@ -62,7 +62,7 @@ from growing_filament.reproducibility import (  # noqa: E402
     event_sequence_hash,
 )
 
-SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-6"
+SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-7"
 _SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -767,9 +767,25 @@ def _morphology_summary(rows: Sequence[Mapping[str, Any]], classification: Mappi
 
 def _mechanical_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     if not rows:
-        return {"energy_initial": None, "energy_final": None, "growth_work_cumulative": None, "dissipation_estimate_cumulative": None, "mechanical_balance_residual_cumulative": None}
+        return {
+            "energy_initial": None,
+            "energy_final": None,
+            "energy_span": None,
+            "energy_stretch_initial": None,
+            "energy_stretch_final": None,
+            "energy_stretch_span": None,
+            "energy_bend_initial": None,
+            "energy_bend_final": None,
+            "energy_bend_span": None,
+            "mechanical_energy_change_cumulative": None,
+            "growth_work_cumulative": None,
+            "dissipation_estimate_cumulative": None,
+            "mechanical_balance_residual_cumulative": None,
+        }
     final = rows[-1]
     energy = [float(row["energy_total"]) for row in rows]
+    stretch = [float(row["energy_stretch"]) for row in rows]
+    bend = [float(row["energy_bend"]) for row in rows]
     balance = [abs(float(row["mechanical_balance_residual_step"])) for row in rows if row.get("mechanical_balance_residual_step") is not None]
     return {
         "energy_initial": float(rows[0]["energy_total"]),
@@ -777,6 +793,12 @@ def _mechanical_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "energy_min": float(min(energy)),
         "energy_max": float(max(energy)),
         "energy_span": float(max(energy) - min(energy)),
+        "energy_stretch_initial": float(rows[0]["energy_stretch"]),
+        "energy_stretch_final": float(final["energy_stretch"]),
+        "energy_stretch_span": float(max(stretch) - min(stretch)),
+        "energy_bend_initial": float(rows[0]["energy_bend"]),
+        "energy_bend_final": float(final["energy_bend"]),
+        "energy_bend_span": float(max(bend) - min(bend)),
         "reference_length_initial": float(rows[0]["reference_length"]),
         "reference_length_final": float(final["reference_length"]),
         "total_length_initial": float(rows[0]["total_length"]),
@@ -903,7 +925,16 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
                 morph_reasons.add("mode_fraction_out_of_tolerance")
 
     mechanical_fields = (
+        ("energy_initial", "energy_relative"),
         ("energy_final", "energy_relative"),
+        ("energy_span", "energy_relative"),
+        ("energy_stretch_initial", "energy_relative"),
+        ("energy_stretch_final", "energy_relative"),
+        ("energy_stretch_span", "energy_relative"),
+        ("energy_bend_initial", "energy_relative"),
+        ("energy_bend_final", "energy_relative"),
+        ("energy_bend_span", "energy_relative"),
+        ("mechanical_energy_change_cumulative", "energy_relative"),
         ("growth_work_cumulative", "growth_work_relative"),
         ("dissipation_estimate_cumulative", "dissipation_relative"),
         ("endpoint_force_residual_final", "endpoint_force_relative"),
@@ -915,7 +946,16 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
     )
     ref_mechanical = reference.get("mechanical", {})
     floors = {
+        "energy_initial": 1.0e-12,
         "energy_final": 1.0e-12,
+        "energy_span": 1.0e-12,
+        "energy_stretch_initial": 1.0e-12,
+        "energy_stretch_final": 1.0e-12,
+        "energy_stretch_span": 1.0e-12,
+        "energy_bend_initial": 1.0e-12,
+        "energy_bend_final": 1.0e-12,
+        "energy_bend_span": 1.0e-12,
+        "mechanical_energy_change_cumulative": 1.0e-12,
         "growth_work_cumulative": 1.0e-12,
         "dissipation_estimate_cumulative": 1.0e-12,
         "endpoint_force_residual_final": 1.0e-12,
@@ -941,7 +981,17 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         "accepted_dt_values": [run.get("accepted_dt_values", []) for run in runs],
         "rejected_trials": rejected,
         "event_counts": [int(run.get("event_count", 0)) for run in runs],
+        "rejection_reason_counts": [run.get("events", {}).get("rejection_reason_counts", {}) for run in runs],
+        "energy_initial": [run.get("mechanical", {}).get("energy_initial") for run in runs],
         "energy_final": [run.get("mechanical", {}).get("energy_final") for run in runs],
+        "energy_span": [run.get("mechanical", {}).get("energy_span") for run in runs],
+        "energy_stretch_initial": [run.get("mechanical", {}).get("energy_stretch_initial") for run in runs],
+        "energy_stretch_final": [run.get("mechanical", {}).get("energy_stretch_final") for run in runs],
+        "energy_stretch_span": [run.get("mechanical", {}).get("energy_stretch_span") for run in runs],
+        "energy_bend_initial": [run.get("mechanical", {}).get("energy_bend_initial") for run in runs],
+        "energy_bend_final": [run.get("mechanical", {}).get("energy_bend_final") for run in runs],
+        "energy_bend_span": [run.get("mechanical", {}).get("energy_bend_span") for run in runs],
+        "mechanical_energy_change_cumulative": [run.get("mechanical", {}).get("mechanical_energy_change_cumulative") for run in runs],
         "growth_work_cumulative": [run.get("mechanical", {}).get("growth_work_cumulative") for run in runs],
         "dissipation_estimate_cumulative": [run.get("mechanical", {}).get("dissipation_estimate_cumulative") for run in runs],
         "mechanical_balance_residual_cumulative": [run.get("mechanical", {}).get("mechanical_balance_residual_cumulative") for run in runs],
@@ -1014,7 +1064,7 @@ def _run_deterministic(config: Mapping[str, Any], output: Path, revision: str | 
 def _run_controls(config: Mapping[str, Any], output: Path, revision: str | None) -> list[dict[str, Any]]:
     base = config["base"]
     n_nodes = int(config["temporal_refinement"]["n_nodes"])
-    dt = float(config["temporal_refinement"]["dt_values"][-1])
+    dt = min(float(value) for value in config["temporal_refinement"]["dt_values"])
     records: list[dict[str, Any]] = []
     for item in config.get("controls", []):
         spec = CaseSpec(f"control__{item['name']}", "deterministic_control", dict(item.get("overrides", {})), role=str(item.get("role", item["name"])), representative=str(item["name"]), refinement_axis="control")
@@ -1036,7 +1086,7 @@ def _exploratory_numerical_contract() -> dict[str, Any]:
 def _run_contrasts(config: Mapping[str, Any], output: Path, revision: str | None) -> list[dict[str, Any]]:
     representatives = _representative_map(config)
     n_nodes = int(config["temporal_refinement"]["n_nodes"])
-    dt = float(config["temporal_refinement"]["dt_values"][-1])
+    dt = min(float(value) for value in config["temporal_refinement"]["dt_values"])
     records: list[dict[str, Any]] = []
     for item in config.get("contrasts", []):
         base_rep = representatives[str(item["base"])]
@@ -1057,7 +1107,7 @@ def _run_sensitivity(config: Mapping[str, Any], output: Path, revision: str | No
     sensitivity = config["sensitivity"]
     item = representatives[str(sensitivity["base"])]
     n_nodes = int(config["temporal_refinement"]["n_nodes"])
-    dt = float(config["temporal_refinement"]["dt_values"][-1])
+    dt = min(float(value) for value in config["temporal_refinement"]["dt_values"])
     records: list[dict[str, Any]] = []
     member_index = 0
     for seed in sensitivity["seeds"]:
@@ -1095,6 +1145,7 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "accepted_dt_mean": item.get("accepted_dt_mean"),
             "accepted_dt_values": item.get("accepted_dt_values"),
             "rejected_trials": item.get("rejected_trials"),
+            "rejection_reason_counts": item.get("events", {}).get("rejection_reason_counts", {}),
             "event_count": item.get("event_count"),
             "G_b": item.get("dimensionless_groups", {}).get("G_b"),
             "G_s": item.get("dimensionless_groups", {}).get("G_s"),
@@ -1107,6 +1158,14 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "mode_fractions": item.get("morphology", {}).get("peak_mode_fractions"),
             "energy_initial": item.get("mechanical", {}).get("energy_initial"),
             "energy_final": item.get("mechanical", {}).get("energy_final"),
+            "energy_span": item.get("mechanical", {}).get("energy_span"),
+            "energy_stretch_initial": item.get("mechanical", {}).get("energy_stretch_initial"),
+            "energy_stretch_final": item.get("mechanical", {}).get("energy_stretch_final"),
+            "energy_stretch_span": item.get("mechanical", {}).get("energy_stretch_span"),
+            "energy_bend_initial": item.get("mechanical", {}).get("energy_bend_initial"),
+            "energy_bend_final": item.get("mechanical", {}).get("energy_bend_final"),
+            "energy_bend_span": item.get("mechanical", {}).get("energy_bend_span"),
+            "mechanical_energy_change_cumulative": item.get("mechanical", {}).get("mechanical_energy_change_cumulative"),
             "reference_length_final": item.get("mechanical", {}).get("reference_length_final"),
             "total_length_final": item.get("mechanical", {}).get("total_length_final"),
             "growth_work_cumulative": item.get("mechanical", {}).get("growth_work_cumulative"),
