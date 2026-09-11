@@ -126,7 +126,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "absolute_floor_fraction_of_length": 0.002,
     },
     "output_policy": {
-        "save_trajectories": False,
         "max_metrics_rows": 512,
     },
 }
@@ -576,7 +575,6 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
         reject_crossing=True,
     )
     groups = dict(dimensionless_groups(effective))
-    trajectory: list[FilamentState] = [state.copy()]
     rows: list[dict[str, Any]] = []
     failure_reason: str | None = None
     failure_codes: list[str] = []
@@ -646,7 +644,6 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
                 "remesh_occurred": bool(remeshed_positions.shape != before.positions.shape),
             })
             rows.append(row)
-            trajectory.append(after)
     except (ModelError, RuntimeError, ValueError, FloatingPointError) as exc:
         failure_reason = f"{type(exc).__name__}: {exc}"
         failure_codes = _failure_codes(str(exc))

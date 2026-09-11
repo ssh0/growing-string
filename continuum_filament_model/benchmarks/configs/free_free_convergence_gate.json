@@ -59,7 +59,6 @@
     "absolute_floor_fraction_of_length": 0.002
   },
   "output_policy": {
-    "save_trajectories": false,
     "max_metrics_rows": 512
   }
 }
