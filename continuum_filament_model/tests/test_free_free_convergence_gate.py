@@ -86,6 +86,8 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertIn("accepted_dt_values", report["convergence"][0]["audit"])
             self.assertIn("remesh_energy_jump_cumulative", report["convergence"][0]["audit"])
             self.assertIn("event_sequence_hash", report["convergence"][0]["audit"])
+            self.assertIn("python_version", report["convergence"][0]["audit"])
+            self.assertIn("numpy_version", report["convergence"][0]["audit"])
 
             temporal = json.loads((Path(directory) / "compact_summary.json").read_text(encoding="utf-8"))["deterministic_fixture_population"]["runs"]
             row = next(item for item in temporal if item["run_kind"] == "deterministic_fixture")
@@ -99,6 +101,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
                 "endpoint_shear_residual_final", "mechanical_balance_residual_cumulative",
                 "remesh_energy_jump_cumulative", "remesh_occurred", "event_sequence_hash",
                 "initial_state_hash", "canonical_state_hash", "input_hash", "git_revision",
+                "python_version", "numpy_version",
                 "total_length_final", "failure_reason_codes", "numerical_status", "numerical_reason_codes",
             ):
                 self.assertIn(key, row)
@@ -120,7 +123,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
                 artifact = json.loads((Path(directory) / "_runs" / contrast_run["run_name"] / artifact_name).read_text(encoding="utf-8"))
                 self.assertEqual(artifact["numerical_status"], "numerically-unresolved")
                 self.assertEqual(artifact["numerical_reason_codes"], ["not_refined_across_time_or_space"])
-            metrics = Path(directory) / "_runs" / "straight__temporal_dt0.001" / "metrics.csv"
+            metrics = Path(directory) / "_runs" / "straight__temporal_001_dt0.001" / "metrics.csv"
             self.assertLessEqual(len(metrics.read_text(encoding="utf-8").splitlines()) - 1, 3)
 
     def test_spatial_refinement_requires_finest_temporal_dt(self):
@@ -226,6 +229,19 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertEqual(events["event_count"], 1)
             self.assertEqual(events["failure_event"]["reason"], "initial_crossing")
             self.assertEqual(manifest["events"][0]["reason"], "initial_crossing")
+
+    def test_duplicate_control_or_contrast_names_are_rejected(self):
+        config = self._config()
+        config["controls"] = [
+            {"name": "duplicate", "overrides": {}},
+            {"name": "duplicate", "overrides": {}},
+        ]
+        with self.assertRaises(GateError):
+            load_config_from_mapping(config)
+        config = self._config()
+        config["contrasts"][1]["name"] = config["contrasts"][0]["name"]
+        with self.assertRaises(GateError):
+            load_config_from_mapping(config)
 
     def test_missing_parameter_contrast_is_rejected(self):
         config = self._config()

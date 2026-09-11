@@ -291,10 +291,14 @@ def _validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
     controls = config.get("controls", [])
     if not isinstance(controls, list):
         raise GateError("controls must be a list")
+    control_names: set[str] = set()
     for index, item in enumerate(controls):
         if not isinstance(item, Mapping) or not item.get("name"):
             raise GateError(f"controls[{index}] requires name")
-        _safe_name(str(item["name"]), "control")
+        name = _safe_name(str(item["name"]), "control")
+        if name in control_names:
+            raise GateError(f"duplicate control: {name}")
+        control_names.add(name)
         if not isinstance(item.get("overrides", {}), Mapping):
             raise GateError(f"controls[{index}].overrides must be an object")
         _validate_scope(item.get("overrides", {}), f"controls[{index}].overrides")
@@ -317,10 +321,14 @@ def _validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(contrasts, list):
         raise GateError("contrasts must be a list")
     contrast_factors: set[str] = set()
+    contrast_names: set[str] = set()
     for index, item in enumerate(contrasts):
         if not isinstance(item, Mapping) or not item.get("name"):
             raise GateError(f"contrasts[{index}] requires name")
-        _safe_name(str(item["name"]), "contrast")
+        name = _safe_name(str(item["name"]), "contrast")
+        if name in contrast_names:
+            raise GateError(f"duplicate contrast: {name}")
+        contrast_names.add(name)
         factor = str(item.get("factor", ""))
         if factor not in factors:
             raise GateError(f"contrast factor must be one of {sorted(factors)}")
@@ -939,6 +947,8 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         "canonical_state_hash": [run.get("provenance", {}).get("canonical_state_hash") for run in runs],
         "input_hash": [run.get("provenance", {}).get("input_hash") for run in runs],
         "git_revision": [run.get("provenance", {}).get("git_revision") for run in runs],
+        "python_version": [run.get("provenance", {}).get("python_version") for run in runs],
+        "numpy_version": [run.get("provenance", {}).get("numpy_version") for run in runs],
     }
     base["morphology_reason_codes"] = sorted(morph_reasons)
     base["mechanics_reason_codes"] = sorted(mech_reasons)
@@ -968,7 +978,7 @@ def _run_deterministic(config: Mapping[str, Any], output: Path, revision: str | 
         for index, raw_dt in enumerate(temporal_cfg["dt_values"], start=1):
             dt = float(raw_dt)
             spec = _specs_for_representative(config, item, "temporal")
-            spec = CaseSpec(f"{name}__temporal_dt{dt:.8g}", spec.kind, spec.overrides, spec.role, spec.representative, "temporal")
+            spec = CaseSpec(f"{name}__temporal_{index:03d}_dt{dt:.8g}", spec.kind, spec.overrides, spec.role, spec.representative, "temporal")
             run = _run_case(spec, base, output, revision, n_nodes=int(temporal_cfg["n_nodes"]), dt=dt)
             temporal_runs.append(run)
             temporal_all.append(run)
@@ -1035,9 +1045,11 @@ def _run_sensitivity(config: Mapping[str, Any], output: Path, revision: str | No
     n_nodes = int(config["temporal_refinement"]["n_nodes"])
     dt = float(config["temporal_refinement"]["dt_values"][-1])
     records: list[dict[str, Any]] = []
+    member_index = 0
     for seed in sensitivity["seeds"]:
         for amplitude_factor in sensitivity["amplitude_factors"]:
-            token = f"seed{int(seed)}_amp{float(amplitude_factor):.8g}"
+            member_index += 1
+            token = f"member{member_index:03d}_seed{int(seed)}_amp{float(amplitude_factor):.8g}"
             spec = CaseSpec(
                 f"sensitivity__{item['name']}__{token}", "sensitivity_replicate", dict(item.get("overrides", {})),
                 role="initial-condition-sensitivity", representative=str(item["name"]), refinement_axis="sensitivity", seed=int(seed),
@@ -1096,6 +1108,8 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "canonical_state_hash": item.get("provenance", {}).get("canonical_state_hash"),
             "input_hash": item.get("provenance", {}).get("input_hash"),
             "git_revision": item.get("provenance", {}).get("git_revision"),
+            "python_version": item.get("provenance", {}).get("python_version"),
+            "numpy_version": item.get("provenance", {}).get("numpy_version"),
             "failure_reason": item.get("failure_reason"),
             "failure_reason_codes": item.get("failure_reason_codes"),
             "numerical_status": item.get("numerical_status"),
