@@ -83,17 +83,6 @@ class ScaleFreeConfig:
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any] | None) -> "ScaleFreeConfig":
         values = dict(value or {})
-        # Keep the explicit name as the canonical API, while accepting the
-        # descriptive aliases used by bounded exploratory runners/configs.
-        for alias in ("candidate_centerlines", "use_candidate_centerlines", "candidate_mode"):
-            if alias in values:
-                alias_value = values[alias]
-                if not isinstance(alias_value, bool):
-                    raise ValueError(f"{alias} must be a boolean")
-                if "allow_censored_candidates" in values:
-                    if not isinstance(values["allow_censored_candidates"], bool) or values["allow_censored_candidates"] != alias_value:
-                        raise ValueError("candidate-centerline settings disagree")
-                values["allow_censored_candidates"] = values.pop(alias)
         unknown = set(values) - set(cls.__dataclass_fields__)
         if unknown:
             raise ValueError(f"unknown scale-free config fields: {sorted(unknown)}")

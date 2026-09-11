@@ -38,7 +38,11 @@ boundary 等の既存 censor は常にそのまま保持する。通常の valid
 shape distance の分母から除外する。bounded follow-up は `allow_censored_candidates=true`
 を明示した `candidate_input_exploratory` モードで、有限な中心線が出力された行に限って
 censor 済み候補も探索的に比較する。このモードでも品質フラグ、censor、lineage の不確実性、
-coverage を結果へ残し、candidate を validated centerline へ再分類しない。missing centerline
+coverage を結果へ残し、candidate を validated centerline へ再分類しない。bounded runner は
+`initial_condition_sensitivity` 設定から、既定では baseline を含む3 memberの実軌跡を生成し、各 memberの
+初期状態 hash・軌跡 artifact hash・再計算 metric・受入基準を protocol として outer artifact に保存する。
+verified な sensitivity population は deterministic fixture と別の `model_populations` として報告する。
+missing centerline
 の補間や lineage の推測は行わない。モデルは free/free・一様成長・非接触 Stage 2 の
 `deterministic_fixture`、または perturbation range、metrics、acceptance criteria、内部 run
 ID、artifact SHA-256、outer linkage を検証した明示的な `initial_condition_sensitivity`
@@ -87,8 +91,9 @@ python continuum_filament_model/video_compare.py scale-free \
 ```
 
 実際の Stage 2 run と gray5 を一度に比較する bounded runner は次である。既定で
-`fast_growth_low_bend` と `fast_growth_high_bend` の deterministic run を実行し、動画から
-中心線を抽出する。trajectory、raw centerline、per-case CSV は一時 artifact とし、root の `compact_summary.json`、
+`fast_growth_low_bend` と `fast_growth_high_bend` の deterministic run、および
+`initial_condition_sensitivity` の verified population を実行し、動画から中心線を抽出する。
+trajectory、raw centerline、sensitivity member、per-case CSV は一時 artifact とし、root の `compact_summary.json`、
 `summary.csv`、`compact_manifest.json` のみをレビュー対象にする。
 
 ```bash

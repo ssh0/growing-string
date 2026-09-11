@@ -125,6 +125,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "seeds": [101, 202, 303],
         "noise_fraction": 0.25,
     },
+    "initial_condition_sensitivity": {
+        "base_fixture": "fast_growth_low_bend",
+        "perturbations": [-0.1, 0.0, 0.1],
+        "metrics": ["normalized_endpoint_distance"],
+        "acceptance_criteria": {"max_normalized_endpoint_distance_delta": 0.2},
+    },
     "video": DEFAULT_VIDEO_CONFIG,
 }
 
@@ -315,6 +321,8 @@ class RunSpec:
     base_fixture: str | None = None
     contrast_factor: str | None = None
     contrast_value: float | None = None
+    population: str = "stage2_deterministic"
+    perturbation_value: float | None = None
 
 
 def _jsonable(value: Any) -> Any:
@@ -362,6 +370,11 @@ def _merge_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
                 value[key] = item
         if "fixtures" in config and "contrast_conditions" not in config:
             value["contrast_conditions"] = []
+        if "fixtures" in config and "initial_condition_sensitivity" not in config:
+            fixtures = config.get("fixtures")
+            if isinstance(fixtures, list) and fixtures and isinstance(fixtures[0], Mapping) and fixtures[0].get("name"):
+                value["initial_condition_sensitivity"] = dict(value["initial_condition_sensitivity"])
+                value["initial_condition_sensitivity"]["base_fixture"] = str(fixtures[0]["name"])
     return value
 
 
@@ -414,6 +427,41 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         if not math.isfinite(value) or value <= 0.0:
             raise Stage2Error(f"contrast {name}.{factor} must be positive and finite")
         condition_names.add(name)
+    sensitivity = config.get("initial_condition_sensitivity", {})
+    if not isinstance(sensitivity, Mapping):
+        raise Stage2Error("initial_condition_sensitivity must be a mapping")
+    sensitivity_base = str(sensitivity.get("base_fixture", ""))
+    if sensitivity_base not in fixture_names:
+        raise Stage2Error(f"initial_condition_sensitivity references unknown fixture: {sensitivity_base}")
+    perturbations = sensitivity.get("perturbations")
+    if not isinstance(perturbations, list) or len(perturbations) < 2:
+        raise Stage2Error("initial_condition_sensitivity requires at least two perturbations")
+    perturbation_values: list[float] = []
+    for index, value in enumerate(perturbations):
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise Stage2Error(f"initial_condition_sensitivity.perturbations[{index}] must be finite") from exc
+        if not math.isfinite(number) or number <= -1.0:
+            raise Stage2Error(f"initial_condition_sensitivity.perturbations[{index}] must be finite and greater than -1")
+        perturbation_values.append(number)
+    if len(set(perturbation_values)) != len(perturbation_values) or not any(abs(value) <= 1.0e-12 for value in perturbation_values):
+        raise Stage2Error("initial_condition_sensitivity requires unique perturbations including zero")
+    metrics = sensitivity.get("metrics")
+    if not isinstance(metrics, list) or not metrics or not all(isinstance(metric, str) and metric for metric in metrics):
+        raise Stage2Error("initial_condition_sensitivity.metrics must be a non-empty list of names")
+    acceptance = sensitivity.get("acceptance_criteria")
+    if not isinstance(acceptance, Mapping) or not acceptance:
+        raise Stage2Error("initial_condition_sensitivity.acceptance_criteria must be a non-empty mapping")
+    for metric in metrics:
+        threshold = acceptance.get(f"max_{metric}_delta", acceptance.get("max_metric_delta"))
+        try:
+            threshold_value = float(threshold)
+        except (TypeError, ValueError) as exc:
+            raise Stage2Error(f"initial_condition_sensitivity acceptance threshold missing for {metric}") from exc
+        if not math.isfinite(threshold_value) or threshold_value < 0.0:
+            raise Stage2Error(f"initial_condition_sensitivity acceptance threshold invalid for {metric}")
+
     refinement = config.get("refinement", {})
     if len(refinement.get("n_nodes", [])) < 2 or len(refinement.get("dt_values", [])) < 2:
         raise Stage2Error("refinement requires at least two spatial resolutions and two time steps")
@@ -446,6 +494,29 @@ def _fixture_specs(config: Mapping[str, Any]) -> list[RunSpec]:
     return result
 
 
+def _initial_condition_sensitivity_specs(config: Mapping[str, Any], fixtures: Sequence[RunSpec]) -> list[RunSpec]:
+    settings = config["initial_condition_sensitivity"]
+    by_name = {item.name: item for item in fixtures}
+    base_name = str(settings["base_fixture"])
+    base_fixture = by_name[base_name]
+    baseline = dict(config["base"])
+    baseline.update(base_fixture.overrides)
+    base_amplitude = float(baseline.get("amplitude", 0.0))
+    result: list[RunSpec] = []
+    ordered_values = sorted((float(value) for value in settings["perturbations"]), key=lambda value: (abs(value), value))
+    for index, perturbation in enumerate(ordered_values):
+        member_id = "baseline" if abs(perturbation) <= 1.0e-12 else f"member_{index:02d}"
+        result.append(RunSpec(
+            f"{base_name}_initial_condition_{member_id}",
+            "deterministic_fixture",
+            {**base_fixture.overrides, "amplitude": base_amplitude * (1.0 + perturbation)},
+            base_fixture=base_name,
+            population="initial_condition_sensitivity",
+            perturbation_value=perturbation,
+        ))
+    return result
+
+
 def _contrast_specs(config: Mapping[str, Any], fixtures: Sequence[RunSpec]) -> list[RunSpec]:
     by_name = {item.name: item for item in fixtures}
     result: list[RunSpec] = []
@@ -475,9 +546,11 @@ def _contrast_specs(config: Mapping[str, Any], fixtures: Sequence[RunSpec]) -> l
     return result
 
 
-def _all_specs(config: Mapping[str, Any]) -> list[RunSpec]:
+def _all_specs(config: Mapping[str, Any], *, include_initial_condition_sensitivity: bool = False) -> list[RunSpec]:
     fixtures = _fixture_specs(config)
     result = list(fixtures)
+    if include_initial_condition_sensitivity:
+        result.extend(_initial_condition_sensitivity_specs(config, fixtures))
     result.extend(_contrast_specs(config, fixtures))
     by_name = {item.name: item for item in fixtures}
     refinement = config["refinement"]

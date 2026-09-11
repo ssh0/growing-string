@@ -41,6 +41,12 @@
     "seeds": [101, 202, 303],
     "noise_fraction": 0.25
   },
+  "initial_condition_sensitivity": {
+    "base_fixture": "fast_growth_low_bend",
+    "perturbations": [-0.1, 0.0, 0.1],
+    "metrics": ["normalized_endpoint_distance"],
+    "acceptance_criteria": {"max_normalized_endpoint_distance_delta": 0.2}
+  },
   "video_model_case": "fast_growth_low_bend",
   "video": {
     "polarity": "dark",

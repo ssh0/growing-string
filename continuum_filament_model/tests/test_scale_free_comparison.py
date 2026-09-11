@@ -13,6 +13,7 @@ from continuum_filament_model.video_compare import build_parser
 from growing_filament.model import FilamentState
 from growing_filament.reproducibility import canonical_state_hash, event_sequence_hash
 from growing_filament.scale_free_comparison import (
+    ScaleFreeConfig,
     _trajectory_sha256,
     normalized_shape_distance,
     scale_free_shape_comparison,
@@ -21,6 +22,13 @@ from growing_filament.scale_free_comparison import (
 
 
 class ScaleFreeShapeComparisonTests(unittest.TestCase):
+    def test_scale_free_config_requires_canonical_candidate_setting(self):
+        for alias in ("candidate_centerlines", "use_candidate_centerlines", "candidate_mode"):
+            with self.assertRaises(ValueError):
+                ScaleFreeConfig.from_mapping({alias: True})
+        config = ScaleFreeConfig.from_mapping({"allow_censored_candidates": True})
+        self.assertTrue(config.allow_censored_candidates)
+
     def _write_observation(self, root: Path, lengths: list[float], *, censored: set[int] | None = None, flags: dict[int, str] | None = None) -> Path:
         root.mkdir(parents=True, exist_ok=True)
         censored = censored or set()
