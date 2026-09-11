@@ -66,7 +66,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = run_gate(config, Path(directory))
             self.assertEqual(report["boundary"], "free/free")
-            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-7")
+            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-8")
             self.assertFalse(report["contact_enabled"])
             self.assertEqual(report["deterministic_fixture_population"]["temporal_count"], 9)
             self.assertEqual(report["deterministic_fixture_population"]["spatial_count"], 9)
@@ -130,7 +130,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
                 artifact = json.loads((Path(directory) / "_runs" / contrast_run["run_name"] / artifact_name).read_text(encoding="utf-8"))
                 self.assertEqual(artifact["numerical_status"], "numerically-unresolved")
                 self.assertEqual(artifact["numerical_reason_codes"], ["not_refined_across_time_or_space"])
-            metrics = Path(directory) / "_runs" / "straight__temporal_001_dt0.001" / "metrics.csv"
+            metrics = Path(directory) / "_runs" / "straight__temporal_001" / "metrics.csv"
             self.assertLessEqual(len(metrics.read_text(encoding="utf-8").splitlines()) - 1, 3)
 
     def test_spatial_refinement_requires_finest_temporal_dt(self):
@@ -197,6 +197,31 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertTrue(straight["failure_reason_codes"])
             self.assertTrue(any(item["status"] == "numerically-unresolved" for item in report["convergence"]))
 
+    def test_perturbation_changes_manifest_input_hash(self):
+        config = load_config_from_mapping(self._config())
+        first = CaseSpec("hash_first", "sensitivity_replicate", {}, refinement_axis="sensitivity", seed=101)
+        second = CaseSpec("hash_second", "sensitivity_replicate", {}, refinement_axis="sensitivity", seed=101)
+        with tempfile.TemporaryDirectory() as directory:
+            first_result = _run_case(
+                first,
+                config["base"],
+                Path(directory),
+                None,
+                n_nodes=5,
+                dt=0.00025,
+                sensitivity={"amplitude_factor": 0.5, "noise_fraction": 0.1},
+            )
+            second_result = _run_case(
+                second,
+                config["base"],
+                Path(directory),
+                None,
+                n_nodes=5,
+                dt=0.00025,
+                sensitivity={"amplitude_factor": 1.0, "noise_fraction": 0.1},
+            )
+            self.assertNotEqual(first_result["provenance"]["input_hash"], second_result["provenance"]["input_hash"])
+
     def test_initial_reference_lengths_are_independent_of_perturbation(self):
         config = load_config_from_mapping(self._config())["base"]
         small, _ = _initial_state(config, amplitude_factor=0.5)
@@ -243,6 +268,14 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertEqual(events["event_count"], 1)
             self.assertEqual(events["failure_event"]["reason"], "initial_crossing")
             self.assertEqual(manifest["events"][0]["reason"], "initial_crossing")
+
+    def test_cross_population_generated_name_collisions_are_rejected(self):
+        config = self._config()
+        config["representatives"][0]["name"] = "control__x"
+        config["controls"] = [{"name": "x__temporal_001", "overrides": {}}]
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(GateError):
+                run_gate(config, Path(directory))
 
     def test_duplicate_control_or_contrast_names_are_rejected(self):
         config = self._config()

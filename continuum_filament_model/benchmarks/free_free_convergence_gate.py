@@ -62,7 +62,7 @@ from growing_filament.reproducibility import (  # noqa: E402
     event_sequence_hash,
 )
 
-SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-7"
+SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-8"
 _SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -413,6 +413,37 @@ def _effective(base: Mapping[str, Any], spec: CaseSpec, *, n_nodes: int | None =
     return value
 
 
+def _validate_generated_run_names(config: Mapping[str, Any]) -> None:
+    names: dict[str, str] = {}
+
+    def add(name: str, context: str) -> None:
+        _safe_name(name, context)
+        if name in names:
+            raise GateError(f"generated run name collision: {name} ({names[name]} and {context})")
+        names[name] = context
+
+    representatives = list(config["representatives"])
+    temporal_dts = list(config["temporal_refinement"]["dt_values"])
+    spatial_nodes = list(config["spatial_refinement"]["n_nodes"])
+    for representative in representatives:
+        base_name = str(representative["name"])
+        for index, _ in enumerate(temporal_dts, start=1):
+            add(f"{base_name}__temporal_{index:03d}", "temporal refinement")
+        for n_nodes in spatial_nodes:
+            add(f"{base_name}__spatial_n{int(n_nodes)}", "spatial refinement")
+    for item in config.get("controls", []):
+        add(f"control__{item['name']}", "control")
+    for item in config.get("contrasts", []):
+        add(f"contrast__{item['name']}", "contrast")
+    sensitivity = config["sensitivity"]
+    sensitivity_base = str(sensitivity["base"])
+    member_index = 0
+    for _seed in sensitivity["seeds"]:
+        for _amplitude_factor in sensitivity["amplitude_factors"]:
+            member_index += 1
+            add(f"sensitivity__{sensitivity_base}__member{member_index:03d}", "sensitivity")
+
+
 def _initial_state(config: Mapping[str, Any], *, seed: int | None = None, amplitude_factor: float = 1.0, noise_fraction: float = 0.0) -> tuple[FilamentState, dict[str, Any]]:
     length = float(config["length"])
     n_nodes = int(config["n_nodes"])
@@ -677,7 +708,11 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
         }
         final_state = state
     else:
-        rejection_counts = Counter(str(value) for value in simulator.rejection_reasons)
+        rejection_counts = Counter(
+            str(event.get("reason", "unknown"))
+            for event in simulator.event_log
+            if event.get("event_type") == "step_attempt" and event.get("accepted") is False
+        )
         compact_events = {
             "event_sequence_hash": event_sequence_hash(simulator.event_log),
             "event_count": len(simulator.events),
@@ -707,7 +742,15 @@ def _run_case(spec: CaseSpec, base: Mapping[str, Any], output: Path, revision: s
         "numerical_status": numerical_status,
         "numerical_reason_codes": numerical_reason_codes,
     }
-    manifest = build_manifest(parameters, state, final_state=final_state, events=(simulator.event_log if simulator else failure_events), metadata=metadata, input_data=effective, git_revision=revision)
+    manifest = build_manifest(
+        parameters,
+        state,
+        final_state=final_state,
+        events=(simulator.event_log if simulator else failure_events),
+        metadata=metadata,
+        input_data={"effective_config": effective, "perturbation": initial_metadata},
+        git_revision=revision,
+    )
     manifest.update({"run_name": spec.name, "run_kind": spec.kind, "seed": seed, "perturbation": initial_metadata, "refinement_axis": spec.refinement_axis, "numerical_status": numerical_status, "numerical_reason_codes": numerical_reason_codes})
     run_dir = output / "_runs" / spec.name
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -1042,7 +1085,7 @@ def _run_deterministic(config: Mapping[str, Any], output: Path, revision: str | 
         for index, raw_dt in enumerate(temporal_cfg["dt_values"], start=1):
             dt = float(raw_dt)
             spec = _specs_for_representative(config, item, "temporal")
-            spec = CaseSpec(f"{name}__temporal_{index:03d}_dt{dt:.8g}", spec.kind, spec.overrides, spec.role, spec.representative, "temporal")
+            spec = CaseSpec(f"{name}__temporal_{index:03d}", spec.kind, spec.overrides, spec.role, spec.representative, "temporal")
             run = _run_case(spec, base, output, revision, n_nodes=int(temporal_cfg["n_nodes"]), dt=dt)
             temporal_runs.append(run)
             temporal_all.append(run)
@@ -1113,7 +1156,7 @@ def _run_sensitivity(config: Mapping[str, Any], output: Path, revision: str | No
     for seed in sensitivity["seeds"]:
         for amplitude_factor in sensitivity["amplitude_factors"]:
             member_index += 1
-            token = f"member{member_index:03d}_seed{int(seed)}_amp{float(amplitude_factor):.8g}"
+            token = f"member{member_index:03d}"
             spec = CaseSpec(
                 f"sensitivity__{item['name']}__{token}", "sensitivity_replicate", dict(item.get("overrides", {})),
                 role="initial-condition-sensitivity", representative=str(item["name"]), refinement_axis="sensitivity", seed=int(seed),
@@ -1195,6 +1238,7 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
 
 def run_gate(config: Mapping[str, Any] | None, output: Path) -> dict[str, Any]:
     effective = load_config_from_mapping(config) if config is not None else load_config()
+    _validate_generated_run_names(effective)
     effective["base"]["max_metrics_rows"] = int(effective.get("output_policy", {}).get("max_metrics_rows", 512))
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
