@@ -62,7 +62,7 @@ from growing_filament.reproducibility import (  # noqa: E402
     event_sequence_hash,
 )
 
-SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-5"
+SCHEMA_VERSION = "continuum-filament-free-free-convergence-gate-6"
 _SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -308,6 +308,8 @@ def _validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
     temporal_dts = [float(value) for value in temporal.get("dt_values", [])]
     if len(temporal_dts) < 3 or len(set(temporal_dts)) < 3 or any(not math.isfinite(value) or value <= 0.0 for value in temporal_dts):
         raise GateError("temporal_refinement.dt_values requires three distinct positive values")
+    if float(base["t_end"]) < max(temporal_dts):
+        raise GateError("base.t_end must be at least the largest temporal refinement dt")
     _integer_at_least(temporal.get("n_nodes"), 3, "temporal_refinement.n_nodes")
     spatial_nodes = [_integer_at_least(value, 3, "spatial_refinement.n_nodes") for value in spatial.get("n_nodes", [])]
     if len(spatial_nodes) < 3 or len(set(spatial_nodes)) < 3:
@@ -871,6 +873,11 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
     if any(bool(run.get("mechanical", {}).get("remesh_occurred")) for run in runs):
         morph_reasons.add("remesh_occurred")
         mech_reasons.add("remesh_occurred")
+    if axis == "temporal":
+        accepted_dt_min = [run.get("accepted_dt_min") for run in runs]
+        if any(value is None for value in accepted_dt_min) or len(set(accepted_dt_min)) != len(accepted_dt_min):
+            morph_reasons.add("accepted_dt_not_distinct")
+            mech_reasons.add("accepted_dt_not_distinct")
     labels = [str(run.get("classification", {}).get("label")) for run in runs]
     if len(set(labels)) != 1 or labels[0] == "numerically-unresolved":
         morph_reasons.add("classification_disagreement")
@@ -902,6 +909,7 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         ("endpoint_force_residual_final", "endpoint_force_relative"),
         ("endpoint_moment_residual_final", "endpoint_moment_relative"),
         ("endpoint_shear_residual_final", "endpoint_shear_relative"),
+        ("mechanical_balance_residual_max_abs", "mechanical_balance_relative"),
         ("total_length_final", "total_length_relative"),
         ("mechanical_balance_residual_cumulative", "mechanical_balance_relative"),
     )
@@ -913,6 +921,7 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         "endpoint_force_residual_final": 1.0e-12,
         "endpoint_moment_residual_final": 1.0e-12,
         "endpoint_shear_residual_final": 1.0e-12,
+        "mechanical_balance_residual_max_abs": 1.0e-12,
         "total_length_final": 1.0,
         "mechanical_balance_residual_cumulative": 1.0e-12,
     }
@@ -939,6 +948,7 @@ def _compare_refinement(runs: Sequence[Mapping[str, Any]], tolerances: Mapping[s
         "endpoint_force_residual_final": [run.get("mechanical", {}).get("endpoint_force_residual_final") for run in runs],
         "endpoint_moment_residual_final": [run.get("mechanical", {}).get("endpoint_moment_residual_final") for run in runs],
         "endpoint_shear_residual_final": [run.get("mechanical", {}).get("endpoint_shear_residual_final") for run in runs],
+        "mechanical_balance_residual_max_abs": [run.get("mechanical", {}).get("mechanical_balance_residual_max_abs") for run in runs],
         "total_length_final": [run.get("mechanical", {}).get("total_length_final") for run in runs],
         "remesh_energy_jump_cumulative": [run.get("mechanical", {}).get("remesh_energy_jump_cumulative") for run in runs],
         "remesh_occurred": [bool(run.get("mechanical", {}).get("remesh_occurred")) for run in runs],
@@ -971,8 +981,12 @@ def _run_deterministic(config: Mapping[str, Any], output: Path, revision: str | 
     convergence: list[dict[str, Any]] = []
     temporal_cfg = config["temporal_refinement"]
     spatial_cfg = config["spatial_refinement"]
+    temporal_max_dt = max(float(value) for value in temporal_cfg["dt_values"])
     spatial_dt = min(float(value) for value in temporal_cfg["dt_values"])
     for item in representatives:
+        representative_t_end = float(item.get("overrides", {}).get("t_end", base["t_end"]))
+        if representative_t_end < temporal_max_dt:
+            raise GateError(f"representative {item['name']} t_end must be at least the largest temporal refinement dt")
         name = str(item["name"])
         temporal_runs: list[dict[str, Any]] = []
         for index, raw_dt in enumerate(temporal_cfg["dt_values"], start=1):
@@ -1098,6 +1112,7 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "growth_work_cumulative": item.get("mechanical", {}).get("growth_work_cumulative"),
             "dissipation_estimate_cumulative": item.get("mechanical", {}).get("dissipation_estimate_cumulative"),
             "mechanical_balance_residual_cumulative": item.get("mechanical", {}).get("mechanical_balance_residual_cumulative"),
+            "mechanical_balance_residual_max_abs": item.get("mechanical", {}).get("mechanical_balance_residual_max_abs"),
             "endpoint_force_residual_final": item.get("mechanical", {}).get("endpoint_force_residual_final"),
             "endpoint_moment_residual_final": item.get("mechanical", {}).get("endpoint_moment_residual_final"),
             "endpoint_shear_residual_final": item.get("mechanical", {}).get("endpoint_shear_residual_final"),

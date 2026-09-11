@@ -66,7 +66,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = run_gate(config, Path(directory))
             self.assertEqual(report["boundary"], "free/free")
-            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-5")
+            self.assertEqual(report["schema_version"], "continuum-filament-free-free-convergence-gate-6")
             self.assertFalse(report["contact_enabled"])
             self.assertEqual(report["deterministic_fixture_population"]["temporal_count"], 9)
             self.assertEqual(report["deterministic_fixture_population"]["spatial_count"], 9)
@@ -83,6 +83,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertTrue(all(item["status"] in {"resolved", "numerically-unresolved"} for item in report["convergence"]))
             self.assertIn("endpoint_shear_residual_final", report["convergence"][0]["audit"])
             self.assertIn("mechanical_balance_residual_cumulative", report["convergence"][0]["audit"])
+            self.assertIn("mechanical_balance_residual_max_abs", report["convergence"][0]["audit"])
             self.assertIn("accepted_dt_values", report["convergence"][0]["audit"])
             self.assertIn("remesh_energy_jump_cumulative", report["convergence"][0]["audit"])
             self.assertIn("event_sequence_hash", report["convergence"][0]["audit"])
@@ -98,7 +99,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
                 "reference_length_final", "growth_work_cumulative",
                 "dissipation_estimate_cumulative",
                 "endpoint_force_residual_final", "endpoint_moment_residual_final",
-                "endpoint_shear_residual_final", "mechanical_balance_residual_cumulative",
+                "endpoint_shear_residual_final", "mechanical_balance_residual_cumulative", "mechanical_balance_residual_max_abs",
                 "remesh_energy_jump_cumulative", "remesh_occurred", "event_sequence_hash",
                 "initial_state_hash", "canonical_state_hash", "input_hash", "git_revision",
                 "python_version", "numpy_version",
@@ -150,6 +151,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
                     "endpoint_shear_residual_final": 1.0,
                     "total_length_final": 1.0,
                     "mechanical_balance_residual_cumulative": balance,
+                    "mechanical_balance_residual_max_abs": abs(balance),
                     "remesh_occurred": False,
                 },
                 "effective_values": {"dt": dt},
@@ -170,6 +172,12 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
         )
         self.assertEqual(result["mechanics_status"], "numerically-unresolved")
         self.assertIn("mechanical_balance_residual_cumulative_out_of_tolerance", result["mechanics_reason_codes"])
+
+    def test_temporal_refinement_requires_sufficient_t_end(self):
+        config = self._config()
+        config["base"]["t_end"] = 0.0001
+        with self.assertRaises(GateError):
+            load_config_from_mapping(config)
 
     def test_unstable_case_is_preserved_as_numerically_unresolved(self):
         config = self._config()
