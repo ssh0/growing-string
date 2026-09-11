@@ -70,6 +70,12 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
             self.assertEqual(report["deterministic_fixture_population"]["spatial_count"], 9)
             self.assertEqual(report["parameter_contrast_population"]["run_count"], 5)
             self.assertEqual(report["sensitivity_replicate_population"]["run_count"], 1)
+            for population_name in ("parameter_contrast_population", "sensitivity_replicate_population"):
+                population = report[population_name]
+                self.assertEqual(population["numerical_contract"]["status"], "numerically-unresolved")
+                self.assertEqual(population["numerical_contract"]["reason_codes"], ["not_refined_across_time_or_space"])
+                self.assertTrue(all(run["numerical_status"] == "numerically-unresolved" for run in population["runs"]))
+                self.assertTrue(all(run["numerical_reason_codes"] == ["not_refined_across_time_or_space"] for run in population["runs"]))
             self.assertEqual(len(report["convergence"]), 6)
             self.assertTrue(all("morphology_status" in item and "mechanics_status" in item for item in report["convergence"]))
             self.assertTrue(all(item["status"] in {"resolved", "numerically-unresolved"} for item in report["convergence"]))
@@ -83,7 +89,7 @@ class FreeFreeConvergenceGateTests(unittest.TestCase):
                 "reference_length_final", "growth_work_cumulative",
                 "dissipation_estimate_cumulative",
                 "endpoint_force_residual_final", "endpoint_moment_residual_final",
-                "total_length_final", "failure_reason_codes",
+                "total_length_final", "failure_reason_codes", "numerical_status", "numerical_reason_codes",
             ):
                 self.assertIn(key, row)
             self.assertEqual(row["seed"], None)

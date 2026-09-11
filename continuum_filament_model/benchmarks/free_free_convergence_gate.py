@@ -977,6 +977,28 @@ def _run_controls(config: Mapping[str, Any], output: Path, revision: str | None)
     return records
 
 
+EXPLORATORY_UNRESOLVED_REASON = "not_refined_across_time_or_space"
+
+
+def _mark_exploratory_unresolved(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            **dict(record),
+            "numerical_status": "numerically-unresolved",
+            "numerical_reason_codes": [EXPLORATORY_UNRESOLVED_REASON],
+        }
+        for record in records
+    ]
+
+
+def _exploratory_numerical_contract() -> dict[str, Any]:
+    return {
+        "status": "numerically-unresolved",
+        "reason_codes": [EXPLORATORY_UNRESOLVED_REASON],
+        "description": "single-resolution exploratory population; temporal and spatial refinement is required before interpreting condition differences as physical",
+    }
+
+
 def _run_contrasts(config: Mapping[str, Any], output: Path, revision: str | None) -> list[dict[str, Any]]:
     representatives = _representative_map(config)
     n_nodes = int(config["temporal_refinement"]["n_nodes"])
@@ -1056,6 +1078,8 @@ def _compact_rows(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "total_length_final": item.get("mechanical", {}).get("total_length_final"),
             "failure_reason": item.get("failure_reason"),
             "failure_reason_codes": item.get("failure_reason_codes"),
+            "numerical_status": item.get("numerical_status"),
+            "numerical_reason_codes": item.get("numerical_reason_codes"),
         }
         for item in records
     ]
@@ -1069,8 +1093,8 @@ def run_gate(config: Mapping[str, Any] | None, output: Path) -> dict[str, Any]:
     revision = detect_git_revision(Path(__file__).resolve().parents[2])
     temporal, spatial, convergence = _run_deterministic(effective, output, revision)
     controls = _run_controls(effective, output, revision)
-    contrasts = _run_contrasts(effective, output, revision)
-    sensitivity = _run_sensitivity(effective, output, revision)
+    contrasts = _mark_exploratory_unresolved(_run_contrasts(effective, output, revision))
+    sensitivity = _mark_exploratory_unresolved(_run_sensitivity(effective, output, revision))
     all_runs = [*temporal, *spatial, *controls, *contrasts, *sensitivity]
     temporal_rows = _compact_rows(temporal)
     spatial_rows = _compact_rows(spatial)
@@ -1083,7 +1107,9 @@ def run_gate(config: Mapping[str, Any] | None, output: Path) -> dict[str, Any]:
     _write_csv(output / "convergence_summary.csv", convergence)
     _write_json(output / "effective_config.json", effective)
     config_hash = hashlib.sha256(canonical_json_bytes(effective)).hexdigest()
-    overall = "resolved" if convergence and all(item["status"] == "resolved" for item in convergence) else "numerically-unresolved"
+    exploratory_runs = [*contrasts, *sensitivity]
+    exploratory_unresolved = any(item.get("numerical_status") != "resolved" for item in exploratory_runs)
+    overall = "resolved" if convergence and all(item["status"] == "resolved" for item in convergence) and not exploratory_unresolved else "numerically-unresolved"
     summary = {
         "schema_version": SCHEMA_VERSION,
         "benchmark": "focused free/free non-contact mechanics convergence gate",
@@ -1096,11 +1122,11 @@ def run_gate(config: Mapping[str, Any] | None, output: Path) -> dict[str, Any]:
         "dimensionless_group_definition": dimensionless_groups(effective["base"])["definition"],
         "deterministic_fixture_population": {"run_count": len(temporal) + len(spatial), "temporal_count": len(temporal), "spatial_count": len(spatial), "runs": temporal_rows + spatial_rows},
         "control_population": {"run_count": len(controls), "runs": _compact_rows(controls)},
-        "parameter_contrast_population": {"run_count": len(contrasts), "factors": sorted({str(item.get("contrast_factor")) for item in contrasts}), "runs": _compact_rows(contrasts)},
-        "sensitivity_replicate_population": {"run_count": len(sensitivity), "seeds": sorted({item.get("seed") for item in sensitivity}), "runs": _compact_rows(sensitivity)},
+        "parameter_contrast_population": {"run_count": len(contrasts), "factors": sorted({str(item.get("contrast_factor")) for item in contrasts}), "numerical_contract": _exploratory_numerical_contract(), "runs": _compact_rows(contrasts)},
+        "sensitivity_replicate_population": {"run_count": len(sensitivity), "seeds": sorted({item.get("seed") for item in sensitivity}), "numerical_contract": _exploratory_numerical_contract(), "runs": _compact_rows(sensitivity)},
         "convergence": convergence,
         "overall_status": overall,
-        "unresolved_policy": "Any run failure, unresolved morphology, or mechanics/work/energy disagreement remains numerically-unresolved; morphology convergence never promotes mechanics convergence.",
+        "unresolved_policy": "Any run failure, unresolved morphology, mechanics/work/energy disagreement, or unrefined exploratory population remains numerically-unresolved; morphology convergence never promotes mechanics convergence.",
         "large_artifact_policy": "per-run metrics, events, and manifests remain under _runs in the caller-provided output; only compact summaries are repository candidates",
     }
     _write_json(output / "compact_summary.json", summary)
