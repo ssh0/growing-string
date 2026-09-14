@@ -27,6 +27,8 @@
 5. `src/growing_filament/` — 新しい連続モデルの最小実装。
 6. `tests/` — 実装の不変条件と数値検証。
 
+free/free 収束ゲートを再開する crew は、最初に `notes/free_free_convergence_crew_handoff.md` を読みます。compact成果物の契約、populationの分離、高コスト工程、再開手順をこの研究リポジトリ固有の前提としてまとめています。
+
 ## 現在のプロトタイプ
 
 初期版は、次の範囲に限定しています。
