@@ -237,6 +237,7 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         for tolerance in (
             {"identity": 1.0},
             {"time": base["t_end"]},
+            {"identity": 10**400},
         ):
             bounded_config = {
                 "base": base,
