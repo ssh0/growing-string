@@ -523,16 +523,7 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
         for key in sorted(old_keys - current_keys):
             old_episode = active[key]
             has_feature_change = any(current_key[0] == key[0] for current_key in current_keys)
-            has_pair_change = any(
-                tuple(current[key2]["root_pair"]) == tuple(old_episode["root_pair"])
-                for key2 in current_keys
-            )
-            has_root_continuation = any(
-                key2 in active
-                and tuple(active[key2]["root_pair"]) == tuple(old_episode["root_pair"])
-                for key2 in current_keys
-            )
-            if has_feature_change or (has_pair_change and not has_root_continuation):
+            if has_feature_change:
                 continue
             episode = active.pop(key)
             close_episode(episode, row, "detachment")

@@ -131,6 +131,8 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         self.assertEqual(tracked["signature"]["detachment_count"], 1)
         self.assertEqual(tracked["signature"]["recontact_count"], 1)
         self.assertEqual(tracked["signature"]["pair_change_count"], 0)
+        self.assertEqual(tracked["episodes"][0]["detachment_time"], 0.3)
+        self.assertEqual(tracked["episodes"][2]["close_reason"], "end_censored")
 
     def test_remesh_boundary_resets_detached_contact_identity(self):
         tracked = _episode_tracker(
