@@ -60,7 +60,7 @@ shape-only を名乗るには、初期参照長（各 segment と総量）、EA�
 
 ## 再開時の最短手順
 
-1. **隔離と status**：`pwd -P` と `git rev-parse --show-toplevel` が同じ disposable worktree を指すこと、`git status --short --branch` が clean（未コミット変更なし）であることを確認する。上記4つの gate 固有ファイルが同じ HEAD に存在することも確認し、無ければ PR #29 を含む current master から作り直す。`no-mistakes axi status` で自分の branch の実行状態も確認する。
+1. **隔離と status**：`pwd -P` と `git rev-parse --show-toplevel` が同じ disposable worktree を指すこと、`git status --short --branch` が clean（未コミット変更なし）であることを確認する。上記4つの gate 固有ファイルが同じ HEAD に存在することも確認し、無ければ PR #29 を含む current master から作り直す。
 2. **docs**：上記の正本（特に gate note、config、free-end note）を読み、今回の scope が free/free・非接触のままか確認する。
 3. **no-mistakes の診断**：`no-mistakes doctor`、続けて `no-mistakes axi status`。他 branch の実行を停止・再起動・横取りしない。
 4. **focused tests**：`PYTHONPATH=continuum_filament_model/src python -m unittest continuum_filament_model.tests.test_free_free_convergence_gate continuum_filament_model.tests.test_free_end_dynamics -v`。
