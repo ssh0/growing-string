@@ -30,7 +30,8 @@
     "residence_tolerance": 0.30,
     "fold_tolerance": 0.50,
     "fold_count_tolerance": 1,
-    "remesh_boundary_tolerance": 1
+    "remesh_boundary_tolerance": 1,
+    "contact_identity_tolerance": 0.08
   },
   "cases": [
     {

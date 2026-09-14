@@ -116,6 +116,20 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         self.assertEqual(tracked["signature"]["pair_change_count"], 0)
         self.assertNotIn("pair_change", {event["event"] for event in tracked["sequence"]})
 
+    def test_remesh_boundary_resets_detached_contact_identity(self):
+        tracked = _episode_tracker(
+            [
+                self._row(0.0, 0, []),
+                self._row(0.1, 1, [self._record()]),
+                self._row(0.2, 2, []),
+                self._row(0.3, 3, [], n_nodes=5, remeshed=True),
+                self._row(0.4, 4, [self._record()]),
+            ],
+            diameter=0.5,
+        )
+        self.assertEqual(tracked["signature"]["recontact_count"], 0)
+        self.assertFalse(tracked["signature"]["repeated_episode_signature"])
+
     def test_episode_tracker_censors_active_episode_at_end(self):
         tracked = _episode_tracker(
             [self._row(0.0, 0, []), self._row(0.1, 1, [self._record()])],
@@ -155,6 +169,10 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             validate_case_config({**self._base(), "reject_crossing": False})
         with self.assertRaises(ValidationError):
             validate_case_config({**self._base(), "reject_crossing": "false"})
+        with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "expected_contact": "false"})
+        with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "expected_repeated": "false"})
 
     def test_long_case_records_c1_episode_metrics_without_legacy_contact(self):
         result = run_case(
@@ -310,6 +328,26 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         self.assertIn(
             "episode_contact_identity_changed", identity_comparison["reason_codes"]
         )
+
+        mesh_left = [
+            {**item, "contact_identity": [0.25, 0.75]} for item in left_sequence
+        ]
+        mesh_right = [
+            {
+                **item,
+                "root_pair": ["1", "3"],
+                "contact_identity": [0.27, 0.73],
+            }
+            for item in left_sequence
+        ]
+        mesh_comparison = _compare_refinement(
+            [
+                result("left", mesh_left, "resolved"),
+                result("right", mesh_right, "resolved"),
+            ],
+            config,
+        )[0]
+        self.assertEqual(mesh_comparison["sequence_status"], "resolved")
 
         censor_comparison = _compare_refinement(
             [

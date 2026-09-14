@@ -79,6 +79,12 @@ class ValidationError(ValueError):
     """Invalid repeated-folding validation input."""
 
 
+def _strict_bool(value: Any, key: str) -> bool:
+    if type(value) is not bool:
+        raise ValidationError(f"{key} must be boolean")
+    return value
+
+
 def _write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(canonical_json_bytes(_jsonable(value)) + b"\n")
@@ -129,7 +135,9 @@ def validate_case_config(config: Mapping[str, Any]) -> None:
         raise ValidationError("friction and adhesion are not active in the C1 runner")
     if bool(config.get("contact_history", False)):
         raise ValidationError("contact history is not active in the C1 runner")
-    if config.get("reject_crossing", True) is not True:
+    _strict_bool(config.get("expected_contact", False), "expected_contact")
+    _strict_bool(config.get("expected_repeated", False), "expected_repeated")
+    if _strict_bool(config.get("reject_crossing", True), "reject_crossing") is not True:
         raise ValidationError("reject_crossing=true is required")
     if str(config.get("initial_shape", "sine")) not in {"sine", "u"}:
         raise ValidationError("initial_shape must be sine or u")
@@ -167,6 +175,7 @@ def _defaults() -> dict[str, Any]:
         "fold_tolerance": 0.50,
         "fold_count_tolerance": 1,
         "remesh_boundary_tolerance": 1,
+        "contact_identity_tolerance": 0.08,
         "expected_contact": False,
         "expected_repeated": False,
     }
@@ -183,17 +192,19 @@ def load_config(path: Path) -> dict[str, Any]:
         if not isinstance(item, Mapping) or "name" not in item:
             raise ValidationError("each case requires name")
         overrides = dict(item.get("overrides", {}))
-        expected = bool(
+        expected = _strict_bool(
             item.get(
                 "expected_contact",
                 overrides.get("expected_contact", base.get("expected_contact", False)),
-            )
+            ),
+            "expected_contact",
         )
-        expected_repeated = bool(
+        expected_repeated = _strict_bool(
             item.get(
                 "expected_repeated",
                 overrides.get("expected_repeated", base.get("expected_repeated", False)),
-            )
+            ),
+            "expected_repeated",
         )
         cases.append(
             CaseSpec(
@@ -228,8 +239,8 @@ def _effective_case(base: Mapping[str, Any], case: CaseSpec) -> dict[str, Any]:
             "refinement_axis": case.refinement_axis,
             "refinement_family": case.refinement_family,
             "refinement_role": case.refinement_role,
-            "expected_repeated": case.expected_repeated,
-            "expected_contact": case.expected_contact,
+            "expected_repeated": _strict_bool(case.expected_repeated, "expected_repeated"),
+            "expected_contact": _strict_bool(case.expected_contact, "expected_contact"),
         }
     )
     validate_case_config(config)
@@ -283,6 +294,31 @@ def _accepted_dt_collapsed(simulator: OverdampedGrowingFilament) -> bool:
     return False
 
 
+def _normalized_contact_positions(
+    record: Mapping[str, Any], state: FilamentState
+) -> tuple[float, float] | None:
+    indices = record.get("segment_indices")
+    if indices is None or len(indices) != 2:
+        return None
+    try:
+        segment_indices = tuple(int(index) for index in indices)
+    except (TypeError, ValueError):
+        return None
+    rest_lengths = np.asarray(state.rest_lengths, dtype=float)
+    if (
+        not np.isfinite(rest_lengths).all()
+        or np.sum(rest_lengths) <= 0.0
+        or any(index < 0 or index >= len(rest_lengths) for index in segment_indices)
+    ):
+        return None
+    cumulative = np.concatenate(([0.0], np.cumsum(rest_lengths)))
+    total = float(cumulative[-1])
+    return tuple(
+        float((cumulative[index] + 0.5 * rest_lengths[index]) / total)
+        for index in segment_indices
+    )
+
+
 def _metrics_rows(
     trajectory: Sequence[FilamentState],
     simulator: OverdampedGrowingFilament,
@@ -296,6 +332,10 @@ def _metrics_rows(
         active, crossings = _pair_records(
             state, float(config["diameter"]), float(config["contact_stiffness"])
         )
+        for record in active:
+            normalized_positions = _normalized_contact_positions(record, state)
+            if normalized_positions is not None:
+                record["contact_identity"] = normalized_positions
         contacts = nonlocal_segment_contacts(state.positions, float(config["diameter"]))
         finite_contacts = [item for item in contacts if item.is_finite_radius_contact]
         min_gap = min((float(item.gap) for item in contacts), default=float("inf"))
@@ -370,23 +410,60 @@ def _episode_event(
         "pair": None if episode is None else list(episode["pair"]),
         "root_pair": None if episode is None else list(episode["root_pair"]),
         "feature": None if episode is None else episode["feature"],
+        "contact_identity": None
+        if episode is None
+        else episode.get("contact_identity"),
     }
 
 
 def _normalized_contact_identity(
     sequence: Sequence[Mapping[str, Any]],
-) -> tuple[tuple[str, tuple[str, ...] | None, str | None], ...]:
+) -> tuple[tuple[str, tuple[Any, ...] | None, str | None], ...]:
     return tuple(
         (
             str(event["event"]),
-            None
-            if event.get("root_pair") is None
-            else tuple(str(value) for value in event["root_pair"]),
+            (
+                tuple(float(value) for value in event["contact_identity"])
+                if event.get("contact_identity") is not None
+                else (
+                    None
+                    if event.get("root_pair") is None
+                    else tuple(str(value) for value in event["root_pair"])
+                )
+            ),
             None if event.get("feature") is None else str(event["feature"]),
         )
         for event in sequence
         if event["event"] not in {"active_continuation", "remesh_boundary"}
     )
+
+
+def _contact_identity_match(
+    left: Sequence[tuple[str, tuple[Any, ...] | None, str | None]],
+    right: Sequence[tuple[str, tuple[Any, ...] | None, str | None]],
+    tolerance: float,
+) -> bool:
+    if len(left) != len(right):
+        return False
+    for left_item, right_item in zip(left, right):
+        if left_item[0] != right_item[0] or left_item[2] != right_item[2]:
+            return False
+        left_identity, right_identity = left_item[1], right_item[1]
+        if left_identity is None or right_identity is None:
+            if left_identity != right_identity:
+                return False
+            continue
+        if len(left_identity) != len(right_identity):
+            return False
+        if all(isinstance(value, (int, float)) for value in left_identity + right_identity):
+            if any(
+                abs(float(left_value) - float(right_value)) > tolerance
+                for left_value, right_value in zip(left_identity, right_identity)
+            ):
+                return False
+        elif left_identity != right_identity:
+            return False
+    return True
 
 
 def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict[str, Any]:
@@ -436,6 +513,7 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
         }
         if bool(row["remeshed_since_previous"]):
             sequence.append(_episode_event("remesh_boundary", row, reason="n_nodes_changed"))
+            detached_keys.clear()
             for episode in list(active.values()):
                 close_episode(episode, row, "remesh_boundary")
             active.clear()
@@ -522,6 +600,7 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
                 "pair": pair,
                 "root_pair": tuple(record["root_pair"]),
                 "feature": feature,
+                "contact_identity": record.get("contact_identity"),
                 "onset_time": float(row["time"]),
                 "onset_step": int(row["step"]),
                 "onset_n_nodes": int(row["n_nodes"]),
@@ -727,6 +806,9 @@ def _compare_refinement(
         remesh_tolerance = int(
             tolerance.get("remesh_boundaries", base.get("remesh_boundary_tolerance", 1))
         )
+        identity_tolerance = float(
+            tolerance.get("identity", base.get("contact_identity_tolerance", 0.08))
+        )
         left_sig = dict(left["episode_signature"])
         right_sig = dict(right["episode_signature"])
         numerical_match = (
@@ -759,7 +841,9 @@ def _compare_refinement(
         event_pattern_match = left_event_pattern == right_event_pattern
         left_identity_pattern = _normalized_contact_identity(left["episode_sequence"])
         right_identity_pattern = _normalized_contact_identity(right["episode_sequence"])
-        identity_match = left_identity_pattern == right_identity_pattern
+        identity_match = _contact_identity_match(
+            left_identity_pattern, right_identity_pattern, identity_tolerance
+        )
         left_events = [
             event
             for event in left["episode_sequence"]
@@ -890,6 +974,7 @@ def _compare_refinement(
             "fold": fold_tolerance,
             "fold_count": fold_count_tolerance,
             "remesh_boundaries": remesh_tolerance,
+            "identity": identity_tolerance,
             "discretization": "remesh boundary count and episode structure are compared with explicit tolerances; exact timestamps and segment IDs are not required",
         }
         output.append(row)
@@ -1161,25 +1246,27 @@ def run_benchmark(
             str(item["name"]),
             str(item.get("group", "primary")),
             dict(item.get("overrides", {})),
-            bool(
+            _strict_bool(
                 item.get(
                     "expected_contact",
                     item.get("overrides", {}).get(
                         "expected_contact", config["base"].get("expected_contact", False)
                     ),
-                )
+                ),
+                "expected_contact",
             ),
             str(item.get("population", "deterministic")),
             None if item.get("refinement_axis") is None else str(item["refinement_axis"]),
             None if item.get("refinement_family") is None else str(item["refinement_family"]),
             None if item.get("refinement_role") is None else str(item["refinement_role"]),
-            bool(
+            _strict_bool(
                 item.get(
                     "expected_repeated",
                     item.get("overrides", {}).get(
                         "expected_repeated", config["base"].get("expected_repeated", False)
                     ),
-                )
+                ),
+                "expected_repeated",
             ),
         )
         for item in raw_cases

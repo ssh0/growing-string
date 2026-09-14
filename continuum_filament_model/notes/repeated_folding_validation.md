@@ -45,7 +45,7 @@ runner は軌跡配列・動画を保存しない。`summary.csv`、`metrics.csv
 
 `refinement_summary.json` は、各 pair について次を個別に返す。
 
-- `sequence_status`: episode 数、detach/recontact、feature/pair change、正規化した root-pair/feature identity、episode順の censor pattern を構造 signature として比較し、remesh boundary 数は設定 tolerance 内で許容する。segment ID の完全一致や raw timestamp の完全一致は要求しない。
+- `sequence_status`: episode 数、detach/recontact、feature/pair change、rest-length arc 上の正規化 contact identity/feature、episode順の censor pattern を構造 signature として比較し、contact identity tolerance と remesh boundary tolerance を適用する。segment ID の完全一致や raw timestamp の完全一致は要求しない。
 - `penetration_status`: 最大 penetration ratio の相対差。
 - `residence_status`: 最大 episode residence の相対差。
 - `fold_status`: fold count、spacing、period proxy の差。
