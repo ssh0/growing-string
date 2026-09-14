@@ -184,6 +184,23 @@ candidate-input モードと、deterministic fixture とは分離した検証済
 使用します。補間や絶対登録の推測はしません。モード別の契約と解釈は
 `notes/scale_free_shape_comparison.md` を参照してください。
 
+## focused free/free 力学収束ゲート
+
+形態ラベルだけでなく力学的な収束を確認する bounded runner は
+`benchmarks/free_free_convergence_gate.py` です。対象は free/free・一様成長・伸長・曲げ・等方基板dragの非接触モデルだけで、接触・摩擦・接着・折りたたみ・gray5の物性fitは含めません。
+
+```bash
+TMP_DIR=$(mktemp -d /tmp/growing-string-free-free-gate.XXXXXX)
+PYTHONPATH=continuum_filament_model/src \
+python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
+  --config continuum_filament_model/benchmarks/configs/free_free_convergence_gate.json \
+  --output "$TMP_DIR"
+```
+
+既定suiteは straight、boundary-near、buckled-candidate の deterministic fixture を、時間3水準・空間3水準で別々に比較します。accepted/requested `dt`、reject/event、energy、参照長成長work、散逸推定、端点force/moment残差、onset、peak transverse、曲率RMS、mode spectrum/fractions、total length、初期条件摂動と provenance を記録します。`morphology_status` と `mechanics_status` は分離し、どちらかが未収束なら `numerically-unresolved` を維持します。parameter contrast と seed付き初期条件感度 replicate は deterministic population と混ぜません。
+
+無次元量 `G_b`、`G_s`、`chi` の定義は `benchmarks/buckling_benchmark.py:dimensionless_groups` に一元化しています。詳細な受入条件、reason code、gray5観測契約は `notes/free_free_convergence_gate.md` を参照してください。
+
 ## P0-B：線形mode・時間／空間数値ゲート
 
 現行の非接触モデルについて、端点の**位置だけを固定し、接線は自由**とした離散線形化を検証します。これはクランプ端（位置と接線を固定）ではありません。

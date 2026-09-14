@@ -1,0 +1,65 @@
+{
+  "schema_version": "continuum-filament-free-free-convergence-gate-8",
+  "base": {
+    "length": 2.0,
+    "n_nodes": 9,
+    "axial_stiffness": 5.0,
+    "bending_stiffness": 0.02,
+    "drag_density": 1.0,
+    "growth_rate": 0.5,
+    "amplitude": 0.02,
+    "dt": 0.004,
+    "t_end": 1.5,
+    "a_max_factor": 8.0,
+    "max_displacement_fraction": 1.0,
+    "max_retries": 8,
+    "dt_min": 1.0e-10
+  },
+  "representatives": [
+    {"name": "straight", "role": "straight", "overrides": {"growth_rate": 0.1}},
+    {"name": "boundary_near", "role": "boundary-near", "overrides": {"growth_rate": 0.3}},
+    {"name": "buckled", "role": "buckled-candidate", "overrides": {"growth_rate": 0.5}}
+  ],
+  "controls": [
+    {"name": "growth_free_control", "role": "growth-free-control", "overrides": {"growth_rate": 0.0}}
+  ],
+  "temporal_refinement": {
+    "n_nodes": 9,
+    "dt_values": [0.004, 0.002, 0.001]
+  },
+  "spatial_refinement": {
+    "n_nodes": [5, 9, 13],
+    "dt": 0.001
+  },
+  "contrasts": [
+    {"name": "lower_growth", "base": "buckled", "factor": "growth_rate", "value": 0.3},
+    {"name": "lower_axial_stiffness", "base": "buckled", "factor": "axial_stiffness", "value": 2.5},
+    {"name": "higher_bending_stiffness", "base": "buckled", "factor": "bending_stiffness", "value": 0.04},
+    {"name": "higher_drag_density", "base": "buckled", "factor": "drag_density", "value": 2.0},
+    {"name": "larger_initial_imperfection", "base": "buckled", "factor": "amplitude", "value": 0.04}
+  ],
+  "sensitivity": {
+    "base": "buckled",
+    "seeds": [101, 202, 303],
+    "amplitude_factors": [0.75, 1.0, 1.25],
+    "noise_fraction": 0.1
+  },
+  "tolerances": {
+    "onset_time_relative": 0.15,
+    "peak_amplitude_relative": 0.2,
+    "curvature_rms_relative": 0.25,
+    "mode_fraction_absolute": 0.15,
+    "energy_relative": 0.25,
+    "growth_work_relative": 0.25,
+    "dissipation_relative": 0.25,
+    "endpoint_force_relative": 0.35,
+    "endpoint_moment_relative": 0.35,
+    "endpoint_shear_relative": 0.35,
+    "total_length_relative": 0.1,
+    "mechanical_balance_relative": 0.35,
+    "absolute_floor_fraction_of_length": 0.002
+  },
+  "output_policy": {
+    "max_metrics_rows": 512
+  }
+}
