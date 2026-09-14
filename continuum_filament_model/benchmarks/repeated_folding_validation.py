@@ -72,6 +72,7 @@ class CaseSpec:
     refinement_axis: str | None = None
     refinement_family: str | None = None
     refinement_role: str | None = None
+    expected_repeated: bool = False
 
 
 class ValidationError(ValueError):
@@ -128,6 +129,8 @@ def validate_case_config(config: Mapping[str, Any]) -> None:
         raise ValidationError("friction and adhesion are not active in the C1 runner")
     if bool(config.get("contact_history", False)):
         raise ValidationError("contact history is not active in the C1 runner")
+    if bool(config.get("reject_crossing", True)) is not True:
+        raise ValidationError("reject_crossing=true is required")
     if str(config.get("initial_shape", "sine")) not in {"sine", "u"}:
         raise ValidationError("initial_shape must be sine or u")
 
@@ -165,6 +168,7 @@ def _defaults() -> dict[str, Any]:
         "fold_count_tolerance": 1,
         "remesh_boundary_tolerance": 1,
         "expected_contact": False,
+        "expected_repeated": False,
     }
 
 
@@ -185,6 +189,12 @@ def load_config(path: Path) -> dict[str, Any]:
                 overrides.get("expected_contact", base.get("expected_contact", False)),
             )
         )
+        expected_repeated = bool(
+            item.get(
+                "expected_repeated",
+                overrides.get("expected_repeated", base.get("expected_repeated", False)),
+            )
+        )
         cases.append(
             CaseSpec(
                 str(item["name"]),
@@ -195,6 +205,7 @@ def load_config(path: Path) -> dict[str, Any]:
                 None if item.get("refinement_axis") is None else str(item["refinement_axis"]),
                 None if item.get("refinement_family") is None else str(item["refinement_family"]),
                 None if item.get("refinement_role") is None else str(item["refinement_role"]),
+                expected_repeated,
             )
         )
     return {
@@ -217,6 +228,7 @@ def _effective_case(base: Mapping[str, Any], case: CaseSpec) -> dict[str, Any]:
             "refinement_axis": case.refinement_axis,
             "refinement_family": case.refinement_family,
             "refinement_role": case.refinement_role,
+            "expected_repeated": case.expected_repeated,
             "expected_contact": case.expected_contact,
         }
     )
@@ -371,7 +383,7 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
     sequence: list[dict[str, Any]] = []
     episodes: list[dict[str, Any]] = []
     active: dict[tuple[tuple[str, str], str], dict[str, Any]] = {}
-    seen_keys: set[tuple[tuple[str, str], str]] = set()
+    detached_keys: set[tuple[tuple[str, str], str]] = set()
     previous_row: Mapping[str, Any] | None = None
     cumulative_slip = 0.0
 
@@ -387,6 +399,8 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
             episode["remesh_closed"] = True
             episode["remesh_boundary_time"] = float(row["time"])
             episode["remesh_boundary_step"] = int(row["step"])
+            episode["censored_at_end"] = True
+        elif reason == "end_censored":
             episode["censored_at_end"] = True
         else:
             episode["censored_at_end"] = False
@@ -423,6 +437,7 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
                 continue
             episode = active.pop(key)
             close_episode(episode, row, "detachment")
+            detached_keys.add(key)
             sequence.append(_episode_event("contact_detachment", row, episode))
 
         for key, record in current.items():
@@ -464,7 +479,9 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
                         "feature_change", row, old, reason=f"{old['feature']}->{feature}"
                     )
                 )
-                active.pop((tuple(old["pair"]), str(old["feature"])), None)
+                old_key = (tuple(old["pair"]), str(old["feature"]))
+                detached_keys.discard(old_key)
+                active.pop(old_key, None)
             elif same_root:
                 old = same_root[0]
                 close_episode(old, row, "pair_change")
@@ -473,7 +490,9 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
                         "pair_change", row, old, reason="root_pair_active_with_new_segment_pair"
                     )
                 )
-                active.pop((tuple(old["pair"]), str(old["feature"])), None)
+                old_key = (tuple(old["pair"]), str(old["feature"]))
+                detached_keys.discard(old_key)
+                active.pop(old_key, None)
 
             episode_id = len(episodes)
             episode = {
@@ -500,7 +519,7 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
             }
             episodes.append(episode)
             is_recontact = (
-                key in seen_keys
+                key in detached_keys
                 and previous_row is not None
                 and not bool(row["remeshed_since_previous"])
             )
@@ -508,7 +527,6 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
                 _episode_event("recontact" if is_recontact else "contact_onset", row, episode)
             )
             active[key] = episode
-            seen_keys.add(key)
 
         previous_row = row
 
@@ -538,6 +556,7 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
         "pair_change_count": sum(event["event"] == "pair_change" for event in sequence),
         "remesh_boundary_count": sum(event["event"] == "remesh_boundary" for event in sequence),
         "censored_episode_count": sum(bool(episode["censored_at_end"]) for episode in episodes),
+        "repeated_episode_signature": bool(len(episodes) >= 2 and recontacts),
         "event_pattern": tuple(
             event["event"] for event in sequence if event["event"] != "active_continuation"
         ),
@@ -906,19 +925,38 @@ def run_case(
         dt_collapsed = _accepted_dt_collapsed(simulator)
     tracker = _episode_tracker(rows, float(config["diameter"]))
     observed_contact = bool(tracker["episodes"])
+    repeated_episode_signature = bool(tracker["signature"]["repeated_episode_signature"])
+    if repeated_episode_signature:
+        evidence_classification = "repeated-folding"
+    elif observed_contact:
+        evidence_classification = "single-proxy/contact"
+    else:
+        evidence_classification = "no-contact"
     reasons: list[str] = []
     if failure:
         reasons.append("solver_failure")
     if config["expected_contact"] and not observed_contact:
         reasons.append("expected_contact_not_observed")
-    elif not config["expected_contact"] and observed_contact:
+    if not config["expected_contact"] and observed_contact:
         reasons.append("unexpected_contact_observed")
+    if config["expected_repeated"] and not repeated_episode_signature:
+        reasons.append("repeated_folding_not_observed")
     if initial_control:
         if not initial_active:
             reasons.append("initial_contact_control_not_observed")
     elif initial_contact_violation:
         reasons.append("initial_contact_violation")
-    if rows and any(row["crossing_pairs"] for row in rows):
+    crossing_rejection_in_events = any(
+        event.get("event_type") == "step_attempt"
+        and event.get("accepted") is False
+        and event.get("reason") == "crossing_rejection"
+        for event in events
+    )
+    if (
+        crossing_rejection_in_events
+        or rejection_counts.get("crossing_rejection", 0) > 0
+        or (rows and any(row["crossing_pairs"] for row in rows))
+    ):
         reasons.append("centerline_crossing_guard_observed")
     if dt_collapsed:
         reasons.append("accepted_dt_collapsed_below_requested")
@@ -936,6 +974,8 @@ def run_case(
         "adhesion": "disabled",
         "contact_history": "disabled; lineage and episodes are diagnostics only",
         "initial_contact_control": initial_control,
+        "expected_repeated": bool(config["expected_repeated"]),
+        "evidence_classification": evidence_classification,
         "measurement_limits": {
             "finite_penalty": "penetration is finite and stiffness/time-step dependent; not hard non-penetration",
             "fold_proxy": "curvature peaks/sign changes are not an experimental or topological fold count",
@@ -971,6 +1011,9 @@ def run_case(
         "classification": "initial-contact-control"
         if initial_control
         else ("contact-observed" if observed_contact else "no-contact-observed"),
+        "evidence_classification": evidence_classification,
+        "expected_repeated": bool(config["expected_repeated"]),
+        "repeated_episode_signature": repeated_episode_signature,
         "numerical_status": numerical_status,
         "numerical_reason_codes": reasons,
         "failure_reason": failure,
@@ -1018,6 +1061,9 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
         "group": result["group"],
         "population": result["population"],
         "classification": result["classification"],
+        "evidence_classification": result["evidence_classification"],
+        "expected_repeated": result["expected_repeated"],
+        "repeated_episode_signature": result["repeated_episode_signature"],
         "numerical_status": result["numerical_status"],
         "numerical_reason_codes": json.dumps(result["numerical_reason_codes"], sort_keys=True),
         "requested_dt": result["requested_dt"],
@@ -1096,6 +1142,14 @@ def run_benchmark(
             None if item.get("refinement_axis") is None else str(item["refinement_axis"]),
             None if item.get("refinement_family") is None else str(item["refinement_family"]),
             None if item.get("refinement_role") is None else str(item["refinement_role"]),
+            bool(
+                item.get(
+                    "expected_repeated",
+                    item.get("overrides", {}).get(
+                        "expected_repeated", config["base"].get("expected_repeated", False)
+                    ),
+                )
+            ),
         )
         for item in raw_cases
     ]

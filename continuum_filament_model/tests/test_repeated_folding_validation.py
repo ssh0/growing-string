@@ -12,6 +12,8 @@ from continuum_filament_model.benchmarks.repeated_folding_validation import (
     _episode_tracker,
     run_benchmark,
     run_case,
+    validate_case_config,
+    ValidationError,
 )
 
 
@@ -77,6 +79,7 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             self._row(0.3, 3, []),
             self._row(0.4, 4, [self._record()]),
             self._row(0.5, 5, [self._record(feature="interior_interior")]),
+            self._row(0.55, 5, [self._record()]),
             self._row(0.6, 6, [self._record(("0.0", "2.0"))], n_nodes=5, remeshed=True),
             self._row(0.7, 7, [], n_nodes=5),
         ]
@@ -92,9 +95,47 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             }.issubset(events)
         )
         self.assertGreaterEqual(tracked["signature"]["remesh_boundary_count"], 1)
-        self.assertGreaterEqual(tracked["signature"]["recontact_count"], 1)
+        self.assertEqual(tracked["signature"]["recontact_count"], 1)
         self.assertGreater(tracked["cumulative_relative_tangential_slip"], 0.0)
         self.assertTrue(all("onset_n_nodes" in episode for episode in tracked["episodes"]))
+
+    def test_episode_tracker_censors_active_episode_at_end(self):
+        tracked = _episode_tracker(
+            [self._row(0.0, 0, []), self._row(0.1, 1, [self._record()])],
+            diameter=0.5,
+        )
+        self.assertTrue(tracked["episodes"][0]["censored_at_end"])
+        self.assertEqual(tracked["signature"]["censored_episode_count"], 1)
+
+    def test_feature_change_back_is_not_recontact(self):
+        tracked = _episode_tracker(
+            [
+                self._row(0.0, 0, []),
+                self._row(0.1, 1, [self._record()]),
+                self._row(0.2, 2, [self._record(feature="interior_interior")]),
+                self._row(0.3, 3, [self._record()]),
+            ],
+            diameter=0.5,
+        )
+        self.assertEqual(tracked["signature"]["recontact_count"], 0)
+        self.assertFalse(tracked["signature"]["repeated_episode_signature"])
+
+    def test_repeated_contract_and_crossing_guard_configuration(self):
+        result = run_case(
+            CaseSpec(
+                "single",
+                "primary_repeating",
+                {},
+                expected_contact=True,
+                expected_repeated=True,
+            ),
+            {**self._base(), "t_end": 0.02},
+            git_revision="test-revision",
+        )
+        self.assertIn("repeated_folding_not_observed", result["numerical_reason_codes"])
+        self.assertNotEqual(result["evidence_classification"], "repeated-folding")
+        with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "reject_crossing": False})
 
     def test_long_case_records_c1_episode_metrics_without_legacy_contact(self):
         result = run_case(

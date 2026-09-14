@@ -37,6 +37,7 @@
       "name": "repeating_primary_long",
       "group": "primary_repeating",
       "expected_contact": true,
+      "expected_repeated": true,
       "refinement_family": "repeating"
     },
     {
@@ -53,6 +54,7 @@
       "refinement_axis": "temporal",
       "refinement_family": "repeating",
       "refinement_role": "coarse",
+      "expected_repeated": true,
       "overrides": {"dt": 0.04}
     },
     {
@@ -62,6 +64,7 @@
       "refinement_axis": "temporal",
       "refinement_family": "repeating",
       "refinement_role": "fine",
+      "expected_repeated": true,
       "overrides": {"dt": 0.01}
     },
     {
@@ -71,6 +74,7 @@
       "refinement_axis": "spatial",
       "refinement_family": "repeating",
       "refinement_role": "coarse",
+      "expected_repeated": true,
       "overrides": {"n_nodes": 9}
     },
     {
@@ -80,6 +84,7 @@
       "refinement_axis": "spatial",
       "refinement_family": "repeating",
       "refinement_role": "fine",
+      "expected_repeated": true,
       "overrides": {"n_nodes": 13}
     },
     {
@@ -89,6 +94,7 @@
       "refinement_axis": "contact_stiffness",
       "refinement_family": "repeating",
       "refinement_role": "low",
+      "expected_repeated": true,
       "overrides": {"contact_stiffness": 0.5}
     },
     {
@@ -98,6 +104,7 @@
       "refinement_axis": "contact_stiffness",
       "refinement_family": "repeating",
       "refinement_role": "high",
+      "expected_repeated": true,
       "overrides": {"contact_stiffness": 4.0}
     },
     {
