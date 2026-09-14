@@ -46,10 +46,12 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         }
 
     @staticmethod
-    def _record(pair=("0", "2"), feature="endpoint_endpoint", penetration=0.1):
+    def _record(
+        pair=("0", "2"), feature="endpoint_endpoint", penetration=0.1, root_pair=None
+    ):
         return {
             "pair": list(pair),
-            "root_pair": list(pair),
+            "root_pair": list(pair if root_pair is None else root_pair),
             "feature": feature,
             "point_i": [0.0, 0.0],
             "point_j": [0.0, 0.1],
@@ -99,6 +101,21 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         self.assertGreater(tracked["cumulative_relative_tangential_slip"], 0.0)
         self.assertTrue(all("onset_n_nodes" in episode for episode in tracked["episodes"]))
 
+    def test_episode_tracker_keeps_one_to_many_root_contacts_active(self):
+        child = self._record(("0.1", "2.1"), root_pair=("0", "2"))
+        tracked = _episode_tracker(
+            [
+                self._row(0.0, 0, []),
+                self._row(0.1, 1, [self._record()]),
+                self._row(0.2, 2, [self._record(), child]),
+                self._row(0.3, 3, [self._record(), child]),
+            ],
+            diameter=0.5,
+        )
+        self.assertEqual(tracked["signature"]["episode_count"], 2)
+        self.assertEqual(tracked["signature"]["pair_change_count"], 0)
+        self.assertNotIn("pair_change", {event["event"] for event in tracked["sequence"]})
+
     def test_episode_tracker_censors_active_episode_at_end(self):
         tracked = _episode_tracker(
             [self._row(0.0, 0, []), self._row(0.1, 1, [self._record()])],
@@ -136,6 +153,8 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         self.assertNotEqual(result["evidence_classification"], "repeated-folding")
         with self.assertRaises(ValidationError):
             validate_case_config({**self._base(), "reject_crossing": False})
+        with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "reject_crossing": "false"})
 
     def test_long_case_records_c1_episode_metrics_without_legacy_contact(self):
         result = run_case(
@@ -192,22 +211,54 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             "feature_change_count": 0,
             "pair_change_count": 0,
             "censored_episode_count": 0,
+            "censor_pattern": (False, False),
             "remesh_boundary_count": 0,
         }
         left_sequence = [
-            {"event": "contact_onset", "time": 0.1},
-            {"event": "contact_detachment", "time": 0.2},
-            {"event": "recontact", "time": 0.3},
+            {
+                "event": "contact_onset",
+                "time": 0.1,
+                "root_pair": ["0", "2"],
+                "feature": "endpoint_endpoint",
+            },
+            {
+                "event": "contact_detachment",
+                "time": 0.2,
+                "root_pair": ["0", "2"],
+                "feature": "endpoint_endpoint",
+            },
+            {
+                "event": "recontact",
+                "time": 0.3,
+                "root_pair": ["0", "2"],
+                "feature": "endpoint_endpoint",
+            },
         ]
         right_sequence = [
-            {"event": "contact_onset", "time": 0.1},
-            {"event": "recontact", "time": 0.2},
-            {"event": "contact_detachment", "time": 0.3},
+            {
+                "event": "contact_onset",
+                "time": 0.1,
+                "root_pair": ["0", "2"],
+                "feature": "endpoint_endpoint",
+            },
+            {
+                "event": "recontact",
+                "time": 0.2,
+                "root_pair": ["0", "2"],
+                "feature": "endpoint_endpoint",
+            },
+            {
+                "event": "contact_detachment",
+                "time": 0.3,
+                "root_pair": ["0", "2"],
+                "feature": "endpoint_endpoint",
+            },
         ]
 
-        def result(name, sequence, numerical_status):
+        def result(name, sequence, numerical_status, censor_pattern=(False, False)):
             result_signature = {
                 **signature,
+                "censor_pattern": censor_pattern,
                 "event_pattern": tuple(item["event"] for item in sequence),
             }
             return {
@@ -245,6 +296,29 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         self.assertEqual(comparison["residence_status"], "numerically-unresolved")
         self.assertEqual(comparison["fold_status"], "numerically-unresolved")
         self.assertIn("paired_case_numerically_unresolved", comparison["reason_codes"])
+
+        identity_sequence = [dict(item) for item in left_sequence]
+        identity_sequence[0]["root_pair"] = ["1", "3"]
+        identity_comparison = _compare_refinement(
+            [
+                result("left", left_sequence, "resolved"),
+                result("right", identity_sequence, "resolved"),
+            ],
+            config,
+        )[0]
+        self.assertEqual(identity_comparison["sequence_status"], "numerically-unresolved")
+        self.assertIn(
+            "episode_contact_identity_changed", identity_comparison["reason_codes"]
+        )
+
+        censor_comparison = _compare_refinement(
+            [
+                result("left", left_sequence, "resolved"),
+                result("right", left_sequence, "resolved", censor_pattern=(True, False)),
+            ],
+            config,
+        )[0]
+        self.assertEqual(censor_comparison["sequence_status"], "numerically-unresolved")
 
     def test_refinement_reports_metric_specific_unresolved_status_and_tolerances(self):
         base = self._base()

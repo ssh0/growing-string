@@ -129,7 +129,7 @@ def validate_case_config(config: Mapping[str, Any]) -> None:
         raise ValidationError("friction and adhesion are not active in the C1 runner")
     if bool(config.get("contact_history", False)):
         raise ValidationError("contact history is not active in the C1 runner")
-    if bool(config.get("reject_crossing", True)) is not True:
+    if config.get("reject_crossing", True) is not True:
         raise ValidationError("reject_crossing=true is required")
     if str(config.get("initial_shape", "sine")) not in {"sine", "u"}:
         raise ValidationError("initial_shape must be sine or u")
@@ -373,6 +373,22 @@ def _episode_event(
     }
 
 
+def _normalized_contact_identity(
+    sequence: Sequence[Mapping[str, Any]],
+) -> tuple[tuple[str, tuple[str, ...] | None, str | None], ...]:
+    return tuple(
+        (
+            str(event["event"]),
+            None
+            if event.get("root_pair") is None
+            else tuple(str(value) for value in event["root_pair"]),
+            None if event.get("feature") is None else str(event["feature"]),
+        )
+        for event in sequence
+        if event["event"] not in {"active_continuation", "remesh_boundary"}
+    )
+
+
 def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict[str, Any]:
     """Build transitions while retaining raw accepted-state coordinates.
 
@@ -465,11 +481,17 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
                 old["last_time"] = float(row["time"])
                 continue
 
-            same_pair = [value for value in active.values() if value["pair"] == pair]
+            same_pair = [
+                value
+                for value in active.values()
+                if value["pair"] == pair
+                and (tuple(value["pair"]), str(value["feature"])) not in current_keys
+            ]
             same_root = [
                 value
                 for value in active.values()
                 if value["root_pair"] == tuple(record["root_pair"])
+                and (tuple(value["pair"]), str(value["feature"])) not in current_keys
             ]
             if same_pair:
                 old = same_pair[0]
@@ -557,6 +579,8 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
         "remesh_boundary_count": sum(event["event"] == "remesh_boundary" for event in sequence),
         "censored_episode_count": sum(bool(episode["censored_at_end"]) for episode in episodes),
         "repeated_episode_signature": bool(len(episodes) >= 2 and recontacts),
+        "contact_identity_pattern": _normalized_contact_identity(sequence),
+        "censor_pattern": tuple(bool(episode["censored_at_end"]) for episode in episodes),
         "event_pattern": tuple(
             event["event"] for event in sequence if event["event"] != "active_continuation"
         ),
@@ -719,6 +743,7 @@ def _compare_refinement(
             "feature_change_count",
             "pair_change_count",
             "censored_episode_count",
+            "censor_pattern",
         )
         structure_match = all(left_sig[key] == right_sig[key] for key in structural_keys)
         left_event_pattern = tuple(
@@ -732,6 +757,9 @@ def _compare_refinement(
             if str(event) != "remesh_boundary"
         )
         event_pattern_match = left_event_pattern == right_event_pattern
+        left_identity_pattern = _normalized_contact_identity(left["episode_sequence"])
+        right_identity_pattern = _normalized_contact_identity(right["episode_sequence"])
+        identity_match = left_identity_pattern == right_identity_pattern
         left_events = [
             event
             for event in left["episode_sequence"]
@@ -760,6 +788,8 @@ def _compare_refinement(
         )
         if not structure_match or not event_pattern_match:
             row["reason_codes"].append("episode_structure_changed")
+        if not identity_match:
+            row["reason_codes"].append("episode_contact_identity_changed")
         if not remesh_match:
             row["reason_codes"].append("remesh_boundary_count_changed_beyond_tolerance")
         if not time_match or not event_time_match:
@@ -769,6 +799,7 @@ def _compare_refinement(
             if numerical_match
             and structure_match
             and event_pattern_match
+            and identity_match
             and remesh_match
             and time_match
             and event_time_match
