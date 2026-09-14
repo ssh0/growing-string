@@ -280,24 +280,26 @@ def _effective_case(base: Mapping[str, Any], case: CaseSpec) -> dict[str, Any]:
                 "shape-only sensitivity may vary only initial_shape/amplitude: "
                 f"{sorted(unexpected)}"
             )
-        config["shape_reference_amplitude"] = float(base["amplitude"])
-        config["shape_reference_initial_shape"] = str(base["initial_shape"])
     return config
 
 
-def _initial_state(config: Mapping[str, Any]) -> FilamentState:
-    """Use the C1 fixture contract; shape sensitivity keeps a fixed reference state."""
+def _initial_state(
+    config: Mapping[str, Any],
+    *,
+    reference_rest_lengths: Sequence[float] | None = None,
+) -> FilamentState:
+    """Use the C1 fixture contract with caller-supplied shape references."""
 
     state = _c1_initial_state(config)
     if config.get("population") != "shape_only_sensitivity":
         return state
-    reference_config = dict(config)
-    reference_config["amplitude"] = config["shape_reference_amplitude"]
-    reference_config["initial_shape"] = config["shape_reference_initial_shape"]
-    reference = _c1_initial_state(reference_config)
+    if reference_rest_lengths is None:
+        raise ValidationError("shape-only sensitivity requires fixed reference rest lengths")
+    if len(reference_rest_lengths) != state.n_segments:
+        raise ValidationError("shape-only reference rest lengths match n_nodes")
     return FilamentState(
         state.positions,
-        reference.rest_lengths,
+        np.asarray(reference_rest_lengths, dtype=float),
         segment_lineage=state.segment_lineage,
     )
 
@@ -1169,10 +1171,14 @@ def _compare_refinement(
 
 
 def run_case(
-    case: CaseSpec, base_config: Mapping[str, Any], *, git_revision: str | None = None
+    case: CaseSpec,
+    base_config: Mapping[str, Any],
+    *,
+    git_revision: str | None = None,
+    reference_rest_lengths: Sequence[float] | None = None,
 ) -> dict[str, Any]:
     config = _effective_case(base_config, case)
-    initial = _initial_state(config)
+    initial = _initial_state(config, reference_rest_lengths=reference_rest_lengths)
     initial_active, _ = _pair_records(
         initial, float(config["diameter"]), float(config["contact_stiffness"])
     )
@@ -1461,7 +1467,16 @@ def run_benchmark(
     _ensure_unique_case_names(cases)
     output.mkdir(parents=True, exist_ok=True)
     revision = git_revision if git_revision is not None else detect_git_revision(Path.cwd())
-    results = [run_case(case, config["base"], git_revision=revision) for case in cases]
+    reference_rest_lengths = _c1_initial_state(config["base"]).rest_lengths
+    results = [
+        run_case(
+            case,
+            config["base"],
+            git_revision=revision,
+            reference_rest_lengths=reference_rest_lengths,
+        )
+        for case in cases
+    ]
     refinement = _compare_refinement(results, config)
     summary = [_summary_row(result) for result in results]
     metrics = [

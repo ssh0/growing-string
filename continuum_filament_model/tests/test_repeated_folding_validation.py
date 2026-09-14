@@ -717,8 +717,14 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
                 population="shape_only_sensitivity",
             ),
         )
+        reference = _initial_state({**base, "population": "deterministic"})
         self.assertEqual(
-            _initial_state(low).rest_lengths.tolist(), _initial_state(high).rest_lengths.tolist()
+            _initial_state(
+                low, reference_rest_lengths=reference.rest_lengths
+            ).rest_lengths.tolist(),
+            _initial_state(
+                high, reference_rest_lengths=reference.rest_lengths
+            ).rest_lengths.tolist(),
         )
         with self.assertRaises(ValidationError):
             _effective_case(
@@ -731,6 +737,8 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
                     population="shape_only_sensitivity",
                 ),
             )
+        with self.assertRaises(ValidationError):
+            _initial_state(low)
 
     def test_benchmark_keeps_shape_sensitivity_separate_and_writes_compact_only(self):
         base = {**self._base(), "diameter": 0.1}
