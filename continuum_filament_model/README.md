@@ -203,6 +203,20 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 
 無次元量 `G_b`、`G_s`、`chi` の定義は `benchmarks/buckling_benchmark.py:dimensionless_groups` に一元化しています。詳細な受入条件、reason code、gray5観測契約は `notes/free_free_convergence_gate.md` を参照してください。
 
+## C1：free/free 成長–接触–折りたたみ baseline
+
+free/free 非接触成長座屈の収束後段階として、摩擦なし・接着なし・接触履歴なしの有限径 segment penalty を検証する入口は `benchmarks/contact_folding_validation.py` です。C1 ケースでは `enable_legacy_node_contact=false` を使い、旧来の node penalty を別 provenance として無効化します。初期 U 字接触は geometry/force control、主動的ケースは初期非接触から成長して接触するケースです。実験の折りたたみ再現、径の推定、有限 penalty による hard non-penetration は主張しません。
+
+```bash
+TMP_DIR=$(mktemp -d /tmp/growing-string-contact-folding.XXXXXX)
+PYTHONPATH="$PWD:$PWD/continuum_filament_model/src" \
+python continuum_filament_model/benchmarks/contact_folding_validation.py \
+  --config continuum_filament_model/benchmarks/configs/contact_folding_baseline.json \
+  --output "$TMP_DIR"
+```
+
+出力には contact onset、active pair/feature、gap/penetration、normal、force/work、residence、relative tangential slip、detachment、endpoint motion、curvature concentration、fold spacing/count proxy、lineage、crossing guard、requested/accepted `dt` と、temporal/spatial/contact-stiffness refinement の判定を含めます。受入条件と proxy の限界は `notes/contact_folding_validation.md` に記録します。軌跡・動画・per-step 大容量イベントは `/tmp` 等へ置き、Gitへ追加しません。摩擦・接着・履歴依存則は、C1 failure と独立した観測品質の双方が示された後に一つずつ追加します。
+
 ## P0-B：線形mode・時間／空間数値ゲート
 
 現行の非接触モデルについて、端点の**位置だけを固定し、接線は自由**とした離散線形化を検証します。これはクランプ端（位置と接線を固定）ではありません。

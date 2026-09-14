@@ -37,6 +37,7 @@ from .model import (
     ModelParameters,
     OverdampedGrowingFilament,
     remesh,
+    remesh_with_lineage,
 )
 from .reproducibility import (
     build_manifest,
@@ -82,6 +83,7 @@ __all__ = [
     "ModelParameters",
     "OverdampedGrowingFilament",
     "remesh",
+    "remesh_with_lineage",
     "ContactDiagnosticType",
     "FeatureType",
     "NormalStatus",

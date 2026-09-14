@@ -106,10 +106,13 @@ F_j     -= (1-u) f_ij       F_{j+1} -= u f_ij
 ```
 
 この線分接触を標準の非局所接触応答として `forces()` と `energy_components()` に含める。
-過去のパラメータ・3節点 fixture との互換性のため、既存の非隣接節点 penalty も同じ
-`contact_stiffness` で加算する。節点・線分が同時に閾値内となる形状では両方の項が寄与する。
+過去のパラメータ・3節点 fixture との互換性のため、既存の非隣接節点 penalty は
+`ModelParameters.enable_legacy_node_contact=True` の既定値で保持する。C1 接触検証では
+これを `False` にして、`contact_energy_components()` の `segment_c1` と `node_legacy` を分離した
+energy 内訳を manifestへ記録する。節点・線分が同時に閾値内となる形状では、互換モードでは両方の項が寄与する。
 定式化、`d=0` で法線を選ばない境界、U字 fixture、有限差分・作用反作用・剛体変換の検証は
-`notes/segment_penalty_contact.md` に記録する。
+`notes/segment_penalty_contact.md` に記録し、C1 の成長–接触–折りたたみ観測量と
+refinement 判定は `notes/contact_folding_validation.md` に記録する。
 
 `growing_filament.geometry` は引き続き、最近接距離・最近接点・パラメータ・有限径の
 `gap=d-D`・`penetration=max(0,D-d)`・feature・normal status を方式非依存に提供する。
@@ -181,7 +184,10 @@ EA, EI は変更しない
 幾何学的中点を使うため、分割前後の各子線分の長さの和も元の線分長に
 丸め誤差内で一致し、総輪郭長も保存する。
 
-初期版では、線分を結合する逆再メッシュは実装しない。再メッシュ規則が観測量へ与える影響を評価してから追加する。
+初期版では、線分を結合する逆再メッシュは実装しない。分割時は `FilamentState.segment_lineage` に
+`x -> x.0, x.1` の診断IDを付与するが、これは物質IDや接触履歴ではない。接触pairが再メッシュを
+またぐ場合、現在配列の添字だけで接触滞在・滑り・離脱を接続せず、lineage reset として記録する。
+再メッシュ規則が観測量へ与える影響を評価してから追加する。
 
 ## 時間積分
 

@@ -171,16 +171,21 @@ Git revision、Python/NumPy、入力hash、初期状態hash、パラメータが
 
 初期ゆらぎを変えて座屈開始条件が大きく変わる場合、線形安定性と非線形発展を分けて解析する。
 
-### 2.3 接触・折りたたみ
+### 2.3 接触・折りたたみ（C1 baseline）
 
-U字またはS字の初期形状を用いて、接触後の挙動を調べる。
+`benchmarks/contact_folding_validation.py` と `notes/contact_folding_validation.md` の C1 ユニットで、摩擦なし有限径 segment penalty を検証する。C1 では `enable_legacy_node_contact=False` とし、旧来 node penalty、摩擦、接着、接触履歴を混ぜない。
 
-- 接触したまま成長するか
-- 反発して離れるか
-- 交差せずに折りたたまれるか
-- 接着を追加した場合に形態がどう変わるか
+主動的ケースは、free/free で初期には非接触の成長–緩和軌道から接触へ至るものとする。U字の初期接触は geometry/force control として別集計し、実験の折りたたみ再現とは解釈しない。次を記録する。
 
-実験で接触したひもが滑らずに成長するなら、反発だけの接触則では不十分である可能性が高い。
+- 接触 onset、active pair/feature、gap、penetration、normal、C1 force/work
+- 接触滞在時間、相対接線滑り、離脱、endpoint motion
+- 曲率集中、fold spacing、fold-count proxy と各 proxy の限界
+- swept centerline crossing guard、action-reaction、再メッシュとの接触 lineage
+- requested/accepted `dt`、時間・空間・接触剛性 refinement、未解決理由
+
+受入条件は、主動的ケースが非接触から接触へ到達すること、または到達できない場合に期待条件と理由を `numerically-unresolved` として残すこと、観測量と provenance が compact output に保存されること、各 refinement の接触 sequence と penetration/residence が許容差内であることとする。有限 penalty の結果は hard non-penetration の証明としない。実験観測について、接触 lineage または径が検証できない gray5 候補線は input-QC/探索的図示に限定し、折りたたみ再現・径推定・摩擦/接着の必要性を主張しない。
+
+摩擦、接着、履歴依存則は、C1 が定義した observable で失敗し、かつ独立した観測品質が確認された場合に限り、一つずつ nested alternative として追加する。
 
 ## Phase 3：実験データとの整合
 
