@@ -488,17 +488,46 @@ def _onset(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 def _contact_sequence(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Record contact episode onsets in temporal order."""
-
     previous: dict[tuple[str, str], tuple[tuple[str, str], str, int]] = {}
     next_episode: dict[tuple[str, str], int] = {}
     sequence: list[dict[str, Any]] = []
     for row in rows:
+        time = float(row["time"])
+        step = int(row["step"])
+        if bool(row["remesh_contact_transition"]):
+            sequence.append(
+                {
+                    "event": "remesh_boundary",
+                    "time": time,
+                    "step": step,
+                    "n_nodes": int(row["n_nodes"]),
+                    "pair": None,
+                    "root_pair": None,
+                    "feature": None,
+                    "episode": None,
+                }
+            )
+            previous = {}
         current: dict[tuple[str, str], tuple[tuple[str, str], str, int]] = {}
         records = sorted(
             row["contact_records"],
             key=lambda item: (tuple(item["pair"]), str(item["feature"])),
         )
+        current_pairs = {tuple(item["pair"]) for item in records}
+        for pair, (root_pair, feature, episode) in sorted(previous.items()):
+            if pair not in current_pairs:
+                sequence.append(
+                    {
+                        "event": "contact_detachment",
+                        "time": time,
+                        "step": step,
+                        "n_nodes": int(row["n_nodes"]),
+                        "pair": list(pair),
+                        "root_pair": list(root_pair),
+                        "feature": feature,
+                        "episode": episode,
+                    }
+                )
         for item in records:
             pair = tuple(item["pair"])
             root_pair = tuple(item["root_pair"])
@@ -508,12 +537,27 @@ def _contact_sequence(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]
             if continuing:
                 episode = old[2]
             else:
+                if old is not None:
+                    sequence.append(
+                        {
+                            "event": "contact_detachment",
+                            "time": time,
+                            "step": step,
+                            "n_nodes": int(row["n_nodes"]),
+                            "pair": list(pair),
+                            "root_pair": list(old[0]),
+                            "feature": old[1],
+                            "episode": old[2],
+                        }
+                    )
                 episode = next_episode.get(pair, -1) + 1
                 next_episode[pair] = episode
                 sequence.append(
                     {
-                        "time": float(row["time"]),
-                        "step": int(row["step"]),
+                        "event": "contact_onset",
+                        "time": time,
+                        "step": step,
+                        "n_nodes": int(row["n_nodes"]),
                         "pair": list(pair),
                         "root_pair": list(root_pair),
                         "feature": feature,
@@ -527,13 +571,17 @@ def _contact_sequence(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]
 
 def _contact_sequence_signature(
     sequence: Sequence[Mapping[str, Any]],
-) -> tuple[tuple[tuple[str, ...], tuple[str, ...], str, int], ...]:
+) -> tuple[tuple[Any, ...], ...]:
     return tuple(
         (
-            tuple(item["pair"]),
-            tuple(item["root_pair"]),
-            str(item["feature"]),
-            int(item["episode"]),
+            str(item["event"]),
+            None if item["time"] is None else float(item["time"]),
+            None if item["step"] is None else int(item["step"]),
+            None if item["n_nodes"] is None else int(item["n_nodes"]),
+            None if item["pair"] is None else tuple(item["pair"]),
+            None if item["root_pair"] is None else tuple(item["root_pair"]),
+            None if item["feature"] is None else str(item["feature"]),
+            None if item["episode"] is None else int(item["episode"]),
         )
         for item in sequence
     )
@@ -553,6 +601,19 @@ def _event_counts(simulator: OverdampedGrowingFilament) -> dict[str, int]:
             key = "other_rejection"
         counts[key] = counts.get(key, 0) + 1
     return counts
+
+
+def _accepted_dt_collapsed(simulator: OverdampedGrowingFilament) -> bool:
+    for event in simulator.event_log:
+        if event.get("event_type") != "step_attempt" or event.get("accepted") is not True:
+            continue
+        requested = event.get("requested_dt")
+        accepted = event.get("accepted_dt")
+        if requested is None or accepted is None:
+            continue
+        if float(accepted) < 0.25 * float(requested):
+            return True
+    return False
 
 
 def run_case(
@@ -587,21 +648,27 @@ def run_case(
         enable_legacy_node_contact=False,
     )
     failure: str | None = None
+    failure_event: dict[str, Any] | None = None
     simulator: OverdampedGrowingFilament | None = None
     trajectory: list[FilamentState] = [initial.copy()]
     try:
         simulator = OverdampedGrowingFilament(initial, params)
         trajectory = simulator.run()
-    except (ModelError, RuntimeError, ValueError, FloatingPointError) as exc:
+    except ModelError as exc:
+        failure = f"{type(exc).__name__}: {exc}"
+        failure_event = None if exc.event is None else dict(exc.event)
+    except (RuntimeError, ValueError, FloatingPointError) as exc:
         failure = f"{type(exc).__name__}: {exc}"
     if simulator is None:
         rows: list[dict[str, Any]] = []
         final = initial
-        events: list[dict[str, Any]] = []
+        events = [] if failure_event is None else [failure_event]
         rejected = 0
         accepted = 0
         rejection_counts: dict[str, int] = {}
     else:
+        if failure:
+            trajectory = simulator.accepted_trajectory
         rows = _metrics_rows(trajectory, simulator, config)
         final = simulator.state
         events = simulator.event_log
@@ -623,11 +690,8 @@ def run_case(
         numerical_reasons.append("initial_contact_violation")
     if rows and any(row["crossing_pairs"] for row in rows):
         numerical_reasons.append("centerline_crossing_guard_observed")
-    if simulator is not None:
-        requested = float(config["dt"])
-        accepted_values = [float(value) for value in simulator.accepted_dts]
-        if accepted_values and min(accepted_values) < requested * 0.25:
-            numerical_reasons.append("accepted_dt_collapsed_below_requested")
+    if simulator is not None and _accepted_dt_collapsed(simulator):
+        numerical_reasons.append("accepted_dt_collapsed_below_requested")
     numerical_status = "numerically-unresolved" if numerical_reasons else "resolved"
     contact_sequence = _contact_sequence(rows)
     metadata = {

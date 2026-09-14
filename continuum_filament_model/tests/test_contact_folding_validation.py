@@ -110,6 +110,40 @@ class ContactFoldingValidationTests(unittest.TestCase):
         self.assertIn("initial_contact_violation", result["numerical_reason_codes"])
         self.assertEqual(result["numerical_status"], "numerically-unresolved")
 
+    def test_final_residual_dt_is_not_retry_collapse(self):
+        base = self._base()
+        result = run_case(
+            CaseSpec("short_run", "primary", {"t_end": 0.023}, expected_contact=False),
+            base,
+            git_revision="test-revision",
+        )
+        self.assertAlmostEqual(result["accepted_dt_values"][-1], 0.003)
+        self.assertNotIn(
+            "accepted_dt_collapsed_below_requested",
+            result["numerical_reason_codes"],
+        )
+
+    def test_partial_run_retains_accepted_trajectory(self):
+        simulator = OverdampedGrowingFilament(
+            FilamentState(
+                np.asarray([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]]),
+                np.asarray([1.0, 1.0]),
+            ),
+            ModelParameters(reference_length=1.0, dt=0.01, t_end=0.02),
+        )
+        original_step = simulator.step
+
+        def fail_after_first_step(dt=None):
+            if simulator.accepted_steps:
+                raise RuntimeError("synthetic partial-run failure")
+            return original_step(dt)
+
+        simulator.step = fail_after_first_step
+        with self.assertRaises(RuntimeError):
+            simulator.run()
+        self.assertEqual(len(simulator.accepted_trajectory), 2)
+        self.assertGreater(simulator.accepted_trajectory[-1].time, 0.0)
+
     def test_dynamic_case_records_c1_observables_and_requested_vs_accepted_dt(self):
         base = self._base()
         result = run_case(

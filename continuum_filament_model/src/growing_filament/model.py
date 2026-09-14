@@ -683,6 +683,7 @@ class OverdampedGrowingFilament:
         self.rejected_dts: list[float] = []
         self.rejection_reasons: list[str] = []
         self.events: list[dict[str, object]] = []
+        self._accepted_trajectory: list[FilamentState] = [self.state.copy()]
         self._last_swept_intersection: Optional[SweptIntersection] = None
         self._append_event(
             {
@@ -770,6 +771,10 @@ class OverdampedGrowingFilament:
         """Return a copy of the structured attempt and geometry event log."""
 
         return [dict(event) for event in self.events]
+
+    @property
+    def accepted_trajectory(self) -> list[FilamentState]:
+        return [state.copy() for state in self._accepted_trajectory]
 
     @classmethod
     def from_straight(
@@ -1396,7 +1401,8 @@ class OverdampedGrowingFilament:
         if target < self.state.time:
             raise ModelError("t_end must not be earlier than current time")
         trajectory = [self.state.copy()]
+        self._accepted_trajectory = trajectory
         while self.state.time < target - 1.0e-15:
             self.step(min(self.parameters.dt, target - self.state.time))
             trajectory.append(self.state.copy())
-        return trajectory
+        return [state.copy() for state in trajectory]

@@ -27,7 +27,7 @@ E_contact = 1/2 * k_c * penetration^2
 - **active pair/feature set**：現在配列の segment index、remesh lineage ID、root lineage ID、feature、gap、penetration、normal、pair force を含む JSON レコード。
 - **gap / penetration**：最近接 gap と最大 penetration、`penetration/D`。有限 penalty の貫入は時間刻み・接触剛性に依存するため、非貫入の証明にはしない。
 - **contact force / work**：C1 pair force の大きさ、action-reaction residual、最近接点の相対変位に対する離散 contact work。これは摩擦散逸ではない。
-- **contact residence**：同じ lineage pair が連続して active だった accepted interval の累積時間。再メッシュで exact pair が変わった区間は lineage reset として明示し、接触履歴を推定しない。
+- **contact residence**：同じ lineage pair/feature episode が連続して active だった accepted interval の時間。報告値は pair ごとの最大連続滞在であり、複数 pair の同時接触を加算しない。再メッシュで exact pair が変わった区間は lineage reset として明示し、接触履歴を推定しない。
 - **relative tangential slip**：前状態と現状態の最近接点相対変位から法線成分を除いた診断値。摩擦力は加えない。
 - **detachment**：再メッシュをまたがない区間で、前状態にあり現状態にない pair。再メッシュ区間は detached と断定せず、lineage transition と記録する。
 - **endpoint motion**：初期端点からの左右端点変位と最大値。free/free の運動を固定端 fixture と混同しない。
@@ -36,11 +36,11 @@ E_contact = 1/2 * k_c * penetration^2
 
 ## lineage と再メッシュ
 
-`FilamentState.segment_lineage` は中点分割時に `x -> x.0, x.1` として子へ継承する診断 ID である。現在配列の添字だけで接触履歴を追跡しない。root lineage pair は refinement 間の祖先対応を補助するが、物質同定・接触履歴・ヒステリシスを意味しない。再メッシュの前後では contact residence/slip/detachment を無理に接続せず、`lineage_reset_count` と `remesh_contact_transition` を保存する。
+`FilamentState.segment_lineage` は中点分割時に `x -> x.0, x.1` として子へ継承する診断 ID である。現在配列の添字だけで接触履歴を追跡しない。root lineage pair は refinement 間の祖先対応を補助するが、物質同定・接触履歴・ヒステリシスを意味しない。接触 sequence には onset、detachment、feature/episode 境界、再メッシュ境界の時刻・step を保存する。再メッシュの前後では contact residence/slip/detachment を無理に接続せず、`lineage_reset_count` と `remesh_contact_transition` を保存する。
 
 ## 数値ガードと refinement
 
-各ケースについて、要求 `dt` と受理 `accepted_dt`、棄却数、棄却理由を別々に保存する。swept centerline crossing guard は既存の試行棄却を使うが、有限径の連続時間 CCD や hard non-penetration solver は実装していない。接触 sequence が refinement で変わる、期待した接触が現れない、solver failure がある、受理 `dt` が要求値から大きく縮退する場合は `numerically-unresolved` とする。
+各ケースについて、要求 `dt` と受理 `accepted_dt`、棄却数、棄却理由を別々に保存する。受理 `dt` の縮退は各 `step_attempt` の per-step requested `dt` と比較し、終端時刻に合わせた自然な残差 timestep は retry 縮退と扱わない。swept centerline crossing guard は既存の試行棄却を使うが、有限径の連続時間 CCD や hard non-penetration solver は実装していない。接触 sequence が refinement で変わる、期待した接触が現れない、solver failure がある、受理 `dt` が要求値から大きく縮退する場合は `numerically-unresolved` とする。
 
 config には次の3 refinement を含める。
 
@@ -69,4 +69,4 @@ python continuum_filament_model/benchmarks/contact_folding_validation.py \
   --output /tmp/growing-string-contact-folding
 ```
 
-`/tmp` の per-run trajectory、動画、イベント全量は Git に追加しない。リポジトリへ残すのは、必要な場合の compact summary、設定、manifest、研究ノートだけとする。
+`results/contact_folding_validation/` の compact summary、metrics、refinement、suite、manifest は、同じ設定と現行ハーネスから生成した一式を current evidence とする。各 case の失敗時も、受理済み部分軌跡と初期 geometry 拒否 event を可能な範囲で manifest に含める。`/tmp` の per-run trajectory、動画、イベント全量は Git に追加しない。リポジトリへ残すのは、必要な場合の compact summary、設定、manifest、研究ノートだけとする。
