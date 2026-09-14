@@ -298,10 +298,12 @@ def _normalized_contact_positions(
     record: Mapping[str, Any], state: FilamentState
 ) -> tuple[float, float] | None:
     indices = record.get("segment_indices")
-    if indices is None or len(indices) != 2:
+    parameters = record.get("contact_parameters")
+    if indices is None or parameters is None or len(indices) != 2 or len(parameters) != 2:
         return None
     try:
         segment_indices = tuple(int(index) for index in indices)
+        segment_parameters = tuple(float(parameter) for parameter in parameters)
     except (TypeError, ValueError):
         return None
     rest_lengths = np.asarray(state.rest_lengths, dtype=float)
@@ -309,13 +311,17 @@ def _normalized_contact_positions(
         not np.isfinite(rest_lengths).all()
         or np.sum(rest_lengths) <= 0.0
         or any(index < 0 or index >= len(rest_lengths) for index in segment_indices)
+        or any(
+            not math.isfinite(parameter) or not 0.0 <= parameter <= 1.0
+            for parameter in segment_parameters
+        )
     ):
         return None
     cumulative = np.concatenate(([0.0], np.cumsum(rest_lengths)))
     total = float(cumulative[-1])
     return tuple(
-        float((cumulative[index] + 0.5 * rest_lengths[index]) / total)
-        for index in segment_indices
+        float((cumulative[index] + parameter * rest_lengths[index]) / total)
+        for index, parameter in zip(segment_indices, segment_parameters)
     )
 
 
@@ -332,12 +338,29 @@ def _metrics_rows(
         active, crossings = _pair_records(
             state, float(config["diameter"]), float(config["contact_stiffness"])
         )
+        contacts = nonlocal_segment_contacts(state.positions, float(config["diameter"]))
+        finite_contacts = [item for item in contacts if item.is_finite_radius_contact]
+        for record in active:
+            segment_indices = tuple(record["segment_indices"])
+            feature = str(record["feature"])
+            matching_contact = next(
+                (
+                    contact
+                    for contact in finite_contacts
+                    if (contact.segment_i, contact.segment_j) == segment_indices
+                    and contact.feature.value == feature
+                ),
+                None,
+            )
+            if matching_contact is not None:
+                record["contact_parameters"] = (
+                    float(matching_contact.parameter_i),
+                    float(matching_contact.parameter_j),
+                )
         for record in active:
             normalized_positions = _normalized_contact_positions(record, state)
             if normalized_positions is not None:
                 record["contact_identity"] = normalized_positions
-        contacts = nonlocal_segment_contacts(state.positions, float(config["diameter"]))
-        finite_contacts = [item for item in contacts if item.is_finite_radius_contact]
         min_gap = min((float(item.gap) for item in contacts), default=float("inf"))
         max_penetration = max((float(item.penetration) for item in finite_contacts), default=0.0)
         contact_force = simulator.contact_force_components(state.positions, state.rest_lengths)[
@@ -720,6 +743,29 @@ def _time_match(left: Sequence[float], right: Sequence[float], tolerance: float)
     return len(left) == len(right) and all(abs(a - b) <= tolerance for a, b in zip(left, right))
 
 
+def _validated_tolerance(value: Any, key: str, maximum: float) -> float:
+    try:
+        converted = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError(f"{key} tolerance must be finite and non-negative") from exc
+    if not math.isfinite(converted) or converted < 0.0 or converted > maximum:
+        raise ValidationError(f"{key} tolerance is outside the allowed range")
+    return converted
+
+
+def _validated_count_tolerance(value: Any, key: str, maximum: int) -> int:
+    if isinstance(value, bool):
+        raise ValidationError(f"{key} tolerance must be an integer")
+    try:
+        converted = int(value)
+        numeric = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValidationError(f"{key} tolerance must be a finite integer") from exc
+    if not math.isfinite(numeric) or numeric != converted or converted < 0 or converted > maximum:
+        raise ValidationError(f"{key} tolerance is outside the allowed range")
+    return converted
+
+
 def _refinement_case_pairs(
     results: Sequence[Mapping[str, Any]], config: Mapping[str, Any]
 ) -> list[dict[str, Any]]:
@@ -790,20 +836,45 @@ def _compare_refinement(
             continue
         left, right = (by_name[names[0]], by_name[names[1]])
         tolerance = dict(pair_spec.get("tolerances", {}))
-        time_tolerance = float(tolerance.get("time", base.get("episode_time_tolerance", 0.08)))
-        penetration_tolerance = float(
-            tolerance.get("penetration", base.get("penetration_tolerance", 0.30))
+        try:
+            time_maximum = float(base.get("t_end", 1.0))
+            node_maximum = int(base.get("n_nodes", 3))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError("refinement base limits must be numeric") from exc
+        if not math.isfinite(time_maximum) or time_maximum <= 0.0 or node_maximum < 1:
+            raise ValidationError("refinement base limits are invalid")
+        time_tolerance = _validated_tolerance(
+            tolerance.get("time", base.get("episode_time_tolerance", 0.08)),
+            "time",
+            time_maximum,
         )
-        residence_tolerance = float(
-            tolerance.get("residence", base.get("residence_tolerance", 0.30))
+        penetration_tolerance = _validated_tolerance(
+            tolerance.get("penetration", base.get("penetration_tolerance", 0.30)),
+            "penetration",
+            1.0,
         )
-        fold_tolerance = float(tolerance.get("fold", base.get("fold_tolerance", 0.50)))
-        fold_count_tolerance = int(tolerance.get("fold_count", base.get("fold_count_tolerance", 1)))
-        remesh_tolerance = int(
-            tolerance.get("remesh_boundaries", base.get("remesh_boundary_tolerance", 1))
+        residence_tolerance = _validated_tolerance(
+            tolerance.get("residence", base.get("residence_tolerance", 0.30)),
+            "residence",
+            1.0,
         )
-        identity_tolerance = float(
-            tolerance.get("identity", base.get("contact_identity_tolerance", 0.08))
+        fold_tolerance = _validated_tolerance(
+            tolerance.get("fold", base.get("fold_tolerance", 0.50)), "fold", 1.0
+        )
+        fold_count_tolerance = _validated_count_tolerance(
+            tolerance.get("fold_count", base.get("fold_count_tolerance", 1)),
+            "fold_count",
+            node_maximum,
+        )
+        remesh_tolerance = _validated_count_tolerance(
+            tolerance.get("remesh_boundaries", base.get("remesh_boundary_tolerance", 1)),
+            "remesh_boundaries",
+            node_maximum,
+        )
+        identity_tolerance = _validated_tolerance(
+            tolerance.get("identity", base.get("contact_identity_tolerance", 0.08)),
+            "identity",
+            1.0,
         )
         left_sig = dict(left["episode_signature"])
         right_sig = dict(right["episode_signature"])

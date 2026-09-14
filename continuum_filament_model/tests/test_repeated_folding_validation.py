@@ -192,6 +192,49 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_case_config({**self._base(), "expected_repeated": "false"})
 
+    def test_refinement_rejects_unbounded_tolerances(self):
+        base = self._base()
+        config = {
+            "base": base,
+            "refinement_pairs": [
+                {
+                    "name": "temporal",
+                    "cases": ["left", "right"],
+                    "tolerances": {"identity": float("inf")},
+                }
+            ],
+        }
+        results = [
+            {
+                "case": name,
+                "episode_signature": {
+                    "contact_observed": False,
+                    "episode_count": 0,
+                    "detachment_count": 0,
+                    "recontact_count": 0,
+                    "feature_change_count": 0,
+                    "pair_change_count": 0,
+                    "censored_episode_count": 0,
+                    "censor_pattern": (),
+                    "event_pattern": (),
+                },
+                "episode_onset_times": [],
+                "episode_sequence": [],
+                "numerical_status": "resolved",
+                "max_penetration_ratio": 0.0,
+                "max_residence_duration": 0.0,
+                "fold_summary": {
+                    "max_fold_count_proxy": 0,
+                    "fold_spacing_proxy": None,
+                    "fold_period_proxy": None,
+                    "max_curvature_concentration": 0.0,
+                },
+            }
+            for name in ("left", "right")
+        ]
+        with self.assertRaises(ValidationError):
+            _compare_refinement(results, config)
+
     def test_long_case_records_c1_episode_metrics_without_legacy_contact(self):
         result = run_case(
             CaseSpec("dynamic", "primary_repeating", {}, expected_contact=True),
@@ -204,6 +247,13 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             "active_continuation", {event["event"] for event in result["episode_sequence"]}
         )
         self.assertIn("max_penetration_ratio", result)
+        self.assertTrue(
+            all(
+                "contact_identity" in record
+                for row in result["metrics_rows"]
+                for record in row["contact_records"]
+            )
+        )
         self.assertIn("fold_period_proxy", result["fold_summary"])
         self.assertTrue(
             all(row["energy_contact_node_legacy"] == 0.0 for row in result["metrics_rows"])
