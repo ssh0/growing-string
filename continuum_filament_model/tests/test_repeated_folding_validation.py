@@ -9,7 +9,9 @@ from pathlib import Path
 from continuum_filament_model.benchmarks.repeated_folding_validation import (
     CaseSpec,
     _compare_refinement,
+    _effective_case,
     _episode_tracker,
+    _initial_state,
     run_benchmark,
     run_case,
     validate_case_config,
@@ -509,6 +511,43 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         self.assertIn("residence_status", refinement[0])
         self.assertIn("fold_status", refinement[0])
         self.assertIn("discretization", refinement[0]["tolerances"])
+
+    def test_shape_sensitivity_keeps_reference_lengths_fixed(self):
+        base = self._base()
+        low = _effective_case(
+            base,
+            CaseSpec(
+                "low",
+                "shape_only_sensitivity",
+                {"amplitude": 0.45},
+                expected_contact=False,
+                population="shape_only_sensitivity",
+            ),
+        )
+        high = _effective_case(
+            base,
+            CaseSpec(
+                "high",
+                "shape_only_sensitivity",
+                {"amplitude": 0.70},
+                expected_contact=False,
+                population="shape_only_sensitivity",
+            ),
+        )
+        self.assertEqual(
+            _initial_state(low).rest_lengths.tolist(), _initial_state(high).rest_lengths.tolist()
+        )
+        with self.assertRaises(ValidationError):
+            _effective_case(
+                base,
+                CaseSpec(
+                    "invalid",
+                    "shape_only_sensitivity",
+                    {"rest_length_factor": 0.8},
+                    expected_contact=False,
+                    population="shape_only_sensitivity",
+                ),
+            )
 
     def test_benchmark_keeps_shape_sensitivity_separate_and_writes_compact_only(self):
         base = {**self._base(), "diameter": 0.1}

@@ -4,7 +4,7 @@
 
 `benchmarks/repeated_folding_validation.py` は、PR #33 で導入した C1 baseline の上に、接触後の複数 episode を観測するための長時間 runner である。C1 の摩擦なし有限径 segment penalty だけを有効にし、摩擦・接着・接触履歴は有効化しない。初期接触 fixture は control として残すが、それだけで実験の折りたたみ再現を主張しない。
 
-既定設定は `benchmarks/configs/repeated_folding_validation.json` で、主ケースは free/free・成長あり・`t_end=2.4` の長時間 run である。時間・空間・接触剛性の refinement を、反復が期待される deterministic population と非接触 control の non-repeating population に分ける。shape-only sensitivity は別 population として出力し、refinement 判定へ混ぜない。
+既定設定は `benchmarks/configs/repeated_folding_validation.json` で、主ケースは free/free・成長あり・`t_end=2.4` の長時間 run である。時間・空間・接触剛性の refinement を、反復が期待される deterministic population と非接触 control の non-repeating population に分ける。shape-only sensitivity は geometry/amplitudeだけを変え、deterministic baselineのrest lengths、EA、EI、drag、initial-energy定義を固定した別 population として出力し、refinement 判定へ混ぜない。
 
 ```bash
 TMP_DIR=$(mktemp -d /tmp/growing-string-repeated-folding.XXXXXX)

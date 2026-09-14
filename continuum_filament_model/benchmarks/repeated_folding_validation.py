@@ -247,20 +247,33 @@ def _effective_case(base: Mapping[str, Any], case: CaseSpec) -> dict[str, Any]:
     if case.population not in {"deterministic", "shape_only_sensitivity"}:
         raise ValidationError(f"unsupported population: {case.population}")
     if case.population == "shape_only_sensitivity":
-        allowed = {"initial_shape", "amplitude", "rest_length_factor"}
+        allowed = {"initial_shape", "amplitude"}
         unexpected = set(case.overrides) - allowed
         if unexpected:
             raise ValidationError(
-                "shape-only sensitivity may vary only initial_shape/amplitude/rest_length_factor: "
+                "shape-only sensitivity may vary only initial_shape/amplitude: "
                 f"{sorted(unexpected)}"
             )
+        config["shape_reference_amplitude"] = float(base["amplitude"])
+        config["shape_reference_initial_shape"] = str(base["initial_shape"])
     return config
 
 
 def _initial_state(config: Mapping[str, Any]) -> FilamentState:
-    """Use the C1 fixture contract; shape sensitivity changes only that fixture."""
+    """Use the C1 fixture contract; shape sensitivity keeps a fixed reference state."""
 
-    return _c1_initial_state(config)
+    state = _c1_initial_state(config)
+    if config.get("population") != "shape_only_sensitivity":
+        return state
+    reference_config = dict(config)
+    reference_config["amplitude"] = config["shape_reference_amplitude"]
+    reference_config["initial_shape"] = config["shape_reference_initial_shape"]
+    reference = _c1_initial_state(reference_config)
+    return FilamentState(
+        state.positions,
+        reference.rest_lengths,
+        segment_lineage=state.segment_lineage,
+    )
 
 
 def _event_counts(simulator: OverdampedGrowingFilament) -> dict[str, int]:
