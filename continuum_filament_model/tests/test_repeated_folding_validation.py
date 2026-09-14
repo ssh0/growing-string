@@ -193,6 +193,10 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             validate_case_config({**self._base(), "expected_contact": "false"})
         with self.assertRaises(ValidationError):
             validate_case_config({**self._base(), "expected_repeated": "false"})
+        with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "length": 10**400})
+        with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "n_nodes": 10**400})
 
     def test_refinement_rejects_unbounded_tolerances(self):
         base = self._base()
@@ -209,6 +213,7 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         results = [
             {
                 "case": name,
+                "effective_config": {},
                 "episode_signature": {
                     "contact_observed": False,
                     "episode_count": 0,
@@ -249,6 +254,42 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             }
             with self.assertRaises(ValidationError):
                 _compare_refinement(results, bounded_config)
+
+        short_results = [
+            {**result, "effective_config": {"t_end": 0.1}} for result in results
+        ]
+        short_config = {
+            "base": {**base, "t_end": 2.4},
+            "refinement_pairs": [
+                {
+                    "name": "temporal",
+                    "cases": ["left", "right"],
+                    "tolerances": {"time": 2.3},
+                }
+            ],
+        }
+        with self.assertRaises(ValidationError):
+            _compare_refinement(short_results, short_config)
+
+    def test_explicit_refinement_rejects_shape_population_mixing(self):
+        results = [
+            {
+                "case": "deterministic",
+                "effective_config": {"population": "deterministic"},
+            },
+            {
+                "case": "shape",
+                "effective_config": {"population": "shape_only_sensitivity"},
+            },
+        ]
+        config = {
+            "base": self._base(),
+            "refinement_pairs": [
+                {"name": "mixed", "cases": ["deterministic", "shape"]}
+            ],
+        }
+        with self.assertRaises(ValidationError):
+            _compare_refinement(results, config)
 
     def test_long_case_records_c1_episode_metrics_without_legacy_contact(self):
         result = run_case(

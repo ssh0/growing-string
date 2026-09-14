@@ -93,7 +93,7 @@ def _write_json(path: Path, value: Any) -> None:
 def _positive(config: Mapping[str, Any], key: str) -> float:
     try:
         value = float(config[key])
-    except (KeyError, TypeError, ValueError) as exc:
+    except (KeyError, OverflowError, TypeError, ValueError) as exc:
         raise ValidationError(f"{key} must be finite") from exc
     if not math.isfinite(value) or value <= 0.0:
         raise ValidationError(f"{key} must be positive")
@@ -114,18 +114,23 @@ def validate_case_config(config: Mapping[str, Any]) -> None:
         _positive(config, key)
     try:
         n_nodes = int(config["n_nodes"])
-    except (KeyError, TypeError, ValueError) as exc:
+        n_nodes_value = float(config["n_nodes"])
+    except (KeyError, OverflowError, TypeError, ValueError) as exc:
         raise ValidationError("n_nodes must be an integer >= 3") from exc
-    if n_nodes < 3 or float(config["n_nodes"]) != n_nodes:
+    if n_nodes < 3 or n_nodes_value != n_nodes:
         raise ValidationError("n_nodes must be an integer >= 3")
     for key in ("growth_rate", "contact_stiffness", "diameter"):
         try:
             value = float(config[key])
-        except (KeyError, TypeError, ValueError) as exc:
+        except (KeyError, OverflowError, TypeError, ValueError) as exc:
             raise ValidationError(f"{key} must be finite") from exc
         if not math.isfinite(value) or value < 0.0:
             raise ValidationError(f"{key} must be non-negative and finite")
-    if not 0.0 < float(config.get("max_displacement_fraction", 0.25)) <= 1.0:
+    try:
+        max_displacement_fraction = float(config.get("max_displacement_fraction", 0.25))
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValidationError("max_displacement_fraction must be in (0, 1]") from exc
+    if not 0.0 < max_displacement_fraction <= 1.0:
         raise ValidationError("max_displacement_fraction must be in (0, 1]")
     if str(config.get("boundary", "free/free")) != "free/free":
         raise ValidationError("boundary must be free/free")
@@ -784,7 +789,21 @@ def _refinement_case_pairs(
 ) -> list[dict[str, Any]]:
     explicit = config.get("refinement_pairs", [])
     if explicit:
-        return [dict(item) for item in explicit if isinstance(item, Mapping)]
+        pairs = [dict(item) for item in explicit if isinstance(item, Mapping)]
+        by_name = {result["case"]: result for result in results}
+        for pair in pairs:
+            names = list(pair.get("cases", []))
+            if len(names) != 2 or any(name not in by_name for name in names):
+                continue
+            populations = {
+                str(by_name[name]["effective_config"].get("population", "deterministic"))
+                for name in names
+            }
+            if populations != {"deterministic"}:
+                raise ValidationError(
+                    "explicit refinement pairs must contain two deterministic cases"
+                )
+        return pairs
     grouped: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
     for result in results:
         effective = result["effective_config"]
@@ -850,12 +869,20 @@ def _compare_refinement(
         left, right = (by_name[names[0]], by_name[names[1]])
         tolerance = dict(pair_spec.get("tolerances", {}))
         try:
-            time_maximum = float(base.get("t_end", 1.0))
+            case_durations = [
+                float(result["effective_config"].get("t_end", base.get("t_end", 1.0)))
+                for result in (left, right)
+            ]
             node_maximum = int(base.get("n_nodes", 3))
-        except (TypeError, ValueError) as exc:
+        except (OverflowError, TypeError, ValueError) as exc:
             raise ValidationError("refinement base limits must be numeric") from exc
-        if not math.isfinite(time_maximum) or time_maximum <= 0.0 or node_maximum < 1:
+        if (
+            not case_durations
+            or not all(math.isfinite(duration) and duration > 0.0 for duration in case_durations)
+            or node_maximum < 1
+        ):
             raise ValidationError("refinement base limits are invalid")
+        time_maximum = max(case_durations)
         time_tolerance = _validated_tolerance(
             tolerance.get("time", base.get("episode_time_tolerance", 0.08)),
             "time",
