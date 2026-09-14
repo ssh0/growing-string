@@ -564,7 +564,16 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
         for key in sorted(old_keys - current_keys):
             old_episode = active[key]
             has_feature_change = any(current_key[0] == key[0] for current_key in current_keys)
-            if has_feature_change:
+            has_pair_change = any(
+                tuple(current[key2]["root_pair"]) == tuple(old_episode["root_pair"])
+                for key2 in current_keys
+            )
+            has_root_continuation = any(
+                key2 in active
+                and tuple(active[key2]["root_pair"]) == tuple(old_episode["root_pair"])
+                for key2 in current_keys
+            )
+            if has_feature_change or (has_pair_change and not has_root_continuation):
                 continue
             episode = active.pop(key)
             close_episode(episode, row, "detachment")
@@ -739,7 +748,7 @@ def _fold_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         count = int(row["fold_count_proxy"])
         if count > previous_count:
             event_times.append(float(row["time"]))
-        previous_count = max(previous_count, count)
+        previous_count = count
     periods = np.diff(event_times).tolist() if len(event_times) >= 2 else []
     return {
         "max_fold_count_proxy": max(int(row["fold_count_proxy"]) for row in rows),
@@ -793,6 +802,8 @@ def _refinement_case_pairs(
         by_name = {result["case"]: result for result in results}
         for pair in pairs:
             names = list(pair.get("cases", []))
+            if len(names) == 2 and names[0] == names[1]:
+                raise ValidationError("explicit refinement pairs require distinct cases")
             if str(pair.get("population", "deterministic")) != "deterministic":
                 raise ValidationError(
                     "explicit refinement pair population must be deterministic"

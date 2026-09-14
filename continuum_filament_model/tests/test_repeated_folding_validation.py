@@ -11,6 +11,7 @@ from continuum_filament_model.benchmarks.repeated_folding_validation import (
     _compare_refinement,
     _effective_case,
     _episode_tracker,
+    _fold_summary,
     _initial_state,
     run_benchmark,
     run_case,
@@ -157,6 +158,31 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         )
         self.assertTrue(tracked["episodes"][0]["censored_at_end"])
         self.assertEqual(tracked["signature"]["censored_episode_count"], 1)
+
+    def test_pair_change_is_recorded_when_root_pair_replaces_contact(self):
+        replacement = self._record(("0", "3"), root_pair=("0", "2"))
+        tracked = _episode_tracker(
+            [
+                self._row(0.0, 0, []),
+                self._row(0.1, 1, [self._record()]),
+                self._row(0.2, 2, [replacement]),
+                self._row(0.3, 3, [replacement]),
+            ],
+            diameter=0.5,
+        )
+        self.assertEqual(tracked["signature"]["pair_change_count"], 1)
+        self.assertNotIn("contact_detachment", {event["event"] for event in tracked["sequence"]})
+
+    def test_fold_period_tracks_repeated_count_increases(self):
+        rows = [
+            {"time": 0.0, "fold_count_proxy": 0, "fold_spacing": None, "curvature_concentration": 1.0},
+            {"time": 0.1, "fold_count_proxy": 1, "fold_spacing": None, "curvature_concentration": 1.0},
+            {"time": 0.2, "fold_count_proxy": 0, "fold_spacing": None, "curvature_concentration": 1.0},
+            {"time": 0.3, "fold_count_proxy": 1, "fold_spacing": None, "curvature_concentration": 1.0},
+        ]
+        summary = _fold_summary(rows)
+        self.assertEqual(summary["fold_event_times"], [0.1, 0.3])
+        self.assertAlmostEqual(summary["fold_period_proxy"], 0.2)
 
     def test_feature_change_back_is_not_recontact(self):
         tracked = _episode_tracker(
@@ -307,6 +333,15 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         }
         with self.assertRaises(ValidationError):
             _compare_refinement(deterministic_results, declared_shape_config)
+
+        duplicate_config = {
+            "base": self._base(),
+            "refinement_pairs": [
+                {"name": "duplicate", "cases": ["left", "left"]}
+            ],
+        }
+        with self.assertRaises(ValidationError):
+            _compare_refinement(deterministic_results, duplicate_config)
 
     def test_long_case_records_c1_episode_metrics_without_legacy_contact(self):
         result = run_case(
