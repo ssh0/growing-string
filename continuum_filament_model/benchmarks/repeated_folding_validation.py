@@ -793,6 +793,10 @@ def _refinement_case_pairs(
         by_name = {result["case"]: result for result in results}
         for pair in pairs:
             names = list(pair.get("cases", []))
+            if str(pair.get("population", "deterministic")) != "deterministic":
+                raise ValidationError(
+                    "explicit refinement pair population must be deterministic"
+                )
             if len(names) != 2 or any(name not in by_name for name in names):
                 continue
             populations = {

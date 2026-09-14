@@ -291,6 +291,23 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             _compare_refinement(results, config)
 
+        deterministic_results = [
+            {"case": name, "effective_config": {"population": "deterministic"}}
+            for name in ("left", "right")
+        ]
+        declared_shape_config = {
+            "base": self._base(),
+            "refinement_pairs": [
+                {
+                    "name": "declared-shape",
+                    "population": "shape_only_sensitivity",
+                    "cases": ["left", "right"],
+                }
+            ],
+        }
+        with self.assertRaises(ValidationError):
+            _compare_refinement(deterministic_results, declared_shape_config)
+
     def test_long_case_records_c1_episode_metrics_without_legacy_contact(self):
         result = run_case(
             CaseSpec("dynamic", "primary_repeating", {}, expected_contact=True),
