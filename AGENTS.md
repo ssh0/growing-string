@@ -303,7 +303,7 @@ READMEの `python proto.py` はルート直下の現状のファイル配置と�
 
 ## 検証の方針
 
-このリポジトリには、標準的なlint設定や、全ディレクトリを対象とするテスト・CI設定は確認できません。`continuum_filament_model/` には既存テストを実行する限定的なGitHub Actions workflowがあります。変更後は、実施したものだけを明示してください。
+Pythonのformatter／lint方針は `PYTHON_QUALITY.md` に定義していますが、対象は変更差分の `continuum_filament_model/` と `scripts/` に限定されます。全ディレクトリを対象とするテスト・CI設定はありません。`continuum_filament_model/` には既存テストを実行する限定的なGitHub Actions workflowがあります。変更後は、実施したものだけを明示してください。
 
 最低限、次を行います。
 

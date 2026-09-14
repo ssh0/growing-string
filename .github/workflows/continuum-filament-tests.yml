@@ -1,4 +1,4 @@
-name: Continuum filament tests
+name: Continuum filament checks
 
 on:
   pull_request:
@@ -6,13 +6,66 @@ on:
       - master
     paths:
       - "continuum_filament_model/**"
+      - "PYTHON_QUALITY.md"
+      - "pyproject.toml"
+      - "requirements-lint.txt"
+      - "scripts/**"
       - ".github/workflows/continuum-filament-tests.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+env:
+  PYTHON_VERSION: "3.11.5"
+
 jobs:
+  formatter:
+    name: formatter (Ruff 0.13.1)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install formatter and lint dependencies
+        run: python -m pip install --disable-pip-version-check --no-input -r requirements-lint.txt
+
+      - name: Check formatter
+        run: python scripts/check_python_quality.py format
+        env:
+          PYTHON_QUALITY_BASE: ${{ github.event.pull_request.base.sha }}
+
+  lint:
+    name: lint (Ruff 0.13.1)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install formatter and lint dependencies
+        run: python -m pip install --disable-pip-version-check --no-input -r requirements-lint.txt
+
+      - name: Check lint
+        run: python scripts/check_python_quality.py lint
+        env:
+          PYTHON_QUALITY_BASE: ${{ github.event.pull_request.base.sha }}
+
   tests:
     name: unittest (Python 3.11.5)
     runs-on: ubuntu-24.04
@@ -24,7 +77,7 @@ jobs:
       - name: Set up Python 3.11.5
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11.5"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install test dependencies
         run: |
