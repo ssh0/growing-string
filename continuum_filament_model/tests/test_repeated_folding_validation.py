@@ -159,6 +159,21 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         self.assertTrue(tracked["episodes"][0]["censored_at_end"])
         self.assertEqual(tracked["signature"]["censored_episode_count"], 1)
 
+    def test_feature_change_closes_unrelated_disappeared_child(self):
+        changed = self._record(feature="interior_interior")
+        sibling = self._record(("0.1", "2.1"), feature="endpoint_endpoint", root_pair=("0", "2"))
+        tracked = _episode_tracker(
+            [
+                self._row(0.0, 0, []),
+                self._row(0.1, 1, [self._record(), sibling]),
+                self._row(0.2, 2, [changed]),
+            ],
+            diameter=0.5,
+        )
+        self.assertEqual(tracked["signature"]["feature_change_count"], 1)
+        self.assertEqual(tracked["signature"]["detachment_count"], 1)
+        self.assertEqual(tracked["episodes"][1]["close_reason"], "detachment")
+
     def test_pair_change_is_recorded_when_root_pair_replaces_contact(self):
         replacement = self._record(("0", "3"), root_pair=("0", "2"))
         tracked = _episode_tracker(
@@ -235,6 +250,8 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             validate_case_config({**self._base(), "expected_contact": "false"})
         with self.assertRaises(ValidationError):
             validate_case_config({**self._base(), "expected_repeated": "false"})
+        with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "max_retries": 1.9})
         with self.assertRaises(ValidationError):
             validate_case_config({**self._base(), "length": 10**400})
         with self.assertRaises(ValidationError):
@@ -358,6 +375,46 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         }
         with self.assertRaises(ValidationError):
             _compare_refinement(deterministic_results, duplicate_config)
+
+        axis_results = [
+            {
+                "case": name,
+                "effective_config": {
+                    "population": "deterministic",
+                    "refinement_axis": "temporal",
+                    "refinement_family": "family",
+                    "dt": 0.02,
+                },
+            }
+            for name in ("left", "right")
+        ]
+        axis_config = {
+            "base": self._base(),
+            "refinement_pairs": [
+                {
+                    "name": "axis-mismatch",
+                    "axis": "spatial",
+                    "family": "family",
+                    "cases": ["left", "right"],
+                }
+            ],
+        }
+        with self.assertRaises(ValidationError):
+            _compare_refinement(axis_results, axis_config)
+
+        same_value_config = {
+            "base": self._base(),
+            "refinement_pairs": [
+                {
+                    "name": "same-axis-value",
+                    "axis": "temporal",
+                    "family": "family",
+                    "cases": ["left", "right"],
+                }
+            ],
+        }
+        with self.assertRaises(ValidationError):
+            _compare_refinement(axis_results, same_value_config)
 
     def test_duplicate_case_names_are_rejected(self):
         config = {
@@ -485,7 +542,12 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             }
             return {
                 "case": name,
-                "effective_config": {},
+                "effective_config": {
+                    "population": "deterministic",
+                    "refinement_axis": "temporal",
+                    "refinement_family": "repeating",
+                    "dt": 0.02 if name == "left" else 0.01,
+                },
                 "episode_signature": result_signature,
                 "episode_onset_times": [0.1, 0.3],
                 "episode_sequence": sequence,

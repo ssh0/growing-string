@@ -132,6 +132,20 @@ def validate_case_config(config: Mapping[str, Any]) -> None:
         raise ValidationError("max_displacement_fraction must be in (0, 1]") from exc
     if not 0.0 < max_displacement_fraction <= 1.0:
         raise ValidationError("max_displacement_fraction must be in (0, 1]")
+    max_retries = config.get("max_retries", 12)
+    if isinstance(max_retries, bool):
+        raise ValidationError("max_retries must be a non-negative integer")
+    try:
+        max_retries_integer = int(max_retries)
+        max_retries_numeric = float(max_retries)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValidationError("max_retries must be a non-negative integer") from exc
+    if (
+        not math.isfinite(max_retries_numeric)
+        or max_retries_numeric != max_retries_integer
+        or max_retries_integer < 0
+    ):
+        raise ValidationError("max_retries must be a non-negative integer")
     if str(config.get("boundary", "free/free")) != "free/free":
         raise ValidationError("boundary must be free/free")
     if bool(config.get("enable_legacy_node_contact", False)):
@@ -580,7 +594,17 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
                 and tuple(active[key2]["root_pair"]) == tuple(old_episode["root_pair"])
                 for key2 in current_keys
             )
-            if has_feature_change or (has_pair_change and not has_root_continuation):
+            old_root_pairs = {
+                current_key[0]
+                for current_key, episode in active.items()
+                if tuple(episode["root_pair"]) == tuple(old_episode["root_pair"])
+            }
+            has_same_pair_current = any(
+                current_key[0] in old_root_pairs for current_key in current_keys
+            )
+            if has_feature_change:
+                continue
+            if has_pair_change and not has_root_continuation and not has_same_pair_current:
                 continue
             episode = active.pop(key)
             close_episode(episode, row, "detachment")
@@ -825,6 +849,40 @@ def _refinement_case_pairs(
                 raise ValidationError(
                     "explicit refinement pairs must contain two deterministic cases"
                 )
+            declared_axis = pair.get("axis")
+            declared_family = pair.get("family")
+            if declared_axis is not None or declared_family is not None:
+                if declared_axis is None or declared_family is None:
+                    raise ValidationError(
+                        "explicit refinement pairs require axis and family together"
+                    )
+                actual_axes = {
+                    by_name[name]["effective_config"].get("refinement_axis") for name in names
+                }
+                actual_families = {
+                    by_name[name]["effective_config"].get("refinement_family")
+                    for name in names
+                }
+                if actual_axes != {str(declared_axis)} or actual_families != {
+                    str(declared_family)
+                }:
+                    raise ValidationError(
+                        "explicit refinement axis/family must match both cases"
+                    )
+                parameter_key = {
+                    "temporal": "dt",
+                    "spatial": "n_nodes",
+                    "contact_stiffness": "contact_stiffness",
+                }.get(str(declared_axis))
+                if parameter_key is None:
+                    raise ValidationError("explicit refinement axis is unsupported")
+                parameter_values = [
+                    by_name[name]["effective_config"].get(parameter_key) for name in names
+                ]
+                if parameter_values[0] == parameter_values[1]:
+                    raise ValidationError(
+                        "explicit refinement cases must differ on the declared axis"
+                    )
         return pairs
     grouped: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
     for result in results:
