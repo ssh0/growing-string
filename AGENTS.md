@@ -257,7 +257,7 @@ triangular_lattice/results/
 
 ### 依存関係・互換性
 
-確認できる範囲では、ルートに `pyproject.toml`、`setup.py`、`setup.cfg`、`requirements.txt`、`environment.yml`、`Makefile` はありません。依存関係は対象スクリプトのimportから確認してください。`continuum_filament_model/` の回帰テストには `.github/workflows/continuum-filament-tests.yml` があり、対象範囲・Python・依存関係の前提は同READMEに記載しています。
+ルートの `pyproject.toml` と `requirements-lint.txt` は、`PYTHON_QUALITY.md` に定義したRuff品質基盤の設定・依存関係です。研究コード全体のパッケージ／依存関係管理用としては、`setup.py`、`setup.cfg`、`requirements.txt`、`environment.yml`、`Makefile` はありません。研究コードの依存関係は対象スクリプトのimportから確認してください。`continuum_filament_model/` の回帰テストには `.github/workflows/continuum-filament-tests.yml` があり、対象範囲・Python・依存関係の前提は同READMEに記載しています。
 
 コードには、Python 2系を想定した構文・APIと、Python 3向けの記述が混在しています。例えば、古い `print` 文、`has_key()`、`iterkeys()` などが残っています。Pythonのバージョンや必要ライブラリを推測して環境手順に追加しないでください。
 
