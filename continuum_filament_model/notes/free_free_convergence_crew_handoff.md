@@ -55,7 +55,7 @@ shape-only を名乗るには、初期参照長（各 segment と総量）、EA�
 
 ## 比較を壊す二つの落とし穴
 
-1. `t_end` が requested `dt` の全ての整数倍でない場合、solver の最後の試行は `min(requested_dt, t_end - time)` という effective dt になる。requested 値のラベルだけで refinement を比較せず、accepted dt の値集合と実際の終了時刻を確認する。共通の時間 horizon と有効刻みを設計できない run は比較不能または `numerically-unresolved` とする。
+1. `t_end` が requested `dt` の全ての整数倍でない場合、solver が最後の区間へ渡す初回の requested dt は `min(requested_dt, t_end - time)` になる。その試行が棄却されて retry される場合、実際の accepted dt はさらに半分になり得る。requested 値のラベルだけで refinement を比較せず、accepted dt の値集合、retry/rejection の event log、実際の終了時刻を確認する。共通の時間 horizon と有効刻みを設計できない run は比較不能または `numerically-unresolved` とする。
 2. run 名は population・axis をまたいで一意でなければならない。重複名は `_runs/<run_name>` の上書き、別条件の取り違え、manifest/hash の混在を起こす。生成前に全 run 名を検査し、`<representative>__temporal_###`、`<representative>__spatial_n###`、`control__...`、`contrast__...`、`sensitivity__...` のように衝突しない名前を使う。古い一時ディレクトリを再利用しない。
 
 ## 再開時の最短手順
