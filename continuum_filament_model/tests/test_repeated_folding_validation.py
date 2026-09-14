@@ -116,6 +116,22 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         self.assertEqual(tracked["signature"]["pair_change_count"], 0)
         self.assertNotIn("pair_change", {event["event"] for event in tracked["sequence"]})
 
+    def test_one_to_many_contact_closes_disappeared_child_and_recontacts(self):
+        child = self._record(("0.1", "2.1"), root_pair=("0", "2"))
+        tracked = _episode_tracker(
+            [
+                self._row(0.0, 0, []),
+                self._row(0.1, 1, [self._record()]),
+                self._row(0.2, 2, [self._record(), child]),
+                self._row(0.3, 3, [child]),
+                self._row(0.4, 4, [self._record(), child]),
+            ],
+            diameter=0.5,
+        )
+        self.assertEqual(tracked["signature"]["detachment_count"], 1)
+        self.assertEqual(tracked["signature"]["recontact_count"], 1)
+        self.assertEqual(tracked["signature"]["pair_change_count"], 0)
+
     def test_remesh_boundary_resets_detached_contact_identity(self):
         tracked = _episode_tracker(
             [

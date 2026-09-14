@@ -28,7 +28,7 @@ runner は軌跡配列・動画を保存しない。`summary.csv`、`metrics.csv
 - `pair_change`
 - `remesh_boundary`
 
-`summary.json` / `suite.json` の `episodes` には onset/detachment の raw 時刻・step・node 数、滞在時間、censor 状態、pair/feature、再メッシュ境界、penetration、tangential slip を保存する。再メッシュ前後は接触履歴として接続せず、`remesh_boundary` で分割する。lineage は分割祖先を追う診断 ID であり、物質 IDや履歴依存接触則ではない。`evidence_classification` は単一episodeの `single-proxy/contact` と、2 episode以上かつ実接触離脱後の再接触を含む `repeated-folding` を分離する。`expected_repeated` のcaseで反復条件を満たさない場合は `repeated_folding_not_observed` として数値未解決にする。
+`summary.json` / `suite.json` の `episodes` には onset/detachment の raw 時刻・step・node 数、滞在時間、censor 状態、pair/feature、再メッシュ境界、penetration、tangential slip を保存する。再メッシュ前後は接触履歴として接続せず、`remesh_boundary` で分割する。lineage は分割祖先を追う診断 ID であり、物質 IDや履歴依存接触則ではない。同じ root-pair に子segment接触が複数ある場合も、current stateに同じpair/featureが残る接触だけを継続し、消えた子接触は離脱として閉じる。`evidence_classification` は単一episodeの `single-proxy/contact` と、2 episode以上かつ実接触離脱後の再接触を含む `repeated-folding` を分離する。`expected_repeated` のcaseで反復条件を満たさない場合は `repeated_folding_not_observed` として数値未解決にする。
 
 同じ episode の accepted state 間で最近接点の相対変位を接線方向へ射影し、`relative_tangential_slip` を積算する。これは診断値であり、摩擦力や摩擦散逸を追加しない。finite penalty の `penetration` は有限で、剛性・時間刻み依存のため hard non-penetration の証明ではない。
 
