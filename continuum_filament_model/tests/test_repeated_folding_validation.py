@@ -234,6 +234,18 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         ]
         with self.assertRaises(ValidationError):
             _compare_refinement(results, config)
+        for tolerance in (
+            {"identity": 1.0},
+            {"time": base["t_end"]},
+        ):
+            bounded_config = {
+                "base": base,
+                "refinement_pairs": [
+                    {"name": "temporal", "cases": ["left", "right"], "tolerances": tolerance}
+                ],
+            }
+            with self.assertRaises(ValidationError):
+                _compare_refinement(results, bounded_config)
 
     def test_long_case_records_c1_episode_metrics_without_legacy_contact(self):
         result = run_case(

@@ -748,7 +748,7 @@ def _validated_tolerance(value: Any, key: str, maximum: float) -> float:
         converted = float(value)
     except (TypeError, ValueError) as exc:
         raise ValidationError(f"{key} tolerance must be finite and non-negative") from exc
-    if not math.isfinite(converted) or converted < 0.0 or converted > maximum:
+    if not math.isfinite(converted) or converted < 0.0 or converted >= maximum:
         raise ValidationError(f"{key} tolerance is outside the allowed range")
     return converted
 
