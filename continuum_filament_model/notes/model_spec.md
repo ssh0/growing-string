@@ -154,7 +154,7 @@ w_{N-1} = a_{N-2} / 2
 penetration を記録する幾何診断であり、イベントを記録する操作自体が力を追加するわけではない。一方、
 `contact_stiffness > 0` かつ `diameter > 0` の力学計算では、同じ `nonlocal_segment_contacts()` の幾何を
 参照して、`energy_components()` に有限径線分 penalty エネルギーを加え、`forces()` に法線反発力を
-4端点へ双線形 scatter する。既存互換の非隣接節点 penalty も加算されるため、イベント記録（診断）と
+4端点へ双線形 scatter する。`enable_legacy_node_contact=True` の互換モードでは既存の非隣接節点 penalty も加算されるが、C1 では無効化する。イベント記録（診断）と
 接触力・接触エネルギーの計算（力学応答）は別の処理だが、同じ有限径幾何契約を共有する。
 
 ## 成長

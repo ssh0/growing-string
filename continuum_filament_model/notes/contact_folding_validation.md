@@ -4,7 +4,7 @@
 
 free/free 非接触成長座屈の収束作業に続き、摩擦なし・接着なし・接触履歴なしの有限径 segment penalty を C1 baseline として検証する。実装入口は `benchmarks/contact_folding_validation.py`、設定は `benchmarks/configs/contact_folding_baseline.json` である。
 
-このユニットの主動的ケースは、初期には有限径接触していない free/free フィラメントを、成長・過渡緩和させて接触へ至らせる。初期 U 字接触は geometry/force control であり、実験の折りたたみを再現したものとは扱わない。centerline だけから径を推定しない。`img/gray5.mp4` などの確認できない、censor 済み、または接触 lineage/幅が検証できない観測は、input-QC と探索的な図示に限定する。
+このユニットの主動的ケースとその時間・空間・接触剛性 refinement は、初期には有限径接触していない free/free フィラメントを、成長・過渡緩和させて接触へ至らせる。初期に active pair がある、または初期 gap が負の動的ケースは `initial_contact_violation` として `numerically-unresolved` に分類し、初期 U 字接触は別の geometry/force control として扱う。初期接触 fixture だけで実験の折りたたみを再現したとは扱わない。centerline だけから径を推定しない。`img/gray5.mp4` などの確認できない、censor 済み、または接触 lineage/幅が検証できない観測は、input-QC と探索的な図示に限定する。
 
 ## C1 の定義
 
@@ -54,7 +54,7 @@ config には次の3 refinement を含める。
 
 - C1 ケースの manifest で legacy node contact、friction、adhesion、history が無効と確認できる。
 - segment force の有限差分勾配、作用反作用、剛体変換、交差/CCD guard、初期 crossing 拒否が既存 test として維持される。
-- dynamic primary case は non-contact から contact へ到達するか、到達しない場合は期待条件と理由を `numerically-unresolved` として残す。初期接触 fixtureだけで合格にしない。
+- dynamic primary case と各 refinement は、active pair がなく初期 gap が非負の状態から開始する。接触へ到達しない場合は期待条件と理由を、初期接触があれば `initial_contact_violation` を含めて `numerically-unresolved` として残す。初期接触 fixtureだけで合格にしない。
 - onset、active pair/feature、gap、penetration、normal、force/work、residence、slip、detachment、endpoint motion、curvature concentration、fold spacing/count proxy が compact output に現れる。
 - 時間・空間・接触剛性 refinement の各結果と、requested/accepted `dt` の差が保存される。
 - finite penalty の結果を hard non-penetration proof と報告しない。

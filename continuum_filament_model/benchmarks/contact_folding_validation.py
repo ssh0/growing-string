@@ -625,9 +625,7 @@ def run_case(
         initial, float(config["diameter"]), float(config["contact_stiffness"])
     )
     initial_contacts = nonlocal_segment_contacts(initial.positions, float(config["diameter"]))
-    initial_min_gap = min(
-        (float(item.gap) for item in initial_contacts), default=float("inf")
-    )
+    initial_min_gap = min((float(item.gap) for item in initial_contacts), default=float("inf"))
     initial_contact_violation = bool(initial_active) or initial_min_gap < 0.0
     initial_contact_control = case.group == "initial_contact_control"
     params = ModelParameters(
@@ -737,7 +735,9 @@ def run_case(
         "group": case.group,
         "expected_contact": expected,
         "effective_config": config,
-        "initial_condition": "initial-contact-control" if initial_contact_control else "non-contact-required",
+        "initial_condition": "initial-contact-control"
+        if initial_contact_control
+        else "non-contact-required",
         "initial_active_contact_pairs": len(initial_active),
         "initial_min_gap": None if not math.isfinite(initial_min_gap) else initial_min_gap,
         "classification": (

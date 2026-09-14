@@ -205,7 +205,7 @@ python continuum_filament_model/benchmarks/free_free_convergence_gate.py \
 
 ## C1：free/free 成長–接触–折りたたみ baseline
 
-free/free 非接触成長座屈の収束後段階として、摩擦なし・接着なし・接触履歴なしの有限径 segment penalty を検証する入口は `benchmarks/contact_folding_validation.py` です。C1 ケースでは `enable_legacy_node_contact=false` を使い、旧来の node penalty を別 provenance として無効化します。初期 U 字接触は geometry/force control、主動的ケースは初期非接触から成長して接触するケースです。実験の折りたたみ再現、径の推定、有限 penalty による hard non-penetration は主張しません。
+free/free 非接触成長座屈の収束後段階として、摩擦なし・接着なし・接触履歴なしの有限径 segment penalty を検証する入口は `benchmarks/contact_folding_validation.py` です。C1 ケースでは `enable_legacy_node_contact=false` を使い、旧来の node penalty を別 provenance として無効化します。初期 U 字接触は geometry/force control、主動的ケースとその refinement は初期非接触から成長して接触するケースです。動的ケースの初期接触は `initial_contact_violation` として未解決に残します。実験の折りたたみ再現、径の推定、有限 penalty による hard non-penetration は主張しません。
 
 ```bash
 TMP_DIR=$(mktemp -d /tmp/growing-string-contact-folding.XXXXXX)
