@@ -186,6 +186,12 @@ def _defaults() -> dict[str, Any]:
     }
 
 
+def _ensure_unique_case_names(cases: Sequence[CaseSpec]) -> None:
+    names = [case.name for case in cases]
+    if len(names) != len(set(names)):
+        raise ValidationError("case names must be unique")
+
+
 def load_config(path: Path) -> dict[str, Any]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, Mapping):
@@ -224,6 +230,7 @@ def load_config(path: Path) -> dict[str, Any]:
                 expected_repeated,
             )
         )
+    _ensure_unique_case_names(cases)
     return {
         "schema_version": str(raw.get("schema_version", SCHEMA_VERSION)),
         "base": base,
@@ -629,16 +636,16 @@ def _episode_tracker(rows: Sequence[Mapping[str, Any]], diameter: float) -> dict
                 detached_keys.discard(old_key)
                 active.pop(old_key, None)
             elif same_root:
-                old = same_root[0]
-                close_episode(old, row, "pair_change")
-                sequence.append(
-                    _episode_event(
-                        "pair_change", row, old, reason="root_pair_active_with_new_segment_pair"
+                for old in same_root:
+                    close_episode(old, row, "pair_change")
+                    sequence.append(
+                        _episode_event(
+                            "pair_change", row, old, reason="root_pair_active_with_new_segment_pair"
+                        )
                     )
-                )
-                old_key = (tuple(old["pair"]), str(old["feature"]))
-                detached_keys.discard(old_key)
-                active.pop(old_key, None)
+                    old_key = (tuple(old["pair"]), str(old["feature"]))
+                    detached_keys.discard(old_key)
+                    active.pop(old_key, None)
 
             episode_id = len(episodes)
             episode = {
@@ -1393,6 +1400,7 @@ def run_benchmark(
         )
         for item in raw_cases
     ]
+    _ensure_unique_case_names(cases)
     output.mkdir(parents=True, exist_ok=True)
     revision = git_revision if git_revision is not None else detect_git_revision(Path.cwd())
     results = [run_case(case, config["base"], git_revision=revision) for case in cases]

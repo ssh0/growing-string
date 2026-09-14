@@ -173,6 +173,22 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         self.assertEqual(tracked["signature"]["pair_change_count"], 1)
         self.assertNotIn("contact_detachment", {event["event"] for event in tracked["sequence"]})
 
+    def test_multiple_root_children_close_together_on_root_replacement(self):
+        replacement = self._record(("0.2", "2.2"), root_pair=("0", "2"))
+        child = self._record(("0.1", "2.1"), root_pair=("0", "2"))
+        tracked = _episode_tracker(
+            [
+                self._row(0.0, 0, []),
+                self._row(0.1, 1, [self._record()]),
+                self._row(0.2, 2, [self._record(), child]),
+                self._row(0.3, 3, [replacement]),
+                self._row(0.4, 4, [replacement]),
+            ],
+            diameter=0.5,
+        )
+        self.assertEqual(tracked["signature"]["pair_change_count"], 2)
+        self.assertNotIn("contact_detachment", {event["event"] for event in tracked["sequence"]})
+
     def test_fold_period_tracks_repeated_count_increases(self):
         rows = [
             {"time": 0.0, "fold_count_proxy": 0, "fold_spacing": None, "curvature_concentration": 1.0},
@@ -342,6 +358,18 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         }
         with self.assertRaises(ValidationError):
             _compare_refinement(deterministic_results, duplicate_config)
+
+    def test_duplicate_case_names_are_rejected(self):
+        config = {
+            "base": self._base(),
+            "cases": [
+                {"name": "duplicate", "expected_contact": False},
+                {"name": "duplicate", "expected_contact": False},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValidationError):
+                run_benchmark(config, Path(directory))
 
     def test_long_case_records_c1_episode_metrics_without_legacy_contact(self):
         result = run_case(
