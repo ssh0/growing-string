@@ -2,6 +2,15 @@
 
 この文書は、free/free 収束ゲートを再実行・再開する crew 向けの作業契約である。汎用的なソフトウェア開発手順ではなく、このリポジトリの非接触 free/free・一様な参照長成長の収束監査に限る。
 
+## 適用前提
+
+この手順は、PR #29（free/free mechanics convergence gate）が取り込まれた current master を基準にする。handoff 文書だけを先に適用した古い HEAD では実行しない。再開対象の同じ HEAD に、次の gate 固有ファイルが存在することを確認する。いずれかが無ければ、PR #29 を含む current master から disposable worktree を作り直し、stage2 など別の実装・設定・テストで代用しない。
+
+- `continuum_filament_model/notes/free_free_convergence_gate.md`
+- `continuum_filament_model/benchmarks/free_free_convergence_gate.py`
+- `continuum_filament_model/benchmarks/configs/free_free_convergence_gate.json`
+- `continuum_filament_model/tests/test_free_free_convergence_gate.py`
+
 ## 最初に読む正本
 
 次の順で確認する。数値結果のファイル名や過去の compact 値だけから条件を復元しない。
@@ -10,7 +19,7 @@
 2. `continuum_filament_model/notes/validation_plan.md` — 数値・力学検証の境界と受入条件。
 3. `continuum_filament_model/notes/free_end_dynamics.md` — free/free 端点 force、moment、shear の符号と診断契約。
 4. `continuum_filament_model/notes/free_free_convergence_gate.md` — このゲートの population、観測量、reason code、収束判定。
-5. `continuum_filament_model/benchmarks/free_free_convergence_gate.py` と `benchmarks/configs/free_free_convergence_gate.json` — 実行契約の実装と設定。
+5. `continuum_filament_model/benchmarks/free_free_convergence_gate.py`、`continuum_filament_model/benchmarks/configs/free_free_convergence_gate.json`、`continuum_filament_model/tests/test_free_free_convergence_gate.py` — 実行契約の実装・設定・focused test。
 
 ## compact 成果物の広い契約
 
@@ -51,7 +60,7 @@ shape-only を名乗るには、初期参照長（各 segment と総量）、EA�
 
 ## 再開時の最短手順
 
-1. **隔離と status**：`pwd -P` と `git rev-parse --show-toplevel` が同じ disposable worktree を指すこと、`git status --short --branch` が想定どおりであることを確認する。`no-mistakes axi status` で自分の branch の実行状態も確認する。
+1. **隔離と status**：`pwd -P` と `git rev-parse --show-toplevel` が同じ disposable worktree を指すこと、`git status --short --branch` が想定どおりであることを確認する。上記4つの gate 固有ファイルが同じ HEAD に存在することも確認し、無ければ PR #29 を含む current master から作り直す。`no-mistakes axi status` で自分の branch の実行状態も確認する。
 2. **docs**：上記の正本（特に gate note、config、free-end note）を読み、今回の scope が free/free・非接触のままか確認する。
 3. **no-mistakes の診断**：`no-mistakes doctor`、続けて `no-mistakes axi status`。他 branch の実行を停止・再起動・横取りしない。
 4. **focused tests**：`PYTHONPATH=continuum_filament_model/src python -m unittest continuum_filament_model.tests.test_free_free_convergence_gate continuum_filament_model.tests.test_free_end_dynamics -v`。
