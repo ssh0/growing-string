@@ -272,27 +272,47 @@ def grow_reference_lengths(rest_lengths: Array, growth_rate: float, dt: float) -
     return result
 
 
-def remesh(positions: Array, rest_lengths: Array, a_max: float) -> Tuple[Array, Array]:
-    """Split long reference segments at their geometric midpoint.
+def _remesh_impl(
+    positions: Array,
+    rest_lengths: Array,
+    a_max: float,
+    segment_lineage: Optional[Tuple[str, ...]] = None,
+    *,
+    retain_lineage: bool = False,
+) -> Tuple[Array, Array, Optional[Tuple[str, ...]]]:
+    """Validate and split reference segments, optionally retaining lineage."""
 
-    This operation is numerical remeshing, not physical material addition.
-    It preserves total reference length and the endpoints.
-    """
-
-    if a_max <= 0.0:
-        raise ModelError("a_max must be positive")
-    p = np.asarray(positions, dtype=float).copy()
-    a = np.asarray(rest_lengths, dtype=float).copy()
+    try:
+        max_length = float(a_max)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ModelError(f"a_max must be finite and positive: {a_max!r}") from exc
+    if not np.isfinite(max_length) or max_length <= 0.0:
+        raise ModelError("a_max must be finite and positive")
+    try:
+        p = np.asarray(positions, dtype=float).copy()
+        a = np.asarray(rest_lengths, dtype=float).copy()
+    except (TypeError, ValueError) as exc:
+        raise ModelError("invalid remeshing inputs") from exc
     if p.ndim != 2 or p.shape[1] != 2 or a.shape != (len(p) - 1,):
         raise ModelError("invalid remeshing shapes")
     if not np.isfinite(p).all() or not np.isfinite(a).all():
         raise ModelError("remeshing inputs contain non-finite values")
 
+    lineage: Optional[list[str]]
+    if not retain_lineage:
+        lineage = None
+    elif segment_lineage is None:
+        lineage = [str(index) for index in range(len(a))]
+    else:
+        lineage = [str(value) for value in segment_lineage]
+        if len(lineage) != len(a) or len(set(lineage)) != len(lineage):
+            raise ModelError("segment_lineage must uniquely label every segment")
+
     # A segment can require several splits when a deliberately small a_max is
     # used. The loop is finite because every split halves the reference length.
     i = 0
     while i < len(a):
-        if a[i] <= a_max:
+        if a[i] <= max_length:
             i += 1
             continue
         midpoint = 0.5 * (p[i] + p[i + 1])
@@ -300,7 +320,26 @@ def remesh(positions: Array, rest_lengths: Array, a_max: float) -> Tuple[Array, 
         p = np.insert(p, i + 1, midpoint, axis=0)
         a[i] = old / 2.0
         a = np.insert(a, i + 1, old / 2.0)
+        if lineage is not None:
+            parent = lineage[i]
+            lineage[i] = parent + ".0"
+            lineage.insert(i + 1, parent + ".1")
         # Revisit the left child; either child may still exceed a_max.
+    if lineage is not None:
+        if len(set(lineage)) != len(lineage):
+            raise ModelError("remeshing produced duplicate segment lineage labels")
+        return p, a, tuple(lineage)
+    return p, a, None
+
+
+def remesh(positions: Array, rest_lengths: Array, a_max: float) -> Tuple[Array, Array]:
+    """Split long reference segments at their geometric midpoint.
+
+    This operation is numerical remeshing, not physical material addition.
+    It preserves total reference length and the endpoints.
+    """
+
+    p, a, _ = _remesh_impl(positions, rest_lengths, a_max)
     return p, a
 
 
@@ -317,30 +356,12 @@ def remesh_with_lineage(
     diagnostic lineage, not persistent material IDs or a contact-history law.
     """
 
-    p = np.asarray(positions, dtype=float).copy()
-    a = np.asarray(rest_lengths, dtype=float).copy()
-    if segment_lineage is None:
-        lineage = [str(index) for index in range(len(a))]
-    else:
-        lineage = [str(value) for value in segment_lineage]
-    if len(lineage) != len(a) or len(set(lineage)) != len(lineage):
-        raise ModelError("segment_lineage must uniquely label every segment")
-    # Re-run the historical split decisions while retaining labels.
-    # ``remesh`` is intentionally kept as the historical two-array API.
-    i = 0
-    while i < len(a):
-        if a[i] <= a_max:
-            i += 1
-            continue
-        midpoint = 0.5 * (p[i] + p[i + 1])
-        old = a[i]
-        parent = lineage[i]
-        p = np.insert(p, i + 1, midpoint, axis=0)
-        a[i] = old / 2.0
-        a = np.insert(a, i + 1, old / 2.0)
-        lineage[i] = parent + ".0"
-        lineage.insert(i + 1, parent + ".1")
-    return p, a, tuple(lineage)
+    p, a, lineage = _remesh_impl(
+        positions, rest_lengths, a_max, segment_lineage, retain_lineage=True
+    )
+    if lineage is None:
+        raise ModelError("remeshing did not produce segment lineage")
+    return p, a, lineage
 
 
 EVENT_SCHEMA_VERSION = "continuum-filament-events-1"

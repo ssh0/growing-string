@@ -13,6 +13,7 @@ from continuum_filament_model.benchmarks.contact_folding_validation import (
 )
 from growing_filament.model import (
     FilamentState,
+    ModelError,
     ModelParameters,
     OverdampedGrowingFilament,
     remesh_with_lineage,
@@ -38,8 +39,6 @@ class ContactFoldingValidationTests(unittest.TestCase):
             "amplitude": 0.55,
             "initial_shape": "sine",
             "boundary": "free/free",
-            "fixed_left": False,
-            "fixed_right": False,
             "reject_crossing": True,
             "enable_legacy_node_contact": False,
             "dt_min": 1.0e-8,
@@ -86,6 +85,30 @@ class ContactFoldingValidationTests(unittest.TestCase):
         self.assertEqual(lineage[-1], "right")
         self.assertEqual(len(set(lineage)), len(lineage))
         np.testing.assert_allclose(refined_positions[[0, -1]], positions[[0, -1]])
+
+    def test_lineage_remeshing_rejects_invalid_limits_and_colliding_descendants(self):
+        positions = np.asarray([[0.0, 0.0], [4.0, 0.0], [5.0, 0.0]])
+        rest = np.asarray([4.0, 1.0])
+        with self.assertRaises(ModelError):
+            remesh_with_lineage(positions, rest, ("left", "right"), a_max=-1.0)
+        with self.assertRaises(ModelError):
+            remesh_with_lineage(positions, rest, ("x", "x.0"), a_max=2.0)
+
+    def test_dynamic_case_with_initial_contact_is_unresolved(self):
+        result = run_case(
+            CaseSpec(
+                "invalid_dynamic_fixture",
+                "primary",
+                {"initial_shape": "u"},
+                expected_contact=True,
+            ),
+            self._base(),
+            git_revision="test-revision",
+        )
+        self.assertEqual(result["initial_condition"], "non-contact-required")
+        self.assertGreater(result["initial_active_contact_pairs"], 0)
+        self.assertIn("initial_contact_violation", result["numerical_reason_codes"])
+        self.assertEqual(result["numerical_status"], "numerically-unresolved")
 
     def test_dynamic_case_records_c1_observables_and_requested_vs_accepted_dt(self):
         base = self._base()

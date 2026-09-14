@@ -16,8 +16,6 @@
     "amplitude": 0.55,
     "initial_shape": "sine",
     "boundary": "free/free",
-    "fixed_left": false,
-    "fixed_right": false,
     "reject_crossing": true,
     "enable_legacy_node_contact": false,
     "dt_min": 1.0e-8,

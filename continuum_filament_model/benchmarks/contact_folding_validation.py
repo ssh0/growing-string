@@ -123,10 +123,10 @@ def validate_case_config(config: Mapping[str, Any]) -> None:
     if bool(config.get("reject_crossing", True)) is not True:
         raise ValidationError("reject_crossing=true is required")
     boundary = str(config.get("boundary", "free/free"))
-    if boundary not in {"free/free", "fixed/fixed"}:
-        raise ValidationError("boundary must be free/free or fixed/fixed")
-    if str(config.get("initial_shape", "sine")) not in {"sine", "u", "hairpin"}:
-        raise ValidationError("initial_shape must be sine, u, or hairpin")
+    if boundary != "free/free":
+        raise ValidationError("boundary must be free/free")
+    if str(config.get("initial_shape", "sine")) not in {"sine", "u"}:
+        raise ValidationError("initial_shape must be sine or u")
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -149,8 +149,6 @@ def load_config(path: Path) -> dict[str, Any]:
         "amplitude": 0.55,
         "initial_shape": "sine",
         "boundary": "free/free",
-        "fixed_left": False,
-        "fixed_right": False,
         "reject_crossing": True,
         "enable_legacy_node_contact": False,
         "dt_min": 1.0e-10,
@@ -208,11 +206,6 @@ def initial_state(config: Mapping[str, Any]) -> FilamentState:
         radius = length / np.pi
         theta = np.linspace(np.pi, 0.0, n_nodes)
         positions = np.column_stack((radius * np.cos(theta), -radius * np.sin(theta)))
-    elif shape == "hairpin":
-        # A smooth, open hairpin.  Its two arms are separated by ``2*amplitude``.
-        x = length * (u - 0.5)
-        y = amplitude * (1.0 - np.cos(2.0 * np.pi * u)) / 2.0
-        positions = np.column_stack((x, y))
     else:
         positions = np.column_stack((length * u, amplitude * np.sin(2.0 * np.pi * u)))
     geometric_lengths = np.linalg.norm(np.diff(positions, axis=0), axis=1)
@@ -317,7 +310,8 @@ def _lineage_contact_observables(
     active: Sequence[Mapping[str, Any]],
     previous_active: Sequence[Mapping[str, Any]],
     dt: float,
-) -> dict[str, Any]:
+    episode_durations: Mapping[tuple[str, str], float],
+) -> tuple[dict[str, Any], dict[tuple[str, str], float]]:
     previous_by_pair = {tuple(item["pair"]): item for item in previous_active}
     current_pairs = {tuple(item["pair"]) for item in active}
     previous_pairs = set(previous_by_pair)
@@ -325,41 +319,59 @@ def _lineage_contact_observables(
     detached = (
         [] if remesh_transition else [list(pair) for pair in sorted(previous_pairs - current_pairs)]
     )
-    residence = 0.0
+    next_episode_durations: dict[tuple[str, str], float] = {}
+    residence_step = 0.0
     slip_step = 0.0
     work_step = 0.0
     lineage_resets = 0
     for item in active:
         pair = tuple(item["pair"])
         old = previous_by_pair.get(pair)
-        if old is None or previous is None or remesh_transition:
+        continuing = (
+            old is not None
+            and previous is not None
+            and not remesh_transition
+            and tuple(old["root_pair"]) == tuple(item["root_pair"])
+            and old["feature"] == item["feature"]
+        )
+        if not continuing:
             if remesh_transition and tuple(item["root_pair"]) in {
                 tuple(value["root_pair"]) for value in previous_active
             }:
                 lineage_resets += 1
-            continue
-        residence += max(dt, 0.0)
-        previous_relative = np.asarray(old["point_i"], dtype=float) - np.asarray(
-            old["point_j"], dtype=float
-        )
-        current_relative = np.asarray(item["point_i"], dtype=float) - np.asarray(
-            item["point_j"], dtype=float
-        )
-        normal = (
-            np.asarray(item["normal"], dtype=float) if item["normal"] is not None else np.zeros(2)
-        )
-        tangent = np.asarray([-normal[1], normal[0]])
-        relative_delta = current_relative - previous_relative
-        slip_step += abs(float(np.dot(relative_delta, tangent)))
-        work_step += float(np.dot(np.asarray(item["force_vector"], dtype=float), relative_delta))
-    return {
-        "contact_residence_step": residence,
-        "relative_tangential_slip_step": slip_step,
-        "contact_work_step": work_step,
-        "detached_pairs": detached,
-        "lineage_reset_count": lineage_resets,
-        "remesh_contact_transition": remesh_transition,
-    }
+        else:
+            duration = float(episode_durations.get(pair, 0.0)) + max(dt, 0.0)
+            next_episode_durations[pair] = duration
+            residence_step = max(residence_step, max(dt, 0.0))
+            previous_relative = np.asarray(old["point_i"], dtype=float) - np.asarray(
+                old["point_j"], dtype=float
+            )
+            current_relative = np.asarray(item["point_i"], dtype=float) - np.asarray(
+                item["point_j"], dtype=float
+            )
+            normal = (
+                np.asarray(item["normal"], dtype=float)
+                if item["normal"] is not None
+                else np.zeros(2)
+            )
+            tangent = np.asarray([-normal[1], normal[0]])
+            relative_delta = current_relative - previous_relative
+            slip_step += abs(float(np.dot(relative_delta, tangent)))
+            work_step += float(
+                np.dot(np.asarray(item["force_vector"], dtype=float), relative_delta)
+            )
+    return (
+        {
+            "contact_residence_step": residence_step,
+            "contact_residence_time": max(next_episode_durations.values(), default=0.0),
+            "relative_tangential_slip_step": slip_step,
+            "contact_work_step": work_step,
+            "detached_pairs": detached,
+            "lineage_reset_count": lineage_resets,
+            "remesh_contact_transition": remesh_transition,
+        },
+        next_episode_durations,
+    )
 
 
 def _energy_total(components: Mapping[str, float]) -> float:
@@ -373,7 +385,7 @@ def _metrics_rows(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     previous_active: list[dict[str, Any]] = []
-    cumulative_residence = 0.0
+    episode_durations: dict[tuple[str, str], float] = {}
     cumulative_slip = 0.0
     cumulative_work = 0.0
     initial = trajectory[0]
@@ -384,8 +396,9 @@ def _metrics_rows(
         active, crossings = _pair_records(
             state, float(config["diameter"]), float(config["contact_stiffness"])
         )
-        lineage_obs = _lineage_contact_observables(state, previous, active, previous_active, dt)
-        cumulative_residence += float(lineage_obs["contact_residence_step"])
+        lineage_obs, episode_durations = _lineage_contact_observables(
+            state, previous, active, previous_active, dt, episode_durations
+        )
         cumulative_slip += float(lineage_obs["relative_tangential_slip_step"])
         cumulative_work += float(lineage_obs["contact_work_step"])
         root_pairs = {tuple(item["root_pair"]) for item in active}
@@ -432,7 +445,7 @@ def _metrics_rows(
                 "contact_work_step": float(lineage_obs["contact_work_step"]),
                 "contact_work": cumulative_work,
                 "contact_residence_step": float(lineage_obs["contact_residence_step"]),
-                "contact_residence_time": cumulative_residence,
+                "contact_residence_time": float(lineage_obs["contact_residence_time"]),
                 "relative_tangential_slip_step": float(
                     lineage_obs["relative_tangential_slip_step"]
                 ),
@@ -474,6 +487,58 @@ def _onset(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _contact_sequence(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Record contact episode onsets in temporal order."""
+
+    previous: dict[tuple[str, str], tuple[tuple[str, str], str, int]] = {}
+    next_episode: dict[tuple[str, str], int] = {}
+    sequence: list[dict[str, Any]] = []
+    for row in rows:
+        current: dict[tuple[str, str], tuple[tuple[str, str], str, int]] = {}
+        records = sorted(
+            row["contact_records"],
+            key=lambda item: (tuple(item["pair"]), str(item["feature"])),
+        )
+        for item in records:
+            pair = tuple(item["pair"])
+            root_pair = tuple(item["root_pair"])
+            feature = str(item["feature"])
+            old = previous.get(pair)
+            continuing = old is not None and old[:2] == (root_pair, feature)
+            if continuing:
+                episode = old[2]
+            else:
+                episode = next_episode.get(pair, -1) + 1
+                next_episode[pair] = episode
+                sequence.append(
+                    {
+                        "time": float(row["time"]),
+                        "step": int(row["step"]),
+                        "pair": list(pair),
+                        "root_pair": list(root_pair),
+                        "feature": feature,
+                        "episode": episode,
+                    }
+                )
+            current[pair] = (root_pair, feature, episode)
+        previous = current
+    return sequence
+
+
+def _contact_sequence_signature(
+    sequence: Sequence[Mapping[str, Any]],
+) -> tuple[tuple[tuple[str, ...], tuple[str, ...], str, int], ...]:
+    return tuple(
+        (
+            tuple(item["pair"]),
+            tuple(item["root_pair"]),
+            str(item["feature"]),
+            int(item["episode"]),
+        )
+        for item in sequence
+    )
+
+
 def _event_counts(simulator: OverdampedGrowingFilament) -> dict[str, int]:
     counts: dict[str, int] = {}
     for reason in simulator.rejection_reasons:
@@ -495,6 +560,15 @@ def run_case(
 ) -> dict[str, Any]:
     config = _effective_case(base_config, case)
     initial = initial_state(config)
+    initial_active, _ = _pair_records(
+        initial, float(config["diameter"]), float(config["contact_stiffness"])
+    )
+    initial_contacts = nonlocal_segment_contacts(initial.positions, float(config["diameter"]))
+    initial_min_gap = min(
+        (float(item.gap) for item in initial_contacts), default=float("inf")
+    )
+    initial_contact_violation = bool(initial_active) or initial_min_gap < 0.0
+    initial_contact_control = case.group == "initial_contact_control"
     params = ModelParameters(
         axial_stiffness=float(config["axial_stiffness"]),
         bending_stiffness=float(config["bending_stiffness"]),
@@ -509,8 +583,6 @@ def run_case(
         dt_min=float(config.get("dt_min", 1.0e-10)),
         max_retries=int(config.get("max_retries", 12)),
         max_displacement_fraction=float(config.get("max_displacement_fraction", 0.25)),
-        fixed_left=bool(config.get("fixed_left", config.get("boundary") == "fixed/fixed")),
-        fixed_right=bool(config.get("fixed_right", config.get("boundary") == "fixed/fixed")),
         reject_crossing=True,
         enable_legacy_node_contact=False,
     )
@@ -544,14 +616,20 @@ def run_case(
         numerical_reasons.append("solver_failure")
     if expected and not observed_contact:
         numerical_reasons.append("expected_contact_not_observed")
+    if initial_contact_control:
+        if not initial_active:
+            numerical_reasons.append("initial_contact_control_not_observed")
+    elif initial_contact_violation:
+        numerical_reasons.append("initial_contact_violation")
     if rows and any(row["crossing_pairs"] for row in rows):
         numerical_reasons.append("centerline_crossing_guard_observed")
     if simulator is not None:
         requested = float(config["dt"])
         accepted_values = [float(value) for value in simulator.accepted_dts]
-        if accepted_values and max(accepted_values) < requested * 0.25:
+        if accepted_values and min(accepted_values) < requested * 0.25:
             numerical_reasons.append("accepted_dt_collapsed_below_requested")
     numerical_status = "numerically-unresolved" if numerical_reasons else "resolved"
+    contact_sequence = _contact_sequence(rows)
     metadata = {
         "benchmark": "C1 frictionless finite-radius segment contact/folding validation",
         "case": case.name,
@@ -595,7 +673,14 @@ def run_case(
         "group": case.group,
         "expected_contact": expected,
         "effective_config": config,
-        "classification": "contact-observed" if observed_contact else "no-contact-observed",
+        "initial_condition": "initial-contact-control" if initial_contact_control else "non-contact-required",
+        "initial_active_contact_pairs": len(initial_active),
+        "initial_min_gap": None if not math.isfinite(initial_min_gap) else initial_min_gap,
+        "classification": (
+            "initial-contact-control"
+            if initial_contact_control
+            else ("contact-observed" if observed_contact else "no-contact-observed")
+        ),
         "numerical_status": numerical_status,
         "numerical_reason_codes": numerical_reasons,
         "failure_reason": failure,
@@ -628,9 +713,7 @@ def run_case(
         ),
         "max_fold_count_proxy": max((int(row["fold_count_proxy"]) for row in rows), default=0),
         "fold_spacing_final": None if not rows else rows[-1]["fold_spacing"],
-        "contact_root_sequence": sorted(
-            {tuple(pair) for row in rows for pair in row["active_contact_root_pair_set"]}
-        ),
+        "contact_root_sequence": contact_sequence,
         "crossing_guard_rejections": rejection_counts.get("crossing_rejection", 0),
         "ccd_contract": "swept centerline-crossing guard only; finite-radius CCD and hard non-penetration are not implemented",
         "metrics_rows": rows,
@@ -720,7 +803,9 @@ def _refinement_summary(
             accepted = [result["accepted_dt_mean"] for result in ordered]
             if len({None if value is None else round(float(value), 15) for value in accepted}) < 2:
                 reasons.append("accepted_dt_not_distinct")
-        sequence_match = coarse["contact_root_sequence"] == fine["contact_root_sequence"]
+        sequence_match = _contact_sequence_signature(
+            coarse["contact_root_sequence"]
+        ) == _contact_sequence_signature(fine["contact_root_sequence"])
         if not sequence_match:
             reasons.append("contact_sequence_changed")
         penetration_difference = _relative_difference(
