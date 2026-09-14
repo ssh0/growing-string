@@ -30,7 +30,7 @@ Git に残すのは、全節点軌跡ではなく、suite-level の `compact_sum
 - `growth_work_step` は現行実装では指定した一時ディレクトリの `_runs/<run_name>/metrics.csv` にのみ記録され、`growth_work_cumulative` は compact CSV/JSON と一時 metrics の双方に記録される。`_runs` の metrics は設定の `max_metrics_rows`（既定 `512`）により downsample されることがある。両方とも同じ幾何で参照長だけを更新した離散的な reference-energy change の診断値であり、連続体の成長仕事の完全な導出でも、全 accepted step を保持する完全な監査記録でもない。古い別名を混在させない。
 - requested `dt` と実際の accepted `dt`（min/max/mean/値集合）、棄却試行数、reason 別の棄却数、event 数、event sequence hash、failure/reason code。
 - total/stretch/bend energy の初期値・最終値・span、mechanical energy change、remesh energy jump。接触 energy はこのゲートでは常に無効であることも明記する。
-- accepted Euler 区間の `dissipation_estimate`、`mechanical_balance_residual` の cumulative/max、および total/reference length。
+- accepted Euler 区間の `dissipation_estimate_cumulative`、`mechanical_balance_residual_cumulative` / `mechanical_balance_residual_max_abs`、および total/reference length。
 - endpoint force residual、bending moment residual、shear-equivalent residual。過渡 run の端点残差を「常にゼロ」と解釈しない。
 - onset の定義と時刻、形態 label、peak transverse amplitude、curvature RMS、mode spectrum/fractions、dominant mode。
 - `run_kind` / `role` / `representative` / `refinement_axis`、seed、初期条件 `perturbation` の内容と `input_hash`、population label。
