@@ -686,6 +686,12 @@ def _compare_refinement(
         )
         left_sig = dict(left["episode_signature"])
         right_sig = dict(right["episode_signature"])
+        numerical_match = (
+            left["numerical_status"] == "resolved"
+            and right["numerical_status"] == "resolved"
+        )
+        if not numerical_match:
+            row["reason_codes"].append("paired_case_numerically_unresolved")
         structural_keys = (
             "contact_observed",
             "episode_count",
@@ -696,6 +702,36 @@ def _compare_refinement(
             "censored_episode_count",
         )
         structure_match = all(left_sig[key] == right_sig[key] for key in structural_keys)
+        left_event_pattern = tuple(
+            str(event)
+            for event in left_sig.get("event_pattern", ())
+            if str(event) != "remesh_boundary"
+        )
+        right_event_pattern = tuple(
+            str(event)
+            for event in right_sig.get("event_pattern", ())
+            if str(event) != "remesh_boundary"
+        )
+        event_pattern_match = left_event_pattern == right_event_pattern
+        left_events = [
+            event
+            for event in left["episode_sequence"]
+            if event["event"] not in {"active_continuation", "remesh_boundary"}
+        ]
+        right_events = [
+            event
+            for event in right["episode_sequence"]
+            if event["event"] not in {"active_continuation", "remesh_boundary"}
+        ]
+        event_time_match = (
+            len(left_events) == len(right_events)
+            and all(
+                left_event["event"] == right_event["event"]
+                and abs(float(left_event["time"]) - float(right_event["time"]))
+                <= time_tolerance
+                for left_event, right_event in zip(left_events, right_events)
+            )
+        )
         remesh_match = (
             abs(left_sig["remesh_boundary_count"] - right_sig["remesh_boundary_count"])
             <= remesh_tolerance
@@ -703,15 +739,20 @@ def _compare_refinement(
         time_match = _time_match(
             left["episode_onset_times"], right["episode_onset_times"], time_tolerance
         )
-        if not structure_match:
+        if not structure_match or not event_pattern_match:
             row["reason_codes"].append("episode_structure_changed")
         if not remesh_match:
             row["reason_codes"].append("remesh_boundary_count_changed_beyond_tolerance")
-        if not time_match:
+        if not time_match or not event_time_match:
             row["reason_codes"].append("episode_times_outside_tolerance")
         row["sequence_status"] = (
             "resolved"
-            if structure_match and remesh_match and time_match
+            if numerical_match
+            and structure_match
+            and event_pattern_match
+            and remesh_match
+            and time_match
+            and event_time_match
             else "numerically-unresolved"
         )
 
@@ -725,18 +766,21 @@ def _compare_refinement(
         row["residence_relative_difference"] = residence_difference
         row["penetration_status"] = (
             "resolved"
-            if penetration_difference is not None
+            if numerical_match
+            and penetration_difference is not None
             and penetration_difference <= penetration_tolerance
             else "numerically-unresolved"
         )
         row["residence_status"] = (
             "resolved"
-            if residence_difference is not None and residence_difference <= residence_tolerance
+            if numerical_match
+            and residence_difference is not None
+            and residence_difference <= residence_tolerance
             else "numerically-unresolved"
         )
-        if row["penetration_status"] != "resolved":
+        if row["penetration_status"] != "resolved" and numerical_match:
             row["reason_codes"].append("penetration_outside_tolerance")
-        if row["residence_status"] != "resolved":
+        if row["residence_status"] != "resolved" and numerical_match:
             row["reason_codes"].append("residence_outside_tolerance")
 
         left_fold = left["fold_summary"]
@@ -769,9 +813,11 @@ def _compare_refinement(
         row["fold_period_relative_difference"] = period_difference
         row["curvature_concentration_relative_difference"] = concentration_difference
         row["fold_status"] = (
-            "resolved" if count_match and optional_fold_match else "numerically-unresolved"
+            "resolved"
+            if numerical_match and count_match and optional_fold_match
+            else "numerically-unresolved"
         )
-        if row["fold_status"] != "resolved":
+        if row["fold_status"] != "resolved" and numerical_match:
             row["reason_codes"].append("fold_proxy_outside_tolerance")
         row["status"] = (
             "resolved"
@@ -865,6 +911,8 @@ def run_case(
         reasons.append("solver_failure")
     if config["expected_contact"] and not observed_contact:
         reasons.append("expected_contact_not_observed")
+    elif not config["expected_contact"] and observed_contact:
+        reasons.append("unexpected_contact_observed")
     if initial_control:
         if not initial_active:
             reasons.append("initial_contact_control_not_observed")
@@ -1000,6 +1048,13 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _csv_cell(value: Any) -> Any:
+    normalized = _jsonable(value)
+    if isinstance(normalized, (Mapping, list, tuple)):
+        return json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return normalized
+
+
 def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -1011,7 +1066,9 @@ def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
             stream, fieldnames=fields, extrasaction="ignore", lineterminator="\n"
         )
         writer.writeheader()
-        writer.writerows(_jsonable(row) for row in rows)
+        writer.writerows(
+            {field: _csv_cell(row.get(field)) for field in fields} for row in rows
+        )
 
 
 def run_benchmark(

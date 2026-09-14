@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -119,6 +121,90 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             )
         )
 
+    def test_unexpected_contact_marks_noncontact_control_unresolved(self):
+        result = run_case(
+            CaseSpec("control", "initial_no_contact_control", {}, expected_contact=False),
+            self._base(),
+            git_revision="test-revision",
+        )
+        self.assertIn("unexpected_contact_observed", result["numerical_reason_codes"])
+        self.assertEqual(result["numerical_status"], "numerically-unresolved")
+
+    def test_refinement_compares_event_order_and_numeric_status(self):
+        base = self._base()
+        config = {
+            "base": base,
+            "refinement_pairs": [
+                {
+                    "name": "temporal",
+                    "axis": "temporal",
+                    "family": "repeating",
+                    "cases": ["left", "right"],
+                }
+            ],
+        }
+        signature = {
+            "contact_observed": True,
+            "episode_count": 2,
+            "detachment_count": 1,
+            "recontact_count": 1,
+            "feature_change_count": 0,
+            "pair_change_count": 0,
+            "censored_episode_count": 0,
+            "remesh_boundary_count": 0,
+        }
+        left_sequence = [
+            {"event": "contact_onset", "time": 0.1},
+            {"event": "contact_detachment", "time": 0.2},
+            {"event": "recontact", "time": 0.3},
+        ]
+        right_sequence = [
+            {"event": "contact_onset", "time": 0.1},
+            {"event": "recontact", "time": 0.2},
+            {"event": "contact_detachment", "time": 0.3},
+        ]
+
+        def result(name, sequence, numerical_status):
+            result_signature = {
+                **signature,
+                "event_pattern": tuple(item["event"] for item in sequence),
+            }
+            return {
+                "case": name,
+                "effective_config": {},
+                "episode_signature": result_signature,
+                "episode_onset_times": [0.1, 0.3],
+                "episode_sequence": sequence,
+                "numerical_status": numerical_status,
+                "max_penetration_ratio": 0.1,
+                "max_residence_duration": 0.2,
+                "fold_summary": {
+                    "max_fold_count_proxy": 1,
+                    "fold_spacing_proxy": 0.5,
+                    "fold_period_proxy": 0.4,
+                    "max_curvature_concentration": 2.0,
+                },
+            }
+
+        event_comparison = _compare_refinement(
+            [result("left", left_sequence, "resolved"), result("right", right_sequence, "resolved")],
+            config,
+        )[0]
+        self.assertEqual(event_comparison["sequence_status"], "numerically-unresolved")
+
+        comparison = _compare_refinement(
+            [
+                result("left", left_sequence, "resolved"),
+                result("right", right_sequence, "numerically-unresolved"),
+            ],
+            config,
+        )[0]
+        self.assertEqual(comparison["sequence_status"], "numerically-unresolved")
+        self.assertEqual(comparison["penetration_status"], "numerically-unresolved")
+        self.assertEqual(comparison["residence_status"], "numerically-unresolved")
+        self.assertEqual(comparison["fold_status"], "numerically-unresolved")
+        self.assertIn("paired_case_numerically_unresolved", comparison["reason_codes"])
+
     def test_refinement_reports_metric_specific_unresolved_status_and_tolerances(self):
         base = self._base()
         config = {
@@ -229,6 +315,10 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
                 self.assertTrue((output / filename).is_file(), filename)
             self.assertFalse(list(output.glob("*.npz")))
             self.assertFalse(list(output.glob("*.mp4")))
+            with (output / "metrics.csv").open(newline="", encoding="utf-8") as stream:
+                metrics = next(csv.DictReader(stream))
+            self.assertIsInstance(json.loads(metrics["contact_records"]), list)
+            self.assertIsInstance(json.loads(metrics["segment_lineage"]), list)
 
 
 if __name__ == "__main__":
