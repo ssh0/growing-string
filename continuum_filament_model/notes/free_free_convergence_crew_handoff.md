@@ -27,7 +27,7 @@ Git に残すのは、全節点軌跡ではなく、suite-level の `compact_sum
 
 - `schema_version`、benchmark scope、boundary、contact disabled、実行時の**現在 Git revision**。
 - config の SHA-256、compact 各 artifact の bytes/SHA-256、run 数・population 数。現行 compact の各 run は `perturbation` の記述と `input_hash` を保持する。独立した `perturbation_hash` は現行出力にない将来契約であり、現時点の受入項目にしない。
-- `growth_work_step` / `growth_work_cumulative` は現行実装では、指定した一時ディレクトリの `_runs/<run_name>/metrics.csv` にだけ記録される。Git に残す compact CSV/JSON への同名フィールド追加は未実装の将来契約であり、compact だけの確認項目にしない。これは同じ幾何で参照長だけを更新した離散 energy 差であり、連続体の成長仕事の完全な導出ではない。古い別名を混在させない。
+- `growth_work_step` は現行実装では指定した一時ディレクトリの `_runs/<run_name>/metrics.csv` にのみ記録され、`growth_work_cumulative` は compact CSV/JSON と一時 metrics の双方に記録される。`_runs` の metrics は設定の `max_metrics_rows`（既定 `512`）により downsample されることがある。両方とも同じ幾何で参照長だけを更新した離散的な reference-energy change の診断値であり、連続体の成長仕事の完全な導出でも、全 accepted step を保持する完全な監査記録でもない。古い別名を混在させない。
 - requested `dt` と実際の accepted `dt`（min/max/mean/値集合）、棄却試行数、reason 別の棄却数、event 数、event sequence hash、failure/reason code。
 - total/stretch/bend energy の初期値・最終値・span、mechanical energy change、remesh energy jump。接触 energy はこのゲートでは常に無効であることも明記する。
 - accepted Euler 区間の `dissipation_estimate`、`mechanical_balance_residual` の cumulative/max、および total/reference length。
@@ -36,7 +36,7 @@ Git に残すのは、全節点軌跡ではなく、suite-level の `compact_sum
 - `run_kind` / `role` / `representative` / `refinement_axis`、seed、初期条件 `perturbation` の内容と `input_hash`、population label。
 - `morphology_status` と `mechanics_status` を分離した refinement 判定、全体 `status`、`numerical_status`、`numerical_reason_codes`。形態が収束しても、work・energy・残差が未収束なら `numerically-unresolved` のままにする。
 
-この provenance と数値監査を compact に含める理由は、後から current HEAD、設定、`input_hash`、実行イベント、成果物の対応を検証し、時間・空間 refinement の取り違えや「形態だけ収束」を検出するためである。per-run の `metrics.csv`、`events.json`、`manifest.json` は指定した一時出力の `_runs/<run_name>/` に置き、Git へコピーしない。成長 work の step 値を含む `_runs` は compact と別に保管し、compact だけでその step 値を確認できるとはみなさない。
+この provenance と数値監査を compact に含める理由は、後から current HEAD、設定、`input_hash`、実行イベント、成果物の対応を検証し、時間・空間 refinement の取り違えや「形態だけ収束」を検出するためである。per-run の `metrics.csv`、`events.json`、`manifest.json` は指定した一時出力の `_runs/<run_name>/` に置き、Git へコピーしない。`_runs` がない場合は `growth_work_step` などの step-level audit を確認できないが、provenance が一致する compact をその理由だけで再実行しない。
 
 ## population を混ぜない
 
@@ -65,9 +65,9 @@ shape-only を名乗るには、初期参照長（各 segment と総量）、EA�
 3. **no-mistakes の診断**：`no-mistakes doctor`、続けて `no-mistakes axi status`。他 branch の実行を停止・再起動・横取りしない。
 4. **focused tests**：`PYTHONPATH=continuum_filament_model/src python -m unittest continuum_filament_model.tests.test_free_free_convergence_gate continuum_filament_model.tests.test_free_end_dynamics -v`。
 5. **full tests**：`PYTHONPATH=continuum_filament_model/src python -m unittest discover -s continuum_filament_model/tests -v`。
-6. **事前 provenance 確認**：clean な実行 HEAD、正本 config の SHA-256、schema version、既存 `results/free_free_convergence_gate/` の `compact_summary.json` / `compact_manifest.json` と各 artifact の bytes/SHA-256 を確認する。これらと run 名・件数・population 分離が一致し、step-level audit 用の対応する `_runs/<run_name>/` も利用可能なら既存成果物を再利用し、同じ HEAD/config で再実行しない。
-7. **single bounded suite**：compact がない、provenance/hash が一致しない、または必要な `_runs` がない場合だけ、新しい一時ディレクトリへ正本 config を指定して `free_free_convergence_gate.py` を一度実行する。この出力を current-HEAD compact として扱い、同じ HEAD/config の別の regeneration は行わない。短縮 config は schema・分類・失敗保持の smoke に限り、収束結論に使わない。
-8. **provenance/hash check**：accepted/requested dt、reject/event/reason、energy/work/dissipation/balance、端点 residual、onset/mode/curvature、`input_hash`、`perturbation` descriptor、`numerically-unresolved` の保持を compact と `_runs` で突合する。`growth_work_step` / `growth_work_cumulative` は `_runs/<run_name>/metrics.csv` の step 値で確認し、compact に同名フィールドや独立した `perturbation_hash` があることは要求しない。spatial は temporal finest dt を使い、morphology-only の合格を mechanics 合格へ昇格しない。
+6. **事前 provenance 確認**：clean な実行 HEAD、正本 config の SHA-256、schema version、既存 `results/free_free_convergence_gate/` の `compact_summary.json` / `compact_manifest.json` と各 artifact の bytes/SHA-256 を確認する。これらと run 名・件数・population 分離が一致すれば既存 compact を再利用し、同じ HEAD/config で再実行しない。対応する `_runs/<run_name>/` がない場合は step-level audit を確認できないことだけを記録する。
+7. **single bounded suite**：compact がない、または provenance/hash が一致しない場合だけ、新しい一時ディレクトリへ正本 config を指定して `free_free_convergence_gate.py` を一度実行する。この出力を current-HEAD compact として扱い、同じ HEAD/config の別の regeneration は行わない。短縮 config は schema・分類・失敗保持の smoke に限り、収束結論に使わない。
+8. **provenance/hash check**：accepted/requested dt、reject/event/reason、energy/work/dissipation/balance、端点 residual、onset/mode/curvature、`input_hash`、`perturbation` descriptor、`numerically-unresolved` の保持を compact と、利用可能な場合は `_runs` で突合する。`growth_work_cumulative` は compact の値と一時 metrics の値を、`growth_work_step` は一時 metrics の値を確認する。`_runs` の metrics が downsample されている場合や存在しない場合は step-level audit の制約を記録し、compact に独立した `perturbation_hash` や `growth_work_step` があることは要求しない。spatial は temporal finest dt を使い、morphology-only の合格を mechanics 合格へ昇格しない。
 9. **commit**：レビュー済みの compact だけを対象にし、`_runs` や既存成果物を含めない。実行 HEAD と成果物 commit の関係を provenance に残す。
 10. **validation**：commit 後に no-mistakes を intent 付きで実行し、各 gate を判断する。`--yes` / `-y` は使わない。失敗・ask-user・unresolved の扱いを勝手に解消せず、根拠を残して再開する。
 
