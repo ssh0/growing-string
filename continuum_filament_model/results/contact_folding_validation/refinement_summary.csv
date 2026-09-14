@@ -1,0 +1,4 @@
+axis,coarse_or_low_case,fine_or_high_case,coarse_or_low_value,fine_or_high_value,penetration_relative_difference,residence_relative_difference,contact_sequence_match,status,reason_codes,nonpenetration_claim
+dt,dynamic_dt_fine,dynamic_dt_coarse,0.01,0.04,0.8314543751448524,350000000000.0002,False,numerically-unresolved,"['contact_sequence_changed', 'penetration_not_within_tolerance', 'contact_residence_not_within_tolerance']",not-a-proof; finite penalty remains penetrable
+n_nodes,dynamic_spatial_coarse,dynamic_spatial_fine,7,11,1.0,1.0,False,numerically-unresolved,"['member_case_numerically_unresolved', 'contact_sequence_changed', 'penetration_not_within_tolerance', 'contact_residence_not_within_tolerance']",not-a-proof; finite penalty remains penetrable
+contact_stiffness,dynamic_kc_soft,dynamic_kc_stiff,1.0,4.0,0.17633630971818834,0.029411764705882363,False,numerically-unresolved,['contact_sequence_changed'],not-a-proof; finite penalty remains penetrable

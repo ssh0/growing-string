@@ -171,16 +171,13 @@ Git revision、Python/NumPy、入力hash、初期状態hash、パラメータが
 
 初期ゆらぎを変えて座屈開始条件が大きく変わる場合、線形安定性と非線形発展を分けて解析する。
 
-### 2.3 接触・折りたたみ
+### 2.3 接触・折りたたみ（C1 baseline）
 
-U字またはS字の初期形状を用いて、接触後の挙動を調べる。
+C1 の接触則、観測量、初期条件、refinement、受入条件は `notes/contact_folding_validation.md` を正本とする。実装入口は `benchmarks/contact_folding_validation.py`、設定は `benchmarks/configs/contact_folding_baseline.json` である。
 
-- 接触したまま成長するか
-- 反発して離れるか
-- 交差せずに折りたたまれるか
-- 接着を追加した場合に形態がどう変わるか
+C1 は free/free の摩擦なし有限径 segment penalty に限定する。主動的ケースと各 refinement は active pair がなく初期 gap が非負の状態から開始し、初期接触があれば `initial_contact_violation` として `numerically-unresolved` に分類する。初期 U 字接触は別の geometry/force control であり、初期接触 fixtureだけで実験の折りたたみ再現を主張しない。
 
-実験で接触したひもが滑らずに成長するなら、反発だけの接触則では不十分である可能性が高い。
+摩擦、接着、履歴依存則は、C1 の観測失敗と独立して品質確認された観測入力の双方が示された場合に限り、同一初期条件の nested alternative として一つずつ追加する。
 
 ## Phase 3：実験データとの整合
 

@@ -24,19 +24,13 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 
 from .geometry import (
-    SegmentDistance,
     SweptIntersection,
     find_swept_nonlocal_intersection,
     geometry_diagnostics,
     has_nonlocal_intersection,
-    has_swept_nonlocal_intersection,
     initial_geometry_diagnostic,
-    minimum_nonlocal_segment_distance,
-    nonlocal_intersection_pairs,
     nonlocal_segment_contacts,
-    nonlocal_segment_distances,
-    segment_closest_points,
-    segments_intersect,
+    segments_intersect,  # noqa: F401 - historical re-export from model
 )
 
 Array = np.ndarray
@@ -85,6 +79,9 @@ class ModelParameters:
     fixed_left: bool = False
     fixed_right: bool = False
     reject_crossing: bool = True
+    # The node-level term is retained for legacy fixtures, but new contact
+    # validation must opt out so C1 is a separately labelled segment law.
+    enable_legacy_node_contact: bool = True
 
     def validate(self) -> None:
         numeric = {
@@ -138,6 +135,8 @@ class ModelParameters:
             raise ModelError("max_displacement_fraction must be in (0, 1]")
         if self.energy_tolerance < 0.0:
             raise ModelError("energy_tolerance must be non-negative")
+        if not isinstance(self.enable_legacy_node_contact, (bool, np.bool_)):
+            raise ModelError("enable_legacy_node_contact must be boolean")
 
 
 @dataclass
@@ -153,10 +152,17 @@ class FilamentState:
     rest_lengths: Array
     time: float = 0.0
     step: int = 0
+    # Stable per-segment lineage labels are diagnostic identity, not material
+    # state in the canonical numerical hash.  They survive midpoint splits.
+    segment_lineage: Optional[Tuple[str, ...]] = None
 
     def __post_init__(self) -> None:
         self.positions = np.asarray(self.positions, dtype=float).copy()
         self.rest_lengths = np.asarray(self.rest_lengths, dtype=float).copy()
+        if self.segment_lineage is None:
+            self.segment_lineage = tuple(str(index) for index in range(self.n_segments))
+        else:
+            self.segment_lineage = tuple(str(value) for value in self.segment_lineage)
         self.validate()
 
     @property
@@ -173,6 +179,7 @@ class FilamentState:
             self.rest_lengths.copy(),
             time=self.time,
             step=self.step,
+            segment_lineage=self.segment_lineage,
         )
 
     def validate(self, eps: float = 1.0e-12) -> None:
@@ -208,28 +215,25 @@ class FilamentState:
             or not isinstance(self.step, Real)
             or not np.isscalar(self.step)
         ):
-            raise ModelError(
-                "step must be a finite integer-valued real scalar: "
-                f"{self.step!r}"
-            )
+            raise ModelError(f"step must be a finite integer-valued real scalar: {self.step!r}")
         try:
             step_value = float(self.step)
         except (TypeError, ValueError, OverflowError) as exc:
             raise ModelError(
-                "step must be a finite integer-valued real scalar: "
-                f"{self.step!r}"
+                f"step must be a finite integer-valued real scalar: {self.step!r}"
             ) from exc
         if not np.isfinite(step_value) or not step_value.is_integer():
-            raise ModelError(
-                "step must be a finite integer-valued real scalar: "
-                f"{self.step!r}"
-            )
+            raise ModelError(f"step must be a finite integer-valued real scalar: {self.step!r}")
         if self.positions.ndim != 2 or self.positions.shape[1] != 2:
             raise ModelError("positions must have shape (N, 2)")
         if self.n_nodes < 3:
             raise ModelError("at least three nodes are required")
         if self.rest_lengths.shape != (self.n_segments,):
             raise ModelError("rest_lengths must have shape (N-1,)")
+        if self.segment_lineage is None or len(self.segment_lineage) != self.n_segments:
+            raise ModelError("segment_lineage must have one label per segment")
+        if len(set(self.segment_lineage)) != len(self.segment_lineage):
+            raise ModelError("segment_lineage labels must be unique")
         if not np.isfinite(self.positions).all():
             raise ModelError("positions contain non-finite values")
         if not np.isfinite(self.rest_lengths).all():
@@ -248,8 +252,7 @@ def straight_state(n_nodes: int, spacing: float = 1.0) -> FilamentState:
         raise ModelError("n_nodes must be at least 3")
     if spacing <= 0.0:
         raise ModelError("spacing must be positive")
-    positions = np.column_stack((np.arange(n_nodes) * spacing,
-                                 np.zeros(n_nodes)))
+    positions = np.column_stack((np.arange(n_nodes) * spacing, np.zeros(n_nodes)))
     return FilamentState(positions, np.full(n_nodes - 1, spacing))
 
 
@@ -269,27 +272,47 @@ def grow_reference_lengths(rest_lengths: Array, growth_rate: float, dt: float) -
     return result
 
 
-def remesh(positions: Array, rest_lengths: Array, a_max: float) -> Tuple[Array, Array]:
-    """Split long reference segments at their geometric midpoint.
+def _remesh_impl(
+    positions: Array,
+    rest_lengths: Array,
+    a_max: float,
+    segment_lineage: Optional[Tuple[str, ...]] = None,
+    *,
+    retain_lineage: bool = False,
+) -> Tuple[Array, Array, Optional[Tuple[str, ...]]]:
+    """Validate and split reference segments, optionally retaining lineage."""
 
-    This operation is numerical remeshing, not physical material addition.
-    It preserves total reference length and the endpoints.
-    """
-
-    if a_max <= 0.0:
-        raise ModelError("a_max must be positive")
-    p = np.asarray(positions, dtype=float).copy()
-    a = np.asarray(rest_lengths, dtype=float).copy()
+    try:
+        max_length = float(a_max)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ModelError(f"a_max must be finite and positive: {a_max!r}") from exc
+    if not np.isfinite(max_length) or max_length <= 0.0:
+        raise ModelError("a_max must be finite and positive")
+    try:
+        p = np.asarray(positions, dtype=float).copy()
+        a = np.asarray(rest_lengths, dtype=float).copy()
+    except (TypeError, ValueError) as exc:
+        raise ModelError("invalid remeshing inputs") from exc
     if p.ndim != 2 or p.shape[1] != 2 or a.shape != (len(p) - 1,):
         raise ModelError("invalid remeshing shapes")
     if not np.isfinite(p).all() or not np.isfinite(a).all():
         raise ModelError("remeshing inputs contain non-finite values")
 
+    lineage: Optional[list[str]]
+    if not retain_lineage:
+        lineage = None
+    elif segment_lineage is None:
+        lineage = [str(index) for index in range(len(a))]
+    else:
+        lineage = [str(value) for value in segment_lineage]
+        if len(lineage) != len(a) or len(set(lineage)) != len(lineage):
+            raise ModelError("segment_lineage must uniquely label every segment")
+
     # A segment can require several splits when a deliberately small a_max is
     # used. The loop is finite because every split halves the reference length.
     i = 0
     while i < len(a):
-        if a[i] <= a_max:
+        if a[i] <= max_length:
             i += 1
             continue
         midpoint = 0.5 * (p[i] + p[i + 1])
@@ -297,8 +320,48 @@ def remesh(positions: Array, rest_lengths: Array, a_max: float) -> Tuple[Array, 
         p = np.insert(p, i + 1, midpoint, axis=0)
         a[i] = old / 2.0
         a = np.insert(a, i + 1, old / 2.0)
+        if lineage is not None:
+            parent = lineage[i]
+            lineage[i] = parent + ".0"
+            lineage.insert(i + 1, parent + ".1")
         # Revisit the left child; either child may still exceed a_max.
+    if lineage is not None:
+        if len(set(lineage)) != len(lineage):
+            raise ModelError("remeshing produced duplicate segment lineage labels")
+        return p, a, tuple(lineage)
+    return p, a, None
+
+
+def remesh(positions: Array, rest_lengths: Array, a_max: float) -> Tuple[Array, Array]:
+    """Split long reference segments at their geometric midpoint.
+
+    This operation is numerical remeshing, not physical material addition.
+    It preserves total reference length and the endpoints.
+    """
+
+    p, a, _ = _remesh_impl(positions, rest_lengths, a_max)
     return p, a
+
+
+def remesh_with_lineage(
+    positions: Array,
+    rest_lengths: Array,
+    segment_lineage: Optional[Tuple[str, ...]],
+    a_max: float,
+) -> Tuple[Array, Array, Tuple[str, ...]]:
+    """Split long segments while retaining deterministic descendant identity.
+
+    A segment labelled ``x`` becomes ``x.0`` and ``x.1`` on its first split;
+    repeated splits append another binary suffix.  The labels are intentionally
+    diagnostic lineage, not persistent material IDs or a contact-history law.
+    """
+
+    p, a, lineage = _remesh_impl(
+        positions, rest_lengths, a_max, segment_lineage, retain_lineage=True
+    )
+    if lineage is None:
+        raise ModelError("remeshing did not produce segment lineage")
+    return p, a, lineage
 
 
 EVENT_SCHEMA_VERSION = "continuum-filament-events-1"
@@ -330,9 +393,7 @@ def _state_summary(
         "finite": finite,
         "n_nodes": int(len(p)) if p.ndim >= 1 else 0,
         "n_segments": int(len(a)) if a.ndim >= 1 else 0,
-        "max_displacement": (
-            None if max_displacement is None else float(max_displacement)
-        ),
+        "max_displacement": (None if max_displacement is None else float(max_displacement)),
     }
     if not finite or p.ndim != 2 or p.shape[1] != 2 or len(a) != len(p) - 1:
         summary.update(
@@ -433,9 +494,7 @@ def _bending_boundary_data(
     local_reference_lengths = 0.5 * (rest_lengths[:-1] + rest_lengths[1:])
     jumps = tangents[1:] - tangents[:-1]
     left_vector = (bending_stiffness / local_reference_lengths[0]) * jumps[0]
-    right_vector = (
-        -(bending_stiffness / local_reference_lengths[-1]) * jumps[-1]
-    )
+    right_vector = -(bending_stiffness / local_reference_lengths[-1]) * jumps[-1]
     return (
         left_vector,
         right_vector,
@@ -471,14 +530,10 @@ def _bending_energy_and_forces(
     local_reference_lengths = 0.5 * (rest_lengths[:-1] + rest_lengths[1:])
     tangent_jumps = tangents[1:] - tangents[:-1]
     coefficients = bending_stiffness / local_reference_lengths
-    bending = 0.5 * float(
-        np.sum(coefficients * np.sum(tangent_jumps * tangent_jumps, axis=1))
-    )
+    bending = 0.5 * float(np.sum(coefficients * np.sum(tangent_jumps * tangent_jumps, axis=1)))
 
     identity = np.eye(positions.shape[1])
-    for i, (jump, coefficient) in enumerate(
-        zip(tangent_jumps, coefficients), start=1
-    ):
+    for i, (jump, coefficient) in enumerate(zip(tangent_jumps, coefficients), start=1):
         previous_tangent = tangents[i - 1]
         next_tangent = tangents[i]
         previous_projection = identity - np.outer(previous_tangent, previous_tangent)
@@ -489,6 +544,37 @@ def _bending_energy_and_forces(
         forces[i] += coefficient * (previous_gradient + next_gradient)
         forces[i + 1] -= coefficient * next_gradient
     return bending, forces
+
+
+def _node_penalty_contact_energy_and_forces(
+    positions: Array,
+    contact_stiffness: float,
+    diameter: float,
+) -> Tuple[float, Array]:
+    """Return the historical non-local node penalty term.
+
+    This term is deliberately separate from C1 segment contact.  Legacy
+    fixtures keep it enabled by default; new validation passes
+    ``enable_legacy_node_contact=False`` and labels its provenance explicitly.
+    """
+
+    forces = np.zeros_like(positions)
+    if contact_stiffness <= 0.0 or diameter <= 0.0:
+        return 0.0, forces
+    contact_energy = 0.0
+    for i in range(len(positions)):
+        for j in range(i + 2, len(positions)):
+            delta = positions[i] - positions[j]
+            distance = float(np.linalg.norm(delta))
+            overlap = diameter - distance
+            if overlap <= 0.0:
+                continue
+            contact_energy += 0.5 * contact_stiffness * overlap**2
+            if distance > 1.0e-12:
+                pair_force = contact_stiffness * overlap * delta / distance
+                forces[i] += pair_force
+                forces[j] -= pair_force
+    return float(contact_energy), forces
 
 
 def _segment_penalty_contact_energy_and_forces(
@@ -597,6 +683,7 @@ class OverdampedGrowingFilament:
         self.rejected_dts: list[float] = []
         self.rejection_reasons: list[str] = []
         self.events: list[dict[str, object]] = []
+        self._accepted_trajectory: list[FilamentState] = [self.state.copy()]
         self._last_swept_intersection: Optional[SweptIntersection] = None
         self._append_event(
             {
@@ -685,6 +772,10 @@ class OverdampedGrowingFilament:
 
         return [dict(event) for event in self.events]
 
+    @property
+    def accepted_trajectory(self) -> list[FilamentState]:
+        return [state.copy() for state in self._accepted_trajectory]
+
     @classmethod
     def from_straight(
         cls,
@@ -697,19 +788,22 @@ class OverdampedGrowingFilament:
             raise ModelError("reference_length must be positive")
         return cls(straight_state(n_nodes, spacing), params)
 
-    def energy_components(self, positions: Optional[Array] = None,
-                          rest_lengths: Optional[Array] = None) -> Dict[str, float]:
+    def energy_components(
+        self, positions: Optional[Array] = None, rest_lengths: Optional[Array] = None
+    ) -> Dict[str, float]:
         p = self.state.positions if positions is None else np.asarray(positions, dtype=float)
-        a = self.state.rest_lengths if rest_lengths is None else np.asarray(rest_lengths, dtype=float)
+        a = (
+            self.state.rest_lengths
+            if rest_lengths is None
+            else np.asarray(rest_lengths, dtype=float)
+        )
         if p.shape != (len(a) + 1, 2):
             raise ModelError("incompatible positions and rest_lengths")
 
         lengths = np.linalg.norm(np.diff(p, axis=0), axis=1)
         if np.any(lengths <= 1.0e-12):
             raise ModelError("zero-length geometric segment")
-        axial = 0.5 * self.parameters.axial_stiffness * np.sum(
-            (lengths - a) ** 2 / a
-        )
+        axial = 0.5 * self.parameters.axial_stiffness * np.sum((lengths - a) ** 2 / a)
 
         bending, _ = _bending_energy_and_forces(
             p,
@@ -717,33 +811,57 @@ class OverdampedGrowingFilament:
             self.parameters.bending_stiffness,
         )
 
-        contact, _ = _segment_penalty_contact_energy_and_forces(
-            p,
-            self.parameters.contact_stiffness,
-            self.parameters.diameter,
+        contact_components = self.contact_energy_components(p, a)
+        return {
+            "stretch": float(axial),
+            "bend": float(bending),
+            # Keep the historical three-key energy contract intact.
+            "contact": float(sum(contact_components.values())),
+        }
+
+    def contact_energy_components(
+        self,
+        positions: Optional[Array] = None,
+        rest_lengths: Optional[Array] = None,
+    ) -> Dict[str, float]:
+        """Return C1 segment and optional legacy node contact energies separately."""
+
+        p = self.state.positions if positions is None else np.asarray(positions, dtype=float)
+        a = (
+            self.state.rest_lengths
+            if rest_lengths is None
+            else np.asarray(rest_lengths, dtype=float)
         )
-        # Keep the historical node-only term for backwards compatibility with
-        # existing parameter files and three-node fixtures.  Segment contact
-        # is now always included above and is the standard non-local response.
-        if self.parameters.contact_stiffness > 0.0 and self.parameters.diameter > 0.0:
-            for i in range(len(p)):
-                for j in range(i + 2, len(p)):
-                    distance = float(np.linalg.norm(p[i] - p[j]))
-                    overlap = self.parameters.diameter - distance
-                    if overlap > 0.0:
-                        contact += 0.5 * self.parameters.contact_stiffness * overlap**2
-        return {"stretch": float(axial), "bend": float(bending), "contact": float(contact)}
+        if p.shape != (len(a) + 1, 2):
+            raise ModelError("incompatible positions and rest_lengths")
+        segment, _ = _segment_penalty_contact_energy_and_forces(
+            p, self.parameters.contact_stiffness, self.parameters.diameter
+        )
+        if self.parameters.enable_legacy_node_contact:
+            node, _ = _node_penalty_contact_energy_and_forces(
+                p, self.parameters.contact_stiffness, self.parameters.diameter
+            )
+        else:
+            node = 0.0
+        return {"segment_c1": float(segment), "node_legacy": float(node)}
 
-    def energy(self, positions: Optional[Array] = None,
-               rest_lengths: Optional[Array] = None) -> float:
-        return float(sum(self.energy_components(positions, rest_lengths).values()))
+    def energy(
+        self, positions: Optional[Array] = None, rest_lengths: Optional[Array] = None
+    ) -> float:
+        components = self.energy_components(positions, rest_lengths)
+        return float(components["stretch"] + components["bend"] + components["contact"])
 
-    def forces(self, positions: Optional[Array] = None,
-               rest_lengths: Optional[Array] = None) -> Array:
+    def forces(
+        self, positions: Optional[Array] = None, rest_lengths: Optional[Array] = None
+    ) -> Array:
         """Return ``-dE/dr`` for the current geometry."""
 
         p = self.state.positions if positions is None else np.asarray(positions, dtype=float)
-        a = self.state.rest_lengths if rest_lengths is None else np.asarray(rest_lengths, dtype=float)
+        a = (
+            self.state.rest_lengths
+            if rest_lengths is None
+            else np.asarray(rest_lengths, dtype=float)
+        )
         if p.shape != (len(a) + 1, 2):
             raise ModelError("incompatible positions and rest_lengths")
         forces = np.zeros_like(p)
@@ -772,21 +890,40 @@ class OverdampedGrowingFilament:
         )
         forces += segment_contact_forces
 
-        # Preserve the historical node-only response for compatibility.  It is
-        # additive rather than a replacement: non-local segment pairs receive
-        # the finite-radius segment response above, while old node fixtures
-        # retain their established threshold law.
-        if self.parameters.contact_stiffness > 0.0 and self.parameters.diameter > 0.0:
-            for i in range(len(p)):
-                for j in range(i + 2, len(p)):
-                    delta = p[i] - p[j]
-                    distance = float(np.linalg.norm(delta))
-                    overlap = self.parameters.diameter - distance
-                    if overlap > 0.0 and distance > 1.0e-12:
-                        force = self.parameters.contact_stiffness * overlap * delta / distance
-                        forces[i] += force
-                        forces[j] -= force
+        if self.parameters.enable_legacy_node_contact:
+            _, node_contact_forces = _node_penalty_contact_energy_and_forces(
+                p,
+                self.parameters.contact_stiffness,
+                self.parameters.diameter,
+            )
+            forces += node_contact_forces
         return forces
+
+    def contact_force_components(
+        self,
+        positions: Optional[Array] = None,
+        rest_lengths: Optional[Array] = None,
+    ) -> Dict[str, Array]:
+        """Return labelled segment-C1 and legacy-node contact force arrays."""
+
+        p = self.state.positions if positions is None else np.asarray(positions, dtype=float)
+        a = (
+            self.state.rest_lengths
+            if rest_lengths is None
+            else np.asarray(rest_lengths, dtype=float)
+        )
+        if p.shape != (len(a) + 1, 2):
+            raise ModelError("incompatible positions and rest_lengths")
+        _, segment = _segment_penalty_contact_energy_and_forces(
+            p, self.parameters.contact_stiffness, self.parameters.diameter
+        )
+        if self.parameters.enable_legacy_node_contact:
+            _, node = _node_penalty_contact_energy_and_forces(
+                p, self.parameters.contact_stiffness, self.parameters.diameter
+            )
+        else:
+            node = np.zeros_like(p)
+        return {"segment_c1": segment, "node_legacy": node}
 
     def endpoint_diagnostics(
         self,
@@ -806,11 +943,7 @@ class OverdampedGrowingFilament:
         boundary condition.
         """
 
-        p = (
-            self.state.positions
-            if positions is None
-            else np.asarray(positions, dtype=float)
-        )
+        p = self.state.positions if positions is None else np.asarray(positions, dtype=float)
         a = (
             self.state.rest_lengths
             if rest_lengths is None
@@ -819,9 +952,7 @@ class OverdampedGrowingFilament:
         if p.shape != (len(a) + 1, 2):
             raise ModelError("incompatible positions and rest_lengths")
         if len(a) < 2:
-            raise ModelError(
-                "at least three nodes are required for endpoint diagnostics"
-            )
+            raise ModelError("at least three nodes are required for endpoint diagnostics")
 
         total_forces = self.forces(p, a)
         stretch_forces = np.zeros_like(p)
@@ -834,9 +965,7 @@ class OverdampedGrowingFilament:
         for index, force_vector in enumerate(edge_force[:, None] * tangents):
             stretch_forces[index] += force_vector
             stretch_forces[index + 1] -= force_vector
-        _, bending_forces = _bending_energy_and_forces(
-            p, a, self.parameters.bending_stiffness
-        )
+        _, bending_forces = _bending_energy_and_forces(p, a, self.parameters.bending_stiffness)
         contact_forces = total_forces - stretch_forces - bending_forces
         (
             left_moment_vector,
@@ -851,12 +980,8 @@ class OverdampedGrowingFilament:
             moment_vector: Array,
             moment: float,
         ) -> dict[str, object]:
-            outward_tangent = (
-                material_tangent if index == len(p) - 1 else -material_tangent
-            )
-            outward_normal = np.asarray(
-                [-outward_tangent[1], outward_tangent[0]], dtype=float
-            )
+            outward_tangent = material_tangent if index == len(p) - 1 else -material_tangent
+            outward_normal = np.asarray([-outward_tangent[1], outward_tangent[0]], dtype=float)
             force = total_forces[index]
             return {
                 "position": p[index].tolist(),
@@ -869,12 +994,8 @@ class OverdampedGrowingFilament:
                 "bending_force": bending_forces[index].tolist(),
                 "contact_force": contact_forces[index].tolist(),
                 "axial_force_residual": float(np.dot(force, outward_tangent)),
-                "shear_equivalent_residual": float(
-                    np.dot(force, outward_normal)
-                ),
-                "bending_shear_equivalent": float(
-                    np.dot(bending_forces[index], outward_normal)
-                ),
+                "shear_equivalent_residual": float(np.dot(force, outward_normal)),
+                "bending_shear_equivalent": float(np.dot(bending_forces[index], outward_normal)),
                 "bending_moment_vector": moment_vector.tolist(),
                 "bending_moment": float(moment),
                 "constraint_reaction": (-force).tolist()
@@ -897,26 +1018,16 @@ class OverdampedGrowingFilament:
         net_force = np.sum(total_forces, axis=0)
         origin = p[0]
         net_torque = float(
-            np.sum(
-                [
-                    _cross_z(position - origin, force)
-                    for position, force in zip(p, total_forces)
-                ]
-            )
+            np.sum([_cross_z(position - origin, force) for position, force in zip(p, total_forces)])
         )
         endpoint_values.update(
             {
                 "boundary_condition": {
-                    "left": (
-                        "fixed" if self.parameters.fixed_left else "free"
-                    ),
-                    "right": (
-                        "fixed" if self.parameters.fixed_right else "free"
-                    ),
+                    "left": ("fixed" if self.parameters.fixed_left else "free"),
+                    "right": ("fixed" if self.parameters.fixed_right else "free"),
                 },
                 "contact_enabled": bool(
-                    self.parameters.contact_stiffness > 0.0
-                    and self.parameters.diameter > 0.0
+                    self.parameters.contact_stiffness > 0.0 and self.parameters.diameter > 0.0
                 ),
                 "net_force": net_force.tolist(),
                 "net_force_norm": float(np.linalg.norm(net_force)),
@@ -927,14 +1038,11 @@ class OverdampedGrowingFilament:
                         np.linalg.norm(total_forces[-1]),
                     )
                 ),
-                "moment_residual_norm_max": float(
-                    max(abs(left_moment), abs(right_moment))
-                ),
+                "moment_residual_norm_max": float(max(abs(left_moment), abs(right_moment))),
                 "contact_force_norm": float(np.linalg.norm(contact_forces)),
                 "definition": {
                     "force_residual": (
-                        "-dE/dr_endpoint; zero is the natural free-end "
-                        "force condition"
+                        "-dE/dr_endpoint; zero is the natural free-end force condition"
                     ),
                     "bending_moment": (
                         "signed transverse component of endpoint generalized "
@@ -945,8 +1053,7 @@ class OverdampedGrowingFilament:
                         "total endpoint force projected on the outward normal"
                     ),
                     "constraint_reaction": (
-                        "negative force_residual for a fixed endpoint; null "
-                        "for a free endpoint"
+                        "negative force_residual for a fixed endpoint; null for a free endpoint"
                     ),
                 },
             }
@@ -1007,13 +1114,12 @@ class OverdampedGrowingFilament:
             return "energy_increased"
         return "invalid_trial"
 
-    def _trial_is_valid(self, positions: Array, dt: float,
-                        velocities: Array, rest_lengths: Array) -> bool:
+    def _trial_is_valid(
+        self, positions: Array, dt: float, velocities: Array, rest_lengths: Array
+    ) -> bool:
         """Keep the pre-Gate-2 boolean helper for callers of the prototype API."""
 
-        return self._trial_rejection_reason(
-            positions, dt, velocities, rest_lengths
-        ) is None
+        return self._trial_rejection_reason(positions, dt, velocities, rest_lengths) is None
 
     def step(self, dt: Optional[float] = None) -> FilamentState:
         """Advance one accepted step and record every trial as a structured event.
@@ -1041,9 +1147,10 @@ class OverdampedGrowingFilament:
                 self.parameters.growth_rate,
                 trial_dt,
             )
-            positions, rest_lengths = remesh(
+            positions, rest_lengths, segment_lineage = remesh_with_lineage(
                 self.state.positions,
                 grown,
+                self.state.segment_lineage,
                 self.parameters.a_max,
             )
             forces = self.forces(positions, rest_lengths)
@@ -1077,7 +1184,11 @@ class OverdampedGrowingFilament:
             if rejection_reason is None:
                 try:
                     trial_components = self.energy_components(trial_positions, rest_lengths)
-                    trial_energy = float(sum(trial_components.values()))
+                    trial_energy = float(
+                        trial_components["stretch"]
+                        + trial_components["bend"]
+                        + trial_components["contact"]
+                    )
                 except (ModelError, ValueError, FloatingPointError) as exc:
                     rejection_reason = f"invalid trial energy: {exc}"
                 else:
@@ -1152,6 +1263,7 @@ class OverdampedGrowingFilament:
                     rest_lengths,
                     time=self.state.time + trial_dt,
                     step=self.state.step + 1,
+                    segment_lineage=segment_lineage,
                 )
                 event_base["state_after"] = _state_summary(
                     self.state.positions,
@@ -1193,8 +1305,12 @@ class OverdampedGrowingFilament:
                             "energy_after": trial_energy,
                             "contact_pairs": contact_pairs,
                             "segment_contacts": trial_summary.get("segment_contacts", []),
-                            "finite_radius_contacts": trial_summary.get("finite_radius_contacts", []),
-                            "centerline_intersections": trial_summary.get("centerline_intersections", []),
+                            "finite_radius_contacts": trial_summary.get(
+                                "finite_radius_contacts", []
+                            ),
+                            "centerline_intersections": trial_summary.get(
+                                "centerline_intersections", []
+                            ),
                             "node_contact_pairs": node_contact_pairs,
                             "detail": "contact diagnostic only; node contact force and segment geometry are recorded separately",
                         }
@@ -1239,7 +1355,9 @@ class OverdampedGrowingFilament:
                         "contact_pairs": contact_pairs,
                         "segment_contacts": trial_summary.get("segment_contacts", []),
                         "finite_radius_contacts": trial_summary.get("finite_radius_contacts", []),
-                        "centerline_intersections": trial_summary.get("centerline_intersections", []),
+                        "centerline_intersections": trial_summary.get(
+                            "centerline_intersections", []
+                        ),
                         "node_contact_pairs": node_contact_pairs,
                         "detail": "contact diagnostic only; node contact force and segment geometry are recorded separately",
                     }
@@ -1283,7 +1401,8 @@ class OverdampedGrowingFilament:
         if target < self.state.time:
             raise ModelError("t_end must not be earlier than current time")
         trajectory = [self.state.copy()]
+        self._accepted_trajectory = trajectory
         while self.state.time < target - 1.0e-15:
             self.step(min(self.parameters.dt, target - self.state.time))
             trajectory.append(self.state.copy())
-        return trajectory
+        return [state.copy() for state in trajectory]

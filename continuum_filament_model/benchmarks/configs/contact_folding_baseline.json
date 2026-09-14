@@ -1,0 +1,91 @@
+{
+  "schema_version": "continuum-filament-contact-folding-c1-config-1",
+  "base": {
+    "length": 4.0,
+    "n_nodes": 9,
+    "axial_stiffness": 5.0,
+    "bending_stiffness": 0.03,
+    "drag_density": 1.0,
+    "growth_rate": 1.0,
+    "contact_stiffness": 2.0,
+    "diameter": 0.5,
+    "dt": 0.02,
+    "t_end": 0.4,
+    "a_max_factor": 8.0,
+    "rest_length_factor": 0.75,
+    "amplitude": 0.55,
+    "initial_shape": "sine",
+    "boundary": "free/free",
+    "reject_crossing": true,
+    "enable_legacy_node_contact": false,
+    "dt_min": 1.0e-8,
+    "max_retries": 4,
+    "max_displacement_fraction": 0.5,
+    "convergence_tolerance": 0.25,
+    "fold_curvature_threshold": 1.0e-8
+  },
+  "cases": [
+    {
+      "name": "dynamic_growth_to_contact",
+      "group": "primary",
+      "expected_contact": true,
+      "overrides": {}
+    },
+    {
+      "name": "dynamic_dt_coarse",
+      "group": "temporal_refinement",
+      "expected_contact": true,
+      "overrides": {"dt": 0.04}
+    },
+    {
+      "name": "dynamic_dt_fine",
+      "group": "temporal_refinement",
+      "expected_contact": true,
+      "overrides": {"dt": 0.01}
+    },
+    {
+      "name": "dynamic_spatial_coarse",
+      "group": "spatial_refinement",
+      "expected_contact": true,
+      "overrides": {"n_nodes": 7, "dt": 0.01}
+    },
+    {
+      "name": "dynamic_spatial_fine",
+      "group": "spatial_refinement",
+      "expected_contact": true,
+      "overrides": {"n_nodes": 11, "dt": 0.01}
+    },
+    {
+      "name": "dynamic_kc_soft",
+      "group": "contact_stiffness_refinement",
+      "expected_contact": true,
+      "overrides": {"contact_stiffness": 1.0, "dt": 0.01}
+    },
+    {
+      "name": "dynamic_kc_stiff",
+      "group": "contact_stiffness_refinement",
+      "expected_contact": true,
+      "overrides": {"contact_stiffness": 4.0, "dt": 0.01}
+    },
+    {
+      "name": "initial_contact_fixture_control",
+      "group": "initial_contact_control",
+      "expected_contact": true,
+      "overrides": {"initial_shape": "u", "diameter": 0.5, "rest_length_factor": 1.03, "t_end": 0.08}
+    },
+    {
+      "name": "initial_no_contact_control",
+      "group": "initial_no_contact_control",
+      "expected_contact": false,
+      "overrides": {"diameter": 0.1, "t_end": 0.08}
+    }
+  ],
+  "refinements": {
+    "axes": ["temporal_refinement", "spatial_refinement", "contact_stiffness_refinement"]
+  },
+  "output_policy": {
+    "save_trajectory": false,
+    "save_video": false,
+    "compact_metrics_only": true
+  }
+}

@@ -5,7 +5,7 @@
 `growing_filament.model.OverdampedGrowingFilament` に、中心線の非隣接線分同士が有限径 `D` の排除距離へ侵入したときの、摩擦なし・保守的な反発力を追加した。接触幾何は既存の
 `growing_filament.geometry.nonlocal_segment_contacts()` を利用する。新しい依存関係、摩擦、接着、履歴変数、連続時間の非貫入保証（CCD）は導入していない。
 
-これは最小の penalty prototype であり、有限径フィラメントの実験妥当性や大きな時間刻みでの非貫入を保証する完成 solver ではない。
+これは最小の penalty prototype であり、有限径フィラメントの実験妥当性や大きな時間刻みでの非貫入を保証する完成 solver ではない。C1 の成長–接触–折りたたみ検証は `notes/contact_folding_validation.md` と `benchmarks/contact_folding_validation.py` に分離している。
 
 ## 定式化
 
@@ -50,7 +50,7 @@ F_{j+1} -= u     f_ij
 
 ## 既存節点接触との互換性
 
-`contact_stiffness > 0` かつ `diameter > 0` のとき、線分ペナルティを標準の非局所接触応答として常に計算する。既存の非隣接節点間ペナルティも、過去の3節点 fixture・パラメータ利用者との互換性のため同じ `contact_stiffness` で加算する。したがって、節点と線分の両方が同じ設定で重なる構成では、エネルギーと力が両項から寄与する。新しい接触試験では、節点対が `D` の外側になる U 字 fixture を用い、線分項だけを検証している。
+`contact_stiffness > 0` かつ `diameter > 0` のとき、線分ペナルティを標準の非局所接触応答として計算する。既存の非隣接節点間ペナルティは、過去の3節点 fixture・パラメータ利用者との互換性のため `ModelParameters.enable_legacy_node_contact=True` の既定値で保持する。したがって、節点と線分の両方が同じ設定で重なる構成では、互換モードのエネルギーと力は両項から寄与する。C1 検証ではこのフラグを `False` にし、`contact_energy_components()` の `segment_c1` と `node_legacy`、manifestの provenance で別ラベルにする。新しい接触試験では、原則として node 項を混ぜず線分項を単独検証する。
 
 接触エネルギーは `energy_components()["contact"]` に含まれ、`forces()` は伸長・曲げ・節点接触・線分接触を合算した `-dE/dr` を返す。過減衰ステップでは、この合算力を既存の参照長重み付き drag で速度へ変換する。
 
