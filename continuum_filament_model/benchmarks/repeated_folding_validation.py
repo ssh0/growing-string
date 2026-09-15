@@ -496,9 +496,7 @@ def _episode_event(
         "pair": None if episode is None else list(episode["pair"]),
         "root_pair": None if episode is None else list(episode["root_pair"]),
         "feature": None if episode is None else episode["feature"],
-        "contact_identity": None
-        if episode is None
-        else episode.get("contact_identity"),
+        "contact_identity": None if episode is None else episode.get("contact_identity"),
     }
 
 
@@ -873,9 +871,7 @@ def _refinement_case_pairs(
             if len(names) == 2 and names[0] == names[1]:
                 raise ValidationError("explicit refinement pairs require distinct cases")
             if str(pair.get("population", "deterministic")) != "deterministic":
-                raise ValidationError(
-                    "explicit refinement pair population must be deterministic"
-                )
+                raise ValidationError("explicit refinement pair population must be deterministic")
             if len(names) != 2 or any(name not in by_name for name in names):
                 continue
             populations = {
@@ -897,15 +893,10 @@ def _refinement_case_pairs(
                     by_name[name]["effective_config"].get("refinement_axis") for name in names
                 }
                 actual_families = {
-                    by_name[name]["effective_config"].get("refinement_family")
-                    for name in names
+                    by_name[name]["effective_config"].get("refinement_family") for name in names
                 }
-                if actual_axes != {str(declared_axis)} or actual_families != {
-                    str(declared_family)
-                }:
-                    raise ValidationError(
-                        "explicit refinement axis/family must match both cases"
-                    )
+                if actual_axes != {str(declared_axis)} or actual_families != {str(declared_family)}:
+                    raise ValidationError("explicit refinement axis/family must match both cases")
                 parameter_key = {
                     "temporal": "dt",
                     "spatial": "n_nodes",
@@ -1036,8 +1027,7 @@ def _compare_refinement(
         left_sig = dict(left["episode_signature"])
         right_sig = dict(right["episode_signature"])
         numerical_match = (
-            left["numerical_status"] == "resolved"
-            and right["numerical_status"] == "resolved"
+            left["numerical_status"] == "resolved" and right["numerical_status"] == "resolved"
         )
         if not numerical_match:
             row["reason_codes"].append("paired_case_numerically_unresolved")
@@ -1078,14 +1068,10 @@ def _compare_refinement(
             for event in right["episode_sequence"]
             if event["event"] not in {"active_continuation", "remesh_boundary"}
         ]
-        event_time_match = (
-            len(left_events) == len(right_events)
-            and all(
-                left_event["event"] == right_event["event"]
-                and abs(float(left_event["time"]) - float(right_event["time"]))
-                <= time_tolerance
-                for left_event, right_event in zip(left_events, right_events)
-            )
+        event_time_match = len(left_events) == len(right_events) and all(
+            left_event["event"] == right_event["event"]
+            and abs(float(left_event["time"]) - float(right_event["time"])) <= time_tolerance
+            for left_event, right_event in zip(left_events, right_events)
         )
         remesh_match = (
             abs(left_sig["remesh_boundary_count"] - right_sig["remesh_boundary_count"])
@@ -1456,9 +1442,7 @@ def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
             stream, fieldnames=fields, extrasaction="ignore", lineterminator="\n"
         )
         writer.writeheader()
-        writer.writerows(
-            {field: _csv_cell(row.get(field)) for field in fields} for row in rows
-        )
+        writer.writerows({field: _csv_cell(row.get(field)) for field in fields} for row in rows)
 
 
 def run_benchmark(

@@ -229,7 +229,7 @@ python continuum_filament_model/benchmarks/repeated_folding_validation.py \
   --output "$TMP_DIR"
 ```
 
-各 accepted state の raw time/step/n_nodes/remesh を保存し、`contact_onset`、`active_continuation`、`contact_detachment`、`recontact`、`feature_change`、`pair_change`、`remesh_boundary` を episode sequence として記録します。refinement は構造 signature と明示的な時刻・離散化 tolerance で比較し、sequence、penetration、residence、fold proxy ごとに `numerically-unresolved` を返します。fold spacing/period/count は morphology proxy であり実験の fold count ではありません。trajectory と動画は Git 管理外へ置き、compact summary と provenance のみを出力します。詳細は `notes/repeated_folding_validation.md` を参照してください。
+各 accepted state の raw time/step/n_nodes/remesh を保存し、`contact_onset`、`active_continuation`、`contact_detachment`、`recontact`、`feature_change`、`pair_change`、`remesh_boundary` を episode sequence として記録します。refinement は構造 signature と明示的な時刻・離散化 tolerance で比較し、sequence、penetration、residence、fold proxy ごとに `numerically-unresolved` を返します。fold spacing/period/count は morphology proxy であり実験の fold count ではありません。runner は trajectory と動画を生成せず、compact summary と provenance のみを出力します。詳細は `notes/repeated_folding_validation.md` を参照してください。
 
 ## P0-B：線形mode・時間／空間数値ゲート
 

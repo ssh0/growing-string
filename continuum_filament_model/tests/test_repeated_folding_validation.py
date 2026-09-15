@@ -50,9 +50,7 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         }
 
     @staticmethod
-    def _record(
-        pair=("0", "2"), feature="endpoint_endpoint", penetration=0.1, root_pair=None
-    ):
+    def _record(pair=("0", "2"), feature="endpoint_endpoint", penetration=0.1, root_pair=None):
         return {
             "pair": list(pair),
             "root_pair": list(pair if root_pair is None else root_pair),
@@ -207,10 +205,30 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
 
     def test_fold_period_tracks_repeated_count_increases(self):
         rows = [
-            {"time": 0.0, "fold_count_proxy": 0, "fold_spacing": None, "curvature_concentration": 1.0},
-            {"time": 0.1, "fold_count_proxy": 1, "fold_spacing": None, "curvature_concentration": 1.0},
-            {"time": 0.2, "fold_count_proxy": 0, "fold_spacing": None, "curvature_concentration": 1.0},
-            {"time": 0.3, "fold_count_proxy": 1, "fold_spacing": None, "curvature_concentration": 1.0},
+            {
+                "time": 0.0,
+                "fold_count_proxy": 0,
+                "fold_spacing": None,
+                "curvature_concentration": 1.0,
+            },
+            {
+                "time": 0.1,
+                "fold_count_proxy": 1,
+                "fold_spacing": None,
+                "curvature_concentration": 1.0,
+            },
+            {
+                "time": 0.2,
+                "fold_count_proxy": 0,
+                "fold_spacing": None,
+                "curvature_concentration": 1.0,
+            },
+            {
+                "time": 0.3,
+                "fold_count_proxy": 1,
+                "fold_spacing": None,
+                "curvature_concentration": 1.0,
+            },
         ]
         summary = _fold_summary(rows)
         self.assertEqual(summary["fold_event_times"], [0.1, 0.3])
@@ -361,9 +379,7 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 _compare_refinement(results, invalid_config)
 
-        short_results = [
-            {**result, "effective_config": {"t_end": 0.1}} for result in results
-        ]
+        short_results = [{**result, "effective_config": {"t_end": 0.1}} for result in results]
         short_config = {
             "base": {**base, "t_end": 2.4},
             "refinement_pairs": [
@@ -390,9 +406,7 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         ]
         config = {
             "base": self._base(),
-            "refinement_pairs": [
-                {"name": "mixed", "cases": ["deterministic", "shape"]}
-            ],
+            "refinement_pairs": [{"name": "mixed", "cases": ["deterministic", "shape"]}],
         }
         with self.assertRaises(ValidationError):
             _compare_refinement(results, config)
@@ -416,9 +430,7 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
 
         duplicate_config = {
             "base": self._base(),
-            "refinement_pairs": [
-                {"name": "duplicate", "cases": ["left", "left"]}
-            ],
+            "refinement_pairs": [{"name": "duplicate", "cases": ["left", "left"]}],
         }
         with self.assertRaises(ValidationError):
             _compare_refinement(deterministic_results, duplicate_config)
@@ -648,7 +660,10 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             }
 
         event_comparison = _compare_refinement(
-            [result("left", left_sequence, "resolved"), result("right", right_sequence, "resolved")],
+            [
+                result("left", left_sequence, "resolved"),
+                result("right", right_sequence, "resolved"),
+            ],
             config,
         )[0]
         self.assertEqual(event_comparison["sequence_status"], "numerically-unresolved")
@@ -676,13 +691,9 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             config,
         )[0]
         self.assertEqual(identity_comparison["sequence_status"], "numerically-unresolved")
-        self.assertIn(
-            "episode_contact_identity_changed", identity_comparison["reason_codes"]
-        )
+        self.assertIn("episode_contact_identity_changed", identity_comparison["reason_codes"])
 
-        mesh_left = [
-            {**item, "contact_identity": [0.25, 0.75]} for item in left_sequence
-        ]
+        mesh_left = [{**item, "contact_identity": [0.25, 0.75]} for item in left_sequence]
         mesh_right = [
             {
                 **item,

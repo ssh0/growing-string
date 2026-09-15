@@ -28,15 +28,15 @@ runner は軌跡配列・動画を保存しない。`summary.csv`、`metrics.csv
 - `pair_change`
 - `remesh_boundary`
 
-`summary.json` は集約値を保存し、`suite.json` の `episodes` には onset/detachment の raw 時刻・step・node 数、滞在時間、censor 状態、pair/feature、再メッシュ境界、penetration、tangential slip を保存する。再メッシュ前後は接触履歴として接続せず、`remesh_boundary` で分割する。lineage は分割祖先を追う診断 ID であり、物質 IDや履歴依存接触則ではない。同じ root-pair に子segment接触が複数ある場合も、current stateに同じpair/featureが残る接触だけを継続し、消えた子接触は離脱として閉じる。`evidence_classification` は単一episodeの `single-proxy/contact` と、2 episode以上かつ実接触離脱後の再接触を含む `repeated-folding` を分離する。`expected_repeated` のcaseで反復条件を満たさない場合は `repeated_folding_not_observed` として数値未解決にする。
+`summary.json` は集約値を保存し、`suite.json` の各 case result に含まれる `episodes` には onset/detachment の raw 時刻・step・node 数、滞在時間、censor 状態、pair/feature、再メッシュ境界、penetration、tangential slip を保存する。再メッシュ前後は接触履歴として接続せず、`remesh_boundary` で分割する。lineage は分割祖先を追う診断 ID であり、物質 IDや履歴依存接触則ではない。同じ root-pair に子segment接触が複数ある場合も、current stateに同じpair/featureが残る接触だけを継続し、消えた子接触は離脱として閉じる。`evidence_classification` は単一episodeの `single-proxy/contact` と、2 episode以上かつ実接触離脱後の再接触を含む `repeated-folding` を分離する。`expected_repeated` のcaseで反復条件を満たさない場合は `repeated_folding_not_observed` として数値未解決にする。
 
 同じ episode の accepted state 間で最近接点の相対変位を接線方向へ射影し、`relative_tangential_slip` を積算する。これは診断値であり、摩擦力や摩擦散逸を追加しない。finite penalty の `penetration` は有限で、剛性・時間刻み依存のため hard non-penetration の証明ではない。
 
 ## Fold proxy
 
 - `fold_spacing_proxy`: 各 state の曲率局所ピーク間隔の中央値。
-- `fold_period_proxy`: 曲率符号変化／peak proxy の増加時刻の間隔の中央値。
-- `max_fold_count_proxy`: 曲率符号変化と局所ピークから得る proxy。
+- `fold_period_proxy`: 閾値以上の曲率符号反転数（fold count proxy）の増加時刻の間隔の中央値。
+- `max_fold_count_proxy`: 閾値以上の符号付き曲率の符号反転数から得る proxy。
 - `curvature_concentration`: 最大絶対曲率 / 平均絶対曲率。
 
 これらは morphology proxy であり、実験の fold count、topological fold、実験周期を意味しない。短い・非周期的な系列では spacing/period は未定義のまま保存する。
@@ -48,7 +48,7 @@ runner は軌跡配列・動画を保存しない。`summary.csv`、`metrics.csv
 - `sequence_status`: episode 数、detach/recontact、feature/pair change、rest-length arc 上の正規化 contact identity/feature、episode順の censor pattern を構造 signature として比較し、contact identity tolerance と remesh boundary tolerance を適用する。segment ID の完全一致や raw timestamp の完全一致は要求しない。
 - `penetration_status`: 最大 penetration ratio の相対差。
 - `residence_status`: 最大 episode residence の相対差。
-- `fold_status`: fold count、spacing、period proxy の差。
+- `fold_status`: fold count、spacing、period、curvature concentration proxy の差。
 
 episode 時刻は `episode_time_tolerance`（既定 0.08）で比較し、`accepted_dt` の違いによる正当な時刻ずれを許容する。`remesh_boundary_tolerance` は discretization tolerance として明示保存する。いずれかが不一致、solver failure、初期接触違反、crossing guard などの場合、該当 metric と pair は `numerically-unresolved` と分類する。resolved はこの数値条件の範囲内の compact observable に対する判定であり、物理妥当性・実験一致・普遍性を意味しない。
 
