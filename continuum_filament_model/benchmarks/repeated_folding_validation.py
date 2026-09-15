@@ -862,6 +862,8 @@ def _refinement_case_pairs(
             raw_tolerances = pair.get("tolerances", {})
             if not isinstance(raw_tolerances, Mapping):
                 raise ValidationError("explicit refinement pair tolerances must be an object")
+            if any(not isinstance(name, str) for name in raw_names):
+                raise ValidationError("explicit refinement pair cases must be strings")
             names = list(raw_names)
             if len(names) == 2 and names[0] == names[1]:
                 raise ValidationError("explicit refinement pairs require distinct cases")

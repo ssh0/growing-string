@@ -270,6 +270,7 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         base = self._base()
         for invalid_pair in (
             {"name": "invalid-cases", "cases": None},
+            {"name": "invalid-case-name", "cases": [{}, "right"]},
             {"name": "invalid-tolerances", "tolerances": None},
         ):
             config = {"base": base, "refinement_pairs": [invalid_pair]}
