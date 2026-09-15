@@ -147,7 +147,9 @@ class SegmentDistance:
             feature=feature,
             normal=normal,
             normal_status=normal_status,
-            centerline_intersection=(diagnostic_type is ContactDiagnosticType.CENTERLINE_INTERSECTION),
+            centerline_intersection=(
+                diagnostic_type is ContactDiagnosticType.CENTERLINE_INTERSECTION
+            ),
             diagnostic_type=diagnostic_type,
         )
 
@@ -354,7 +356,11 @@ def segments_intersect(
         return True
     if abs(o4) <= eps and _on_segment(c, d, b, eps):
         return True
-    return (o1 > 0.0) != (o2 > 0.0) and (o3 > 0.0) != (o4 > 0.0)
+    # A zero orientation is neither side of a line; do not let it satisfy the
+    # proper-crossing test as if it were negative.
+    return ((o1 > 0.0 and o2 < 0.0) or (o1 < 0.0 and o2 > 0.0)) and (
+        (o3 > 0.0 and o4 < 0.0) or (o3 < 0.0 and o4 > 0.0)
+    )
 
 
 # Name the topological predicate explicitly for contact consumers.  The
@@ -406,7 +412,9 @@ def segment_closest_points(
     else:
         parameter_i = (uv * vw - vv * uw) / denominator
         parameter_j = (uu * vw - uv * uw) / denominator
-        candidates = [(float(np.clip(parameter_i, 0.0, 1.0)), float(np.clip(parameter_j, 0.0, 1.0)))]
+        candidates = [
+            (float(np.clip(parameter_i, 0.0, 1.0)), float(np.clip(parameter_j, 0.0, 1.0)))
+        ]
         # Clamping one parameter can move the optimum to the other segment's
         # endpoint.  Enumerating all four endpoint projections is inexpensive
         # for the small diagnostic pair counts used by this prototype.
@@ -447,9 +455,8 @@ def _is_collinear(a: Array, b: Array, c: Array, d: Array, eps: float) -> bool:
     w = c - a
     uu = float(np.linalg.norm(u))
     vv = float(np.linalg.norm(v))
-    return (
-        abs(_cross2(u, v)) <= eps * max(uu * vv, 1.0)
-        and abs(_cross2(u, w)) <= eps * max(uu * float(np.linalg.norm(w)), 1.0)
+    return abs(_cross2(u, v)) <= eps * max(uu * vv, 1.0) and abs(_cross2(u, w)) <= eps * max(
+        uu * float(np.linalg.norm(w)), 1.0
     )
 
 
@@ -591,9 +598,7 @@ def segment_contact_geometry(
         distance = float(np.linalg.norm(point_i - point_j))
 
     collinear_overlap = collinear_overlap_parameters is not None
-    parallel_overlap = (
-        parallel_overlap_parameters is not None and not collinear_overlap
-    )
+    parallel_overlap = parallel_overlap_parameters is not None and not collinear_overlap
     feature = _feature_for_parameters(
         parameter_i,
         parameter_j,
@@ -761,9 +766,7 @@ def initial_geometry_diagnostic(
     closest_contact = min(contacts, key=lambda value: value.distance) if contacts else None
     closest = _distance_from_contact(closest_contact) if closest_contact else None
     intersections = tuple(
-        (value.segment_i, value.segment_j)
-        for value in contacts
-        if value.centerline_intersection
+        (value.segment_i, value.segment_j) for value in contacts if value.centerline_intersection
     )
     # Keep the historical ``contact_pairs`` semantics (positive diameter and
     # inclusive threshold), while exposing explicit classifications for new
@@ -774,25 +777,18 @@ def initial_geometry_diagnostic(
         for value in contacts
         if contact_distance > 0.0 and value.is_contact
     )
-    finite_radius_contacts = tuple(
-        value for value in contacts if value.is_finite_radius_contact
-    )
-    centerline_contacts = tuple(
-        value for value in contacts if value.centerline_intersection
-    )
+    finite_radius_contacts = tuple(value for value in contacts if value.is_finite_radius_contact)
+    centerline_contacts = tuple(value for value in contacts if value.centerline_intersection)
     serialized_contacts = (
         contacts
         if include_all_segment_contacts
-        else tuple(
-            value for value in contacts
-            if value.is_contact or value.centerline_intersection
-        )
+        else tuple(value for value in contacts if value.is_contact or value.centerline_intersection)
     )
     return {
         "valid": not bool(intersections),
-        "reason": "initial_crossing" if intersections else (
-            "contact" if contact_pairs else "initial_geometry_valid"
-        ),
+        "reason": "initial_crossing"
+        if intersections
+        else ("contact" if contact_pairs else "initial_geometry_valid"),
         "min_segment_length": float(np.min(segment_lengths)),
         "min_nonlocal_distance": float(closest.distance) if closest else float("inf"),
         "closest_nonlocal_pair": closest.as_dict() if closest else None,
@@ -954,9 +950,7 @@ def find_swept_nonlocal_intersection(
                         low = candidate
                 time = high
                 positions = _interpolated_positions(start, end, time)
-                point = 0.25 * (
-                    positions[i] + positions[i + 1] + positions[j] + positions[j + 1]
-                )
+                point = 0.25 * (positions[i] + positions[i + 1] + positions[j] + positions[j + 1])
                 return SweptIntersection(i, j, float(time), (float(point[0]), float(point[1])))
     return None
 

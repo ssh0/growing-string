@@ -28,6 +28,10 @@
 - 平行で投影区間が重なる場合も最近接点が一意でないため `parallel_overlap` とし、投影重なりの中点を代表値にする。ほぼ平行でも法線は距離が正の場合だけ返す。
 - 中心線交差は `diagnostic_type=centerline_intersection`、交差しない有限径の gap 接触は `finite_radius_gap_contact` とする。中心線交差を有限径 gap 接触だけとして報告しない。
 
+## 交差判定の数値境界
+
+`segments_intersect()` は、orientation が `eps` 以内で端点が相手線分上にある場合を、既存の端点接触・重なり判定として扱う。proper crossing の判定では、orientation のゼロを片側の符号として扱わず、4つの向きがそれぞれ厳密に反対符号になる場合だけ交差とする。これにより、中点再メッシュで生じる丸め誤差だけのゼロ／微小値を、collinear disjoint segment の交差へ誤分類しない。一方、符号が計算できる浅い交差は一律に `eps` でゼロ化しないため、交差判定の修正は線分対の列挙、有限径の接触対象、径、接触力・エネルギー則を変更しない。
+
 ## 非隣接対と識別子の限界
 
 `nonlocal_segment_contacts()` は既存契約と同じく、現在の `positions` 配列に対する0始まりの線分添字 `(i, j)` で `j >= i + 2` の対だけを返す。共有端点を持つ隣接線分は除外する。これは自己接触の物理的な判定や material identity の契約ではない。
