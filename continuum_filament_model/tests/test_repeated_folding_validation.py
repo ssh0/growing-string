@@ -266,6 +266,16 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_case_config({**self._base(), "dt_min": 10**400})
 
+    def test_refinement_rejects_invalid_nested_types(self):
+        base = self._base()
+        for invalid_pair in (
+            {"name": "invalid-cases", "cases": None},
+            {"name": "invalid-tolerances", "tolerances": None},
+        ):
+            config = {"base": base, "refinement_pairs": [invalid_pair]}
+            with self.assertRaises(ValidationError):
+                _compare_refinement([], config)
+
     def test_refinement_rejects_unbounded_tolerances(self):
         base = self._base()
         config = {

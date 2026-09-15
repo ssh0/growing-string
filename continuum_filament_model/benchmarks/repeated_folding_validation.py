@@ -856,7 +856,13 @@ def _refinement_case_pairs(
         pairs = [dict(item) for item in explicit if isinstance(item, Mapping)]
         by_name = {result["case"]: result for result in results}
         for pair in pairs:
-            names = list(pair.get("cases", []))
+            raw_names = pair.get("cases", [])
+            if not isinstance(raw_names, list):
+                raise ValidationError("explicit refinement pair cases must be an array")
+            raw_tolerances = pair.get("tolerances", {})
+            if not isinstance(raw_tolerances, Mapping):
+                raise ValidationError("explicit refinement pair tolerances must be an object")
+            names = list(raw_names)
             if len(names) == 2 and names[0] == names[1]:
                 raise ValidationError("explicit refinement pairs require distinct cases")
             if str(pair.get("population", "deterministic")) != "deterministic":
