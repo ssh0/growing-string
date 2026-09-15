@@ -179,6 +179,8 @@ C1 は free/free の摩擦なし有限径 segment penalty に限定する。主�
 
 摩擦、接着、履歴依存則は、C1 の観測失敗と独立して品質確認された観測入力の双方が示された場合に限り、同一初期条件の nested alternative として一つずつ追加する。
 
+長時間の反復折りたたみ staged unit は `notes/repeated_folding_validation.md`、実装入口は `benchmarks/repeated_folding_validation.py`、設定は `benchmarks/configs/repeated_folding_validation.json` とする。deterministic C1 populationでは複数episode/recontact、接触滞在・離脱、fold spacing/period/count、曲率集中、penetration、slipを測定し、時間・空間・接触剛性refinementとexpected repeated条件を数値ゲートへ含める。`shape_only_sensitivity` は固定rest length等のgeometry/amplitude感度としてdeterministic evidenceと分離し、gray5候補線は入力QC・探索比較に限定する。
+
 ## Phase 3：実験データとの整合
 
 ### 3.1 データ契約

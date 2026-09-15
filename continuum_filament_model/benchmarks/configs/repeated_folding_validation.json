@@ -1,0 +1,200 @@
+{
+  "schema_version": "continuum-filament-repeated-folding-config-1",
+  "base": {
+    "length": 4.0,
+    "n_nodes": 9,
+    "axial_stiffness": 5.0,
+    "bending_stiffness": 0.03,
+    "drag_density": 1.0,
+    "growth_rate": 1.0,
+    "contact_stiffness": 2.0,
+    "diameter": 0.5,
+    "dt": 0.02,
+    "t_end": 2.4,
+    "a_max_factor": 8.0,
+    "rest_length_factor": 0.75,
+    "amplitude": 0.55,
+    "initial_shape": "sine",
+    "boundary": "free/free",
+    "reject_crossing": true,
+    "enable_legacy_node_contact": false,
+    "friction": false,
+    "adhesion": false,
+    "contact_history": false,
+    "dt_min": 1.0e-8,
+    "max_retries": 4,
+    "max_displacement_fraction": 0.5,
+    "fold_curvature_threshold": 1.0e-8,
+    "episode_time_tolerance": 0.08,
+    "penetration_tolerance": 0.30,
+    "residence_tolerance": 0.30,
+    "fold_tolerance": 0.50,
+    "fold_count_tolerance": 1,
+    "remesh_boundary_tolerance": 1,
+    "contact_identity_tolerance": 0.08
+  },
+  "cases": [
+    {
+      "name": "repeating_primary_long",
+      "group": "primary_repeating",
+      "expected_contact": true,
+      "expected_repeated": true,
+      "refinement_family": "repeating"
+    },
+    {
+      "name": "nonrepeating_no_contact_control",
+      "group": "initial_no_contact_control",
+      "expected_contact": false,
+      "refinement_family": "nonrepeating",
+      "overrides": {"diameter": 0.1, "t_end": 1.2}
+    },
+    {
+      "name": "repeating_temporal_coarse",
+      "group": "temporal_refinement",
+      "expected_contact": true,
+      "refinement_axis": "temporal",
+      "refinement_family": "repeating",
+      "refinement_role": "coarse",
+      "expected_repeated": true,
+      "overrides": {"dt": 0.04}
+    },
+    {
+      "name": "repeating_temporal_fine",
+      "group": "temporal_refinement",
+      "expected_contact": true,
+      "refinement_axis": "temporal",
+      "refinement_family": "repeating",
+      "refinement_role": "fine",
+      "expected_repeated": true,
+      "overrides": {"dt": 0.01}
+    },
+    {
+      "name": "repeating_spatial_coarse",
+      "group": "spatial_refinement",
+      "expected_contact": true,
+      "refinement_axis": "spatial",
+      "refinement_family": "repeating",
+      "refinement_role": "coarse",
+      "expected_repeated": true,
+      "overrides": {"n_nodes": 9}
+    },
+    {
+      "name": "repeating_spatial_fine",
+      "group": "spatial_refinement",
+      "expected_contact": true,
+      "refinement_axis": "spatial",
+      "refinement_family": "repeating",
+      "refinement_role": "fine",
+      "expected_repeated": true,
+      "overrides": {"n_nodes": 13}
+    },
+    {
+      "name": "repeating_stiffness_soft",
+      "group": "contact_stiffness_refinement",
+      "expected_contact": true,
+      "refinement_axis": "contact_stiffness",
+      "refinement_family": "repeating",
+      "refinement_role": "low",
+      "expected_repeated": true,
+      "overrides": {"contact_stiffness": 0.5}
+    },
+    {
+      "name": "repeating_stiffness_stiff",
+      "group": "contact_stiffness_refinement",
+      "expected_contact": true,
+      "refinement_axis": "contact_stiffness",
+      "refinement_family": "repeating",
+      "refinement_role": "high",
+      "expected_repeated": true,
+      "overrides": {"contact_stiffness": 4.0}
+    },
+    {
+      "name": "nonrepeating_temporal_coarse",
+      "group": "temporal_refinement",
+      "expected_contact": false,
+      "refinement_axis": "temporal",
+      "refinement_family": "nonrepeating",
+      "refinement_role": "coarse",
+      "overrides": {"diameter": 0.1, "dt": 0.04, "t_end": 1.2}
+    },
+    {
+      "name": "nonrepeating_temporal_fine",
+      "group": "temporal_refinement",
+      "expected_contact": false,
+      "refinement_axis": "temporal",
+      "refinement_family": "nonrepeating",
+      "refinement_role": "fine",
+      "overrides": {"diameter": 0.1, "dt": 0.01, "t_end": 1.2}
+    },
+    {
+      "name": "nonrepeating_spatial_coarse",
+      "group": "spatial_refinement",
+      "expected_contact": false,
+      "refinement_axis": "spatial",
+      "refinement_family": "nonrepeating",
+      "refinement_role": "coarse",
+      "overrides": {"diameter": 0.1, "n_nodes": 9, "t_end": 1.2}
+    },
+    {
+      "name": "nonrepeating_spatial_fine",
+      "group": "spatial_refinement",
+      "expected_contact": false,
+      "refinement_axis": "spatial",
+      "refinement_family": "nonrepeating",
+      "refinement_role": "fine",
+      "overrides": {"diameter": 0.1, "n_nodes": 13, "t_end": 1.2}
+    },
+    {
+      "name": "nonrepeating_stiffness_soft",
+      "group": "contact_stiffness_refinement",
+      "expected_contact": false,
+      "refinement_axis": "contact_stiffness",
+      "refinement_family": "nonrepeating",
+      "refinement_role": "low",
+      "overrides": {"diameter": 0.1, "contact_stiffness": 0.5, "t_end": 1.2}
+    },
+    {
+      "name": "nonrepeating_stiffness_stiff",
+      "group": "contact_stiffness_refinement",
+      "expected_contact": false,
+      "refinement_axis": "contact_stiffness",
+      "refinement_family": "nonrepeating",
+      "refinement_role": "high",
+      "overrides": {"diameter": 0.1, "contact_stiffness": 4.0, "t_end": 1.2}
+    },
+    {
+      "name": "shape_sensitivity_low_amplitude",
+      "group": "shape_only_sensitivity",
+      "population": "shape_only_sensitivity",
+      "expected_contact": true,
+      "overrides": {"amplitude": 0.45}
+    },
+    {
+      "name": "shape_sensitivity_high_amplitude",
+      "group": "shape_only_sensitivity",
+      "population": "shape_only_sensitivity",
+      "expected_contact": true,
+      "overrides": {"amplitude": 0.70}
+    },
+    {
+      "name": "initial_contact_fixture_control",
+      "group": "initial_contact_control",
+      "expected_contact": true,
+      "overrides": {"initial_shape": "u", "t_end": 0.08}
+    }
+  ],
+  "refinement_pairs": [
+    {"name": "repeating_temporal", "axis": "temporal", "family": "repeating", "cases": ["repeating_temporal_coarse", "repeating_temporal_fine"]},
+    {"name": "repeating_spatial", "axis": "spatial", "family": "repeating", "cases": ["repeating_spatial_coarse", "repeating_spatial_fine"]},
+    {"name": "repeating_contact_stiffness", "axis": "contact_stiffness", "family": "repeating", "cases": ["repeating_stiffness_soft", "repeating_stiffness_stiff"]},
+    {"name": "nonrepeating_temporal", "axis": "temporal", "family": "nonrepeating", "cases": ["nonrepeating_temporal_coarse", "nonrepeating_temporal_fine"]},
+    {"name": "nonrepeating_spatial", "axis": "spatial", "family": "nonrepeating", "cases": ["nonrepeating_spatial_coarse", "nonrepeating_spatial_fine"]},
+    {"name": "nonrepeating_contact_stiffness", "axis": "contact_stiffness", "family": "nonrepeating", "cases": ["nonrepeating_stiffness_soft", "nonrepeating_stiffness_stiff"]}
+  ],
+  "output_policy": {
+    "save_trajectory": false,
+    "save_video": false,
+    "compact_metrics_only": true,
+    "trajectory_policy": "keep outside Git in caller-selected temporary storage"
+  }
+}

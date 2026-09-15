@@ -217,6 +217,20 @@ python continuum_filament_model/benchmarks/contact_folding_validation.py \
 
 出力には contact onset、active pair/feature、gap/penetration、normal、force/work、residence、relative tangential slip、detachment、endpoint motion、curvature concentration、fold spacing/count proxy、lineage、crossing guard、requested/accepted `dt` と、temporal/spatial/contact-stiffness refinement の判定を含めます。受入条件と proxy の限界は `notes/contact_folding_validation.md` に記録します。軌跡・動画・per-step 大容量イベントは `/tmp` 等へ置き、Gitへ追加しません。摩擦・接着・履歴依存則は、C1 failure と独立した観測品質の双方が示された後に一つずつ追加します。
 
+### C1 staged unit：長時間反復 episode
+
+接触後の繰り返し折りたたみ様パターンを、単一 proxy と複数 contact episode に分けて観測する runner は `benchmarks/repeated_folding_validation.py` です。既定設定は `benchmarks/configs/repeated_folding_validation.json` で、free/free 長時間成長 run、initial-contact/no-contact control、temporal/spatial/contact-stiffness refinement、deterministic population と shape-only sensitivity population を分離します。C1 の finite-radius segment penalty 以外（摩擦・接着・履歴）は無効です。
+
+```bash
+TMP_DIR=$(mktemp -d /tmp/growing-string-repeated-folding.XXXXXX)
+PYTHONPATH="$PWD:$PWD/continuum_filament_model/src" \
+python continuum_filament_model/benchmarks/repeated_folding_validation.py \
+  --config continuum_filament_model/benchmarks/configs/repeated_folding_validation.json \
+  --output "$TMP_DIR"
+```
+
+各 accepted state の raw time/step/n_nodes/remesh を保存し、`contact_onset`、`active_continuation`、`contact_detachment`、`recontact`、`feature_change`、`pair_change`、`remesh_boundary` を episode sequence として記録します。refinement は構造 signature と明示的な時刻・離散化 tolerance で比較し、sequence、penetration、residence、fold proxy ごとに `numerically-unresolved` を返します。fold spacing/period/count は morphology proxy であり実験の fold count ではありません。runner は trajectory と動画を生成せず、compact summary と provenance のみを出力します。詳細は `notes/repeated_folding_validation.md` を参照してください。
+
 ## P0-B：線形mode・時間／空間数値ゲート
 
 現行の非接触モデルについて、端点の**位置だけを固定し、接線は自由**とした離散線形化を検証します。これはクランプ端（位置と接線を固定）ではありません。
