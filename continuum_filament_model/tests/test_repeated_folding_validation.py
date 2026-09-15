@@ -13,6 +13,7 @@ from continuum_filament_model.benchmarks.repeated_folding_validation import (
     _episode_tracker,
     _fold_summary,
     _initial_state,
+    load_config,
     run_benchmark,
     run_case,
     validate_case_config,
@@ -259,6 +260,10 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_case_config({**self._base(), "dt_min": None})
         with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "amplitude": None})
+        with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "amplitude": 10**400})
+        with self.assertRaises(ValidationError):
             validate_case_config({**self._base(), "dt_min": 10**400})
 
     def test_refinement_rejects_unbounded_tolerances(self):
@@ -431,6 +436,30 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ValidationError):
                 run_benchmark(config, Path(directory))
+
+    def test_benchmark_validates_base_before_initial_state(self):
+        config = {
+            "base": {**self._base(), "length": 10**400},
+            "cases": [{"name": "invalid-base", "expected_contact": False}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValidationError):
+                run_benchmark(config, Path(directory))
+
+    def test_loaded_config_hashes_case_specs(self):
+        payload = {
+            "base": {**self._base(), "t_end": 0.02},
+            "cases": [{"name": "loaded", "expected_contact": False}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text(json.dumps(payload), encoding="utf-8")
+            suite = run_benchmark(
+                load_config(config_path), root / "output", git_revision="test-revision"
+            )
+            self.assertIsInstance(suite["config_hash"], str)
+            self.assertTrue((root / "output" / "suite.json").is_file())
 
     def test_long_case_records_c1_episode_metrics_without_legacy_contact(self):
         result = run_case(

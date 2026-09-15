@@ -13,7 +13,7 @@ import csv
 import json
 import math
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -113,6 +113,12 @@ def validate_case_config(config: Mapping[str, Any]) -> None:
     ):
         _positive(config, key)
     _positive({"dt_min": config.get("dt_min", 1.0e-10)}, "dt_min")
+    try:
+        amplitude = float(config.get("amplitude", 0.55))
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValidationError("amplitude must be finite") from exc
+    if not math.isfinite(amplitude):
+        raise ValidationError("amplitude must be finite")
     try:
         n_nodes = int(config["n_nodes"])
         n_nodes_value = float(config["n_nodes"])
@@ -1433,6 +1439,7 @@ def run_benchmark(
     raw_cases = list(config.get("cases", []))
     if not raw_cases:
         raise ValidationError("at least one case is required")
+    validate_case_config(config["base"])
     cases = [
         item
         if isinstance(item, CaseSpec)
@@ -1483,7 +1490,9 @@ def run_benchmark(
     metrics = [
         {"case": result["case"], **row} for result in results for row in result["metrics_rows"]
     ]
-    config_hash = sha256_hex(canonical_json_bytes(_jsonable(config)))
+    hash_config = dict(config)
+    hash_config["cases"] = [asdict(case) for case in cases]
+    config_hash = sha256_hex(canonical_json_bytes(_jsonable(hash_config)))
     compact_manifest = {
         "manifest_schema_version": "continuum-filament-repeated-folding-compact-1",
         "benchmark_schema_version": SCHEMA_VERSION,
