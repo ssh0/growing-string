@@ -256,6 +256,10 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             validate_case_config({**self._base(), "length": 10**400})
         with self.assertRaises(ValidationError):
             validate_case_config({**self._base(), "n_nodes": 10**400})
+        with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "dt_min": None})
+        with self.assertRaises(ValidationError):
+            validate_case_config({**self._base(), "dt_min": 10**400})
 
     def test_refinement_rejects_unbounded_tolerances(self):
         base = self._base()

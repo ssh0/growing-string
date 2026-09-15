@@ -112,6 +112,7 @@ def validate_case_config(config: Mapping[str, Any]) -> None:
         "rest_length_factor",
     ):
         _positive(config, key)
+    _positive({"dt_min": config.get("dt_min", 1.0e-10)}, "dt_min")
     try:
         n_nodes = int(config["n_nodes"])
         n_nodes_value = float(config["n_nodes"])
