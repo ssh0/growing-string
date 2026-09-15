@@ -217,13 +217,28 @@ def load_config(path: Path) -> dict[str, Any]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, Mapping):
         raise ValidationError("config root must be an object")
+    raw_base = raw.get("base", {})
+    if not isinstance(raw_base, Mapping):
+        raise ValidationError("base must be an object")
+    raw_cases = raw.get("cases", [])
+    if not isinstance(raw_cases, list):
+        raise ValidationError("cases must be an array")
+    raw_refinement_pairs = raw.get("refinement_pairs", [])
+    if not isinstance(raw_refinement_pairs, list):
+        raise ValidationError("refinement_pairs must be an array")
+    raw_output_policy = raw.get("output_policy", {})
+    if not isinstance(raw_output_policy, Mapping):
+        raise ValidationError("output_policy must be an object")
     base = _defaults()
-    base.update(dict(raw.get("base", {})))
+    base.update(dict(raw_base))
     cases: list[CaseSpec] = []
-    for item in raw.get("cases", []):
+    for item in raw_cases:
         if not isinstance(item, Mapping) or "name" not in item:
             raise ValidationError("each case requires name")
-        overrides = dict(item.get("overrides", {}))
+        raw_overrides = item.get("overrides", {})
+        if not isinstance(raw_overrides, Mapping):
+            raise ValidationError("case overrides must be an object")
+        overrides = dict(raw_overrides)
         expected = _strict_bool(
             item.get(
                 "expected_contact",
@@ -256,8 +271,8 @@ def load_config(path: Path) -> dict[str, Any]:
         "schema_version": str(raw.get("schema_version", SCHEMA_VERSION)),
         "base": base,
         "cases": cases,
-        "refinement_pairs": list(raw.get("refinement_pairs", [])),
-        "output_policy": dict(raw.get("output_policy", {})),
+        "refinement_pairs": list(raw_refinement_pairs),
+        "output_policy": dict(raw_output_policy),
     }
 
 

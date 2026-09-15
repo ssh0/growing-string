@@ -446,6 +446,20 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 run_benchmark(config, Path(directory))
 
+    def test_load_config_rejects_invalid_section_types(self):
+        payloads = (
+            {"base": None},
+            {"cases": [{"name": "invalid", "overrides": None}]},
+            {"refinement_pairs": None},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for index, payload in enumerate(payloads):
+                path = root / f"invalid-{index}.json"
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaises(ValidationError):
+                    load_config(path)
+
     def test_loaded_config_hashes_case_specs(self):
         payload = {
             "base": {**self._base(), "t_end": 0.02},
