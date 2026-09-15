@@ -835,7 +835,7 @@ def _validated_tolerance(value: Any, key: str, maximum: float) -> float:
     return converted
 
 
-def _validated_count_tolerance(value: Any, key: str, maximum: int) -> int:
+def _validated_count_tolerance(value: Any, key: str, maximum: int | None) -> int:
     if isinstance(value, bool):
         raise ValidationError(f"{key} tolerance must be an integer")
     try:
@@ -843,7 +843,12 @@ def _validated_count_tolerance(value: Any, key: str, maximum: int) -> int:
         numeric = float(value)
     except (OverflowError, TypeError, ValueError) as exc:
         raise ValidationError(f"{key} tolerance must be a finite integer") from exc
-    if not math.isfinite(numeric) or numeric != converted or converted < 0 or converted > maximum:
+    if (
+        not math.isfinite(numeric)
+        or numeric != converted
+        or converted < 0
+        or (maximum is not None and converted > maximum)
+    ):
         raise ValidationError(f"{key} tolerance is outside the allowed range")
     return converted
 
@@ -1021,7 +1026,7 @@ def _compare_refinement(
         remesh_tolerance = _validated_count_tolerance(
             tolerance.get("remesh_boundaries", base.get("remesh_boundary_tolerance", 1)),
             "remesh_boundaries",
-            node_maximum,
+            None,
         )
         identity_tolerance = _validated_tolerance(
             tolerance.get("identity", base.get("contact_identity_tolerance", 0.08)),

@@ -300,6 +300,7 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
                     "recontact_count": 0,
                     "feature_change_count": 0,
                     "pair_change_count": 0,
+                    "remesh_boundary_count": 0,
                     "censored_episode_count": 0,
                     "censor_pattern": (),
                     "event_pattern": (),
@@ -333,6 +334,32 @@ class RepeatedFoldingValidationTests(unittest.TestCase):
             }
             with self.assertRaises(ValidationError):
                 _compare_refinement(results, bounded_config)
+
+        large_remesh_config = {
+            "base": base,
+            "refinement_pairs": [
+                {
+                    "name": "temporal",
+                    "cases": ["left", "right"],
+                    "tolerances": {"remesh_boundaries": base["n_nodes"] + 1},
+                }
+            ],
+        }
+        large_remesh = _compare_refinement(results, large_remesh_config)
+        self.assertEqual(large_remesh[0]["tolerances"]["remesh_boundaries"], 10)
+        for invalid_remesh in (-1, 1.5, None, 10**400):
+            invalid_config = {
+                "base": base,
+                "refinement_pairs": [
+                    {
+                        "name": "temporal",
+                        "cases": ["left", "right"],
+                        "tolerances": {"remesh_boundaries": invalid_remesh},
+                    }
+                ],
+            }
+            with self.assertRaises(ValidationError):
+                _compare_refinement(results, invalid_config)
 
         short_results = [
             {**result, "effective_config": {"t_end": 0.1}} for result in results
